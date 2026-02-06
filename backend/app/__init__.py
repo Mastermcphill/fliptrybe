@@ -135,16 +135,24 @@ def create_app():
     @app.get("/api/health")
     def health():
         db_state = "ok"
+        db_error = None
         try:
-            db.session.execute(text("SELECT 1"))
-        except Exception:
+            with db.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except Exception as e:
             db_state = "fail"
-        return jsonify({
+            msg = str(e)
+            if msg:
+                db_error = (msg[:300] + "...") if len(msg) > 300 else msg
+        payload = {
             "ok": True,
             "service": "fliptrybe-backend",
             "env": env,
             "db": db_state,
-        })
+        }
+        if db_error:
+            payload["db_error"] = db_error
+        return jsonify(payload)
 
     @app.get("/api/version")
     def version():
