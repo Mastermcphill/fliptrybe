@@ -94,18 +94,18 @@ def run_migrations_online():
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
 
-    url = current_app.config.get("SQLALCHEMY_DATABASE_URI") or get_engine_url()
-    config.set_main_option("sqlalchemy.url", url)
-    connectable = current_app.extensions["migrate"].db.engine
-    try:
-        logger.info("Alembic dialect: %s", connectable.dialect.name)
-    except Exception:
-        pass
+    connectable = get_engine()
 
     with connectable.connect() as connection:
+        try:
+            logger.info("Alembic dialect: %s", connection.engine.url.get_backend_name())
+        except Exception:
+            pass
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
+            compare_type=True,
+            compare_server_default=True,
             **conf_args
         )
 
