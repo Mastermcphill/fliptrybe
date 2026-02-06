@@ -1,0 +1,31 @@
+﻿# Python / venv
+.venv/
+__pycache__/
+*.pyc
+
+# Backend artifacts
+backend/instance/
+backend/**/*.db
+backend/qa/artifacts/
+backend/ops/artifacts/
+
+# Logs
+*.log
+
+# Archives
+*.zip
+
+# Temp admin port sources
+_ADMIN_PORT_SRC*/
+fliptrybe_recent*/
+
+# Flutter build output
+frontend/build/
+frontend/.dart_tool/
+
+# IDE
+.vscode/
+.idea/
+
+# Nested repo to keep out of root git
+fliptrybe-logistics/

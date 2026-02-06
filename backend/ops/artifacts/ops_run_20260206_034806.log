@@ -1,9 +1,0 @@
-[2026-02-06 03:48:07] OPS run started
-[2026-02-06 03:48:07] BackendRoot=C:\Users\ayomc\Desktop\FLIPTRYBE.inc\Fliptrybe\backend
-[2026-02-06 03:48:07] BaseUrl=http://127.0.0.1:5000
-[2026-02-06 03:48:07] Running migrations
-[2026-02-06 03:48:18] INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
-[2026-02-06 03:48:18] INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
-[2026-02-06 03:48:22] Server started PID=3724
-[2026-02-06 03:48:38] Runner exception: The term 'if' is not recognized as the name of a cmdlet, function, script file, or operable program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
-[2026-02-06 03:48:38] Server stopped PID=3724
