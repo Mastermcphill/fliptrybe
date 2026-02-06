@@ -104,8 +104,6 @@ def run_migrations_online():
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
-            compare_type=True,
-            compare_server_default=True,
             **conf_args
         )
 
