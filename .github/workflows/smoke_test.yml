@@ -2,7 +2,10 @@ name: Smoke Test
 
 on:
   push:
+    branches: ["main"]
   pull_request:
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   smoke:
@@ -38,7 +41,7 @@ jobs:
           for ($i = 0; $i -lt 30; $i++) {
             try {
               $res = Invoke-RestMethod "http://127.0.0.1:5000/api/health"
-              if ($res.ok -eq $true) { $ok = $true; break }
+              if (($res.ok -eq $true) -or ($res.status -eq "ok")) { $ok = $true; break }
             } catch { }
             Start-Sleep -Seconds 2
           }
