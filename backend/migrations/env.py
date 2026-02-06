@@ -36,7 +36,6 @@ def get_engine_url():
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-config.set_main_option('sqlalchemy.url', get_engine_url())
 target_db = current_app.extensions['migrate'].db
 
 # other values from the config, defined by the needs of env.py,
@@ -63,7 +62,8 @@ def run_migrations_offline():
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = current_app.config.get("SQLALCHEMY_DATABASE_URI") or get_engine_url()
+    config.set_main_option("sqlalchemy.url", url)
     context.configure(
         url=url, target_metadata=get_metadata(), literal_binds=True
     )
@@ -94,7 +94,13 @@ def run_migrations_online():
     if conf_args.get("process_revision_directives") is None:
         conf_args["process_revision_directives"] = process_revision_directives
 
-    connectable = get_engine()
+    url = current_app.config.get("SQLALCHEMY_DATABASE_URI") or get_engine_url()
+    config.set_main_option("sqlalchemy.url", url)
+    connectable = current_app.extensions["migrate"].db.engine
+    try:
+        logger.info("Alembic dialect: %s", connectable.dialect.name)
+    except Exception:
+        pass
 
     with connectable.connect() as connection:
         context.configure(
