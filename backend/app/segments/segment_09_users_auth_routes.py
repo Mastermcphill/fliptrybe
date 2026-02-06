@@ -88,6 +88,9 @@ def register():
     email = (data.get("email") or "").strip().lower()
     phone = (data.get("phone") or "").strip() or None
     password = data.get("password") or ""
+    role = (data.get("role") or "").strip().lower()
+    if role == "admin":
+        return jsonify({"message": "Admin signup is not allowed"}), 403
 
     u, token, err = _create_user(name=name, email=email, phone=phone, password=password, role="buyer")
     if err:
