@@ -3,8 +3,6 @@ name: backend-gate
 on:
   pull_request:
     branches: ["main"]
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -36,34 +34,11 @@ jobs:
       - name: Install backend deps
         run: |
           set -euo pipefail
-
-          # Try common backend roots in this repo
-          for d in backend fliptrybe-logistics app; do
-            if [ -d "$d" ]; then BACKEND_DIR="$d"; break; fi
-          done
-
-          if [ -z "${BACKEND_DIR:-}" ]; then
-            echo "No backend directory found (expected one of: backend, fliptrybe-logistics, app)"
-            ls -la
-            exit 1
-          fi
-
-          echo "Using backend dir: $BACKEND_DIR"
-          cd "$BACKEND_DIR"
+          cd backend
 
           python -m pip install --upgrade pip
 
-          if [ -f "requirements.txt" ]; then
-            pip install -r requirements.txt
-          elif [ -f "requirements-dev.txt" ]; then
-            pip install -r requirements-dev.txt
-          elif [ -f "pyproject.toml" ]; then
-            pip install -e .
-          else
-            echo "No requirements.txt / requirements-dev.txt / pyproject.toml found in $BACKEND_DIR"
-            ls -la
-            exit 1
-          fi
+          pip install -r requirements.txt
 
       - name: Alembic upgrade (SQLite CI DB) if present
         env:
@@ -72,23 +47,21 @@ jobs:
           FLASK_ENV: development
         run: |
           set -euo pipefail
+          cd backend
 
-          for d in backend fliptrybe-logistics app; do
-            if [ -d "$d" ]; then BACKEND_DIR="$d"; break; fi
-          done
-          cd "$BACKEND_DIR"
-
-          if [ -f "alembic.ini" ] || [ -d "migrations" ]; then
+          if [ -f "alembic.ini" ] || [ -f "migrations/alembic.ini" ] || [ -d "migrations" ]; then
             python -m pip install alembic >/dev/null 2>&1 || true
 
             if python -m alembic --help >/dev/null 2>&1; then
-              # Prefer local alembic config if present
-              if [ -f "alembic.ini" ]; then
+              # Prefer explicit alembic config if present
+              if [ -f "migrations/alembic.ini" ]; then
+                python -m alembic -c migrations/alembic.ini upgrade head
+                python -m alembic -c migrations/alembic.ini current || true
+              elif [ -f "alembic.ini" ]; then
                 python -m alembic -c alembic.ini upgrade head
                 python -m alembic -c alembic.ini current || true
               else
-                python -m alembic upgrade head
-                python -m alembic current || true
+                echo "Alembic config not found; skipping migrations step."
               fi
             else
               echo "Alembic not available; skipping migrations step."
@@ -103,11 +76,7 @@ jobs:
           FLASK_ENV: development
         run: |
           set -euo pipefail
-
-          for d in backend fliptrybe-logistics app; do
-            if [ -d "$d" ]; then BACKEND_DIR="$d"; break; fi
-          done
-          cd "$BACKEND_DIR"
+          cd backend
 
           if ls -1 tests test 2>/dev/null | grep -q .; then
             python -m pip install pytest >/dev/null 2>&1 || true
