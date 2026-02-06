@@ -141,7 +141,7 @@ def me():
 
 @auth_bp.post("/set-role")
 def set_role():
-    """Demo helper: set current user's role to buyer/merchant/driver/admin."""
+    """Demo helper: set current user's role to buyer/merchant/driver."""
     env = (os.getenv("FLIPTRYBE_ENV", "dev") or "dev").strip().lower()
     allow_override = (os.getenv("ALLOW_DEV_ROLE_SWITCH", "") or "").strip() == "1"
     if env not in ("dev", "development", "local", "test") or not allow_override:
@@ -172,8 +172,10 @@ def set_role():
 
     data = request.get_json(silent=True) or {}
     role = (data.get("role") or "").strip().lower()
-    if role not in ("buyer", "merchant", "driver", "admin"):
-        return jsonify({"message": "role must be buyer|merchant|driver|admin"}), 400
+    if role == "admin":
+        return jsonify({"message": "Admin role cannot be set via this endpoint"}), 403
+    if role not in ("buyer", "merchant", "driver"):
+        return jsonify({"message": "role must be buyer|merchant|driver"}), 400
 
     u.role = role
     try:
