@@ -10,8 +10,14 @@ function New-OpsState {
     $artifact = Join-Path $artifactDir ("ops_run_{0}.log" -f $stamp)
     New-Item -ItemType File -Path $artifact -Force | Out-Null
 
-    $python = Join-Path $BackendRoot ".venv\Scripts\python.exe"
-    if (-not (Test-Path $python)) { throw "Python not found at $python" }
+    $python = $null
+    if ($env:PYTHON -and (Test-Path $env:PYTHON)) {
+        $python = $env:PYTHON
+    } else {
+        $cmd = Get-Command python -ErrorAction SilentlyContinue
+        if ($cmd -and $cmd.Path) { $python = $cmd.Path }
+    }
+    if (-not $python) { throw "Python not found. Ensure actions/setup-python ran or set PYTHON env var." }
 
     $state = [ordered]@{
         BackendRoot = $BackendRoot
