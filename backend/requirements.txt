@@ -10,3 +10,4 @@ psycopg[binary]==3.2.13
 python-dotenv==1.0.1
 PyJWT==2.9.0
 reportlab
+psycopg2-binary
