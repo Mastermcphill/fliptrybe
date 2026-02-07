@@ -280,8 +280,41 @@ def me():
         user_id = int(payload.get("sub"))
     except Exception:
         return jsonify({"message": "Invalid token payload"}), 401
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
 
-    u = User.query.get(user_id)
+    def _lookup_user():
+        return db.session.get(User, user_id)
+
+    try:
+        u = _lookup_user()
+    except InternalError as e:
+        if "InFailedSqlTransaction" in str(e):
+            try:
+                db.session.rollback()
+                db.session.remove()
+            except Exception:
+                pass
+            try:
+                u = _lookup_user()
+            except Exception:
+                try:
+                    current_app.logger.exception("me_aborted_retry_failed")
+                except Exception:
+                    pass
+                return jsonify({"message": "Database error"}), 500
+        else:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                current_app.logger.exception("me_internal_error")
+            except Exception:
+                pass
+            return jsonify({"message": "Database error"}), 500
     if not u:
         return jsonify({"message": "User not found"}), 404
 
@@ -409,17 +442,6 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
                     pass
                 return None, (jsonify({"message": "Database error"}), 500)
 
-        if existing_phone:
-            try:
-                record_account_flag(int(existing_phone.id), "DUP_PHONE", signal=phone, details={"phone": phone})
-            except Exception:
-                pass
-            try:
-                current_app.logger.info("register_conflict route=/api/auth/register/%s type=phone", role)
-            except Exception:
-                pass
-            return None, (jsonify({"message": "Phone already in use"}), 409)
-
         try:
             existing = _lookup_email()
         except InternalError as e:
@@ -448,16 +470,20 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
                     pass
                 return None, (jsonify({"message": "Database error"}), 500)
 
-        if existing:
+        conflict_msg = _conflict_message(existing, existing_phone)
+        if conflict_msg:
             try:
-                record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})
+                if existing_phone:
+                    record_account_flag(int(existing_phone.id), "DUP_PHONE", signal=phone, details={"phone": phone})
+                if existing:
+                    record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})
             except Exception:
                 pass
             try:
-                current_app.logger.info("register_conflict route=/api/auth/register/%s type=email", role)
+                current_app.logger.info("register_conflict route=/api/auth/register/%s type=%s", role, conflict_msg)
             except Exception:
                 pass
-            return None, (jsonify({"message": "Email already in use"}), 409)
+            return None, (jsonify({"message": conflict_msg}), 409)
 
         u = User(name=name, email=email, role=role, phone=phone)
         u.set_password(password)
@@ -574,13 +600,6 @@ def register_merchant():
                 pass
             return jsonify({"message": "Database error"}), 500
 
-    if existing_phone:
-        try:
-            current_app.logger.info("register_conflict route=/api/auth/register/merchant type=phone")
-        except Exception:
-            pass
-        return jsonify({"message": "Phone already in use"}), 409
-
     try:
         dup_users = find_duplicate_phone_users(0, phone)
         if dup_users:
@@ -613,12 +632,13 @@ def register_merchant():
                 pass
             return jsonify({"message": "Database error"}), 500
 
-    if existing:
+    conflict_msg = _conflict_message(existing, existing_phone)
+    if conflict_msg:
         try:
-            current_app.logger.info("register_conflict route=/api/auth/register/merchant type=email")
+            current_app.logger.info("register_conflict route=/api/auth/register/merchant type=%s", conflict_msg)
         except Exception:
             pass
-        return jsonify({"message": "Email already in use"}), 409
+        return jsonify({"message": conflict_msg}), 409
     else:
         user = User(name=(data.get("owner_name") or data.get("name") or business_name), email=email, role="buyer")
         user.set_password(password)
