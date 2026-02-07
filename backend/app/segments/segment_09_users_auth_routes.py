@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
 from app.models import User, RoleChangeRequest
@@ -135,7 +135,7 @@ def register():
     try:
         json_keys = list(data_json.keys()) if isinstance(data_json, dict) else []
         form_keys = list(data_form.keys()) if isinstance(data_form, dict) else []
-        current_app.logger.warning(
+        current_app.logger.info(
             "register_payload_debug content_type=%s content_length=%s json_keys=%s form_keys=%s raw_len=%s",
             request.content_type,
             request.content_length,
@@ -264,6 +264,10 @@ def set_role():
 # ---------------------------
 
 def _register_common(payload: dict, role: str, extra: dict | None = None):
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
     name = (payload.get("name") or payload.get("full_name") or payload.get("fullname") or "").strip()
     email = (payload.get("email") or "").strip().lower()
     password = (payload.get("password") or "").strip()
@@ -279,7 +283,30 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
     if len(password) < 4:
         return None, (jsonify({"message": "password is required"}), 400)
 
-    existing = User.query.filter_by(email=email).first()
+    try:
+        existing = User.query.filter_by(email=email).first()
+    except InternalError as e:
+        if "InFailedSqlTransaction" in str(e):
+            try:
+                db.session.rollback()
+                db.session.remove()
+            except Exception:
+                pass
+            try:
+                existing = User.query.filter_by(email=email).first()
+            except Exception:
+                try:
+                    current_app.logger.exception("register_common_aborted_retry_failed")
+                except Exception:
+                    pass
+                return None, (jsonify({"message": "Database error"}), 500)
+        else:
+            db.session.rollback()
+            try:
+                current_app.logger.exception("register_common_internal_error")
+            except Exception:
+                pass
+            return None, (jsonify({"message": "Database error"}), 500)
     if existing:
         try:
             record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})

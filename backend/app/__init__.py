@@ -69,6 +69,7 @@ def create_app():
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "pool_pre_ping": True,
         "pool_reset_on_return": "rollback",
+        "pool_recycle": 300,
     }
 
     # Ensure instance dir exists for SQLite paths
