@@ -11,6 +11,33 @@ from app.utils.account_flags import record_account_flag, find_duplicate_phone_us
 
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
 
+def _get_request_payload(label: str) -> dict:
+    data_json = request.get_json(silent=True)
+    data_form = request.form.to_dict() if request.form else {}
+    data = data_json if isinstance(data_json, dict) and data_json else data_form
+    raw_len = 0
+    if not data:
+        raw_text = request.get_data(cache=True, as_text=True) or ""
+        raw_len = len(raw_text)
+        try:
+            data = json.loads(raw_text) if raw_text else {}
+        except Exception:
+            data = {}
+    try:
+        json_keys = list(data_json.keys()) if isinstance(data_json, dict) else []
+        form_keys = list(data_form.keys()) if isinstance(data_form, dict) else []
+        current_app.logger.info(
+            "%s_payload_keys content_type=%s json_keys=%s form_keys=%s raw_len=%s",
+            label,
+            request.content_type,
+            json_keys,
+            form_keys,
+            raw_len,
+        )
+    except Exception:
+        pass
+    return data if isinstance(data, dict) else {}
+
 def _create_user(*, name: str, email: str, phone: str | None, password: str, role: str = "buyer") -> tuple[User | None, str | None, tuple[dict, int] | None]:
     """Create user, return (user, token, error_response)."""
     role = (role or "buyer").strip().lower()
@@ -98,8 +125,8 @@ def _bearer_token() -> str | None:
 @auth_bp.post("/register")
 def register():
     # Backwards-compatible: treat as buyer/seller signup
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()
+    data = _get_request_payload("register")
+    name = (data.get("name") or data.get("full_name") or data.get("fullname") or "").strip()
     email = (data.get("email") or "").strip().lower()
     phone = (data.get("phone") or "").strip() or None
     password = data.get("password") or ""
@@ -207,10 +234,10 @@ def set_role():
 # Role-based registration (Phase 2.8)
 # ---------------------------
 
-def _register_common(name: str, email: str, password: str, role: str, extra: dict | None = None):
-    name = (name or "").strip()
-    email = (email or "").strip().lower()
-    password = (password or "").strip()
+def _register_common(payload: dict, role: str, extra: dict | None = None):
+    name = (payload.get("name") or payload.get("full_name") or payload.get("fullname") or "").strip()
+    email = (payload.get("email") or "").strip().lower()
+    password = (payload.get("password") or "").strip()
     role = (role or "").strip().lower()
 
     if role == "admin":
@@ -267,16 +294,11 @@ def _register_common(name: str, email: str, password: str, role: str, extra: dic
 
 @auth_bp.post("/register/buyer")
 def register_buyer():
-    data = request.get_json(silent=True) or {}
+    data = _get_request_payload("register_buyer")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
         return jsonify({"message": "Admin signup is not allowed"}), 403
-    payload, err = _register_common(
-        name=data.get("name") or "",
-        email=data.get("email") or "",
-        password=data.get("password") or "",
-        role="buyer",
-    )
+    payload, err = _register_common(data, role="buyer")
     if err:
         return err
     return jsonify(payload), 201
@@ -284,7 +306,7 @@ def register_buyer():
 
 @auth_bp.post("/register/merchant")
 def register_merchant():
-    data = request.get_json(silent=True) or {}
+    data = _get_request_payload("register_merchant")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
         return jsonify({"message": "Admin signup is not allowed"}), 403
@@ -385,13 +407,13 @@ def register_merchant():
 
 @auth_bp.post("/register/driver")
 def register_driver():
-    data = request.get_json(silent=True) or {}
+    data = _get_request_payload("register_driver")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
         return jsonify({"message": "Admin signup is not allowed"}), 403
 
     # Admin-mediated activation: we still create the base user + a pending role-change request.
-    name = (data.get("name") or "").strip() or (data.get("full_name") or "").strip()
+    name = (data.get("name") or data.get("full_name") or data.get("fullname") or "").strip()
     email = (data.get("email") or "").strip().lower()
     password = (data.get("password") or "").strip()
 
@@ -418,13 +440,12 @@ def register_driver():
         return jsonify({"message": "name is required"}), 400
 
     # Create base account as buyer (safe default) then queue role change.
-    payload, err = _register_common(
-        name=name,
-        email=email,
-        password=password,
-        role="buyer",
-        extra={"phone": phone, "state": state, "city": city},
-    )
+    base_payload = {
+        "name": name,
+        "email": email,
+        "password": password,
+    }
+    payload, err = _register_common(base_payload, role="buyer", extra={"phone": phone, "state": state, "city": city})
     if err:
         return err
 
@@ -458,12 +479,12 @@ def register_driver():
 
 @auth_bp.post("/register/inspector")
 def register_inspector():
-    data = request.get_json(silent=True) or {}
+    data = _get_request_payload("register_inspector")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
         return jsonify({"message": "Admin signup is not allowed"}), 403
 
-    name = (data.get("name") or "").strip() or (data.get("full_name") or "").strip()
+    name = (data.get("name") or data.get("full_name") or data.get("fullname") or "").strip()
     email = (data.get("email") or "").strip().lower()
     password = (data.get("password") or "").strip()
 
@@ -487,13 +508,12 @@ def register_inspector():
     if not name:
         return jsonify({"message": "name is required"}), 400
 
-    payload, err = _register_common(
-        name=name,
-        email=email,
-        password=password,
-        role="buyer",
-        extra={"phone": phone, "state": state, "city": city},
-    )
+    base_payload = {
+        "name": name,
+        "email": email,
+        "password": password,
+    }
+    payload, err = _register_common(base_payload, role="buyer", extra={"phone": phone, "state": state, "city": city})
     if err:
         return err
 
