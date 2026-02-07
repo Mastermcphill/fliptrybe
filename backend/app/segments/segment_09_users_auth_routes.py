@@ -125,7 +125,36 @@ def _bearer_token() -> str | None:
 @auth_bp.post("/register")
 def register():
     # Backwards-compatible: treat as buyer/seller signup
-    data = _get_request_payload("register")
+    data_json = request.get_json(silent=True)
+    data_form = request.form.to_dict() if request.form else {}
+    raw_text = ""
+    raw_len = 0
+    if not data_json and not data_form:
+        raw_text = request.get_data(cache=True, as_text=True) or ""
+        raw_len = len(raw_text)
+    try:
+        json_keys = list(data_json.keys()) if isinstance(data_json, dict) else []
+        form_keys = list(data_form.keys()) if isinstance(data_form, dict) else []
+        current_app.logger.warning(
+            "register_payload_debug content_type=%s content_length=%s json_keys=%s form_keys=%s raw_len=%s",
+            request.content_type,
+            request.content_length,
+            json_keys,
+            form_keys,
+            raw_len,
+        )
+    except Exception:
+        pass
+
+    data = data_json if isinstance(data_json, dict) and data_json else data_form
+    if not data and raw_text:
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            data = {}
+    if not isinstance(data, dict):
+        data = {}
+
     name = (data.get("name") or data.get("full_name") or data.get("fullname") or "").strip()
     email = (data.get("email") or "").strip().lower()
     phone = (data.get("phone") or "").strip() or None
