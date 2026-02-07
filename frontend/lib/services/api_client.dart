@@ -21,6 +21,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Fliptrybe-Client': ApiConfig.clientFingerprint,
       },
     ),
   )..interceptors.add(
@@ -32,6 +33,7 @@ class ApiClient {
           } else {
             options.headers.remove('Authorization');
           }
+          options.headers['X-Fliptrybe-Client'] = ApiConfig.clientFingerprint;
           // ignore: avoid_print
           print('*** Request ***');
           // ignore: avoid_print

@@ -10,9 +10,11 @@ import 'screens/inspector_dashboard_screen.dart';
 import 'screens/admin_hub_screen.dart';
 import 'screens/pending_approval_screen.dart';
 import 'services/api_service.dart';
+import 'services/api_config.dart';
 import 'services/token_storage.dart';
 
 void main() {
+  ApiConfig.logStartup();
   runApp(const FlipTrybeApp());
 }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../services/api_client.dart';
 import '../services/api_config.dart';
@@ -177,6 +178,18 @@ class _LandingScreenState extends State<LandingScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      if (kDebugMode) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'API: ${ApiConfig.baseUrl}\nFP: ${ApiConfig.clientFingerprint}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.25,
+                            color: Colors.white.withOpacity(0.8),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       SizedBox(
                         width: double.infinity,

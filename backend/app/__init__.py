@@ -1,9 +1,11 @@
 import os
 import subprocess
-from flask import Flask, jsonify
+import click
+from flask import Flask, jsonify, request
 from sqlalchemy import text
 
 from app.extensions import db, migrate, cors
+from app.models import User
 from app.segments.segment_09_users_auth_routes import auth_bp
 from app.segments.segment_20_rides_routes import ride_bp
 from app.segments.segment_payments import payments_bp
@@ -191,6 +193,22 @@ def create_app():
             "git_sha": _get_git_sha(),
         })
 
+    @app.get("/api/debug/client-echo")
+    def debug_client_echo():
+        return jsonify({
+            "ok": True,
+            "received_x_fliptrybe_client": request.headers.get("X-Fliptrybe-Client"),
+            "received_user_agent": request.headers.get("User-Agent"),
+            "request_path": request.path,
+        })
+
+    @app.before_request
+    def _log_client_fingerprint():
+        if request.path.startswith("/api/"):
+            fp = request.headers.get("X-Fliptrybe-Client")
+            if fp:
+                app.logger.info("X-Fliptrybe-Client=%s path=%s", fp, request.path)
+
 
     # -------------------------
     # Autopilot: run small tick on requests (throttled)
@@ -218,5 +236,28 @@ def create_app():
     app.register_blueprint(role_change_bp)
 
     app.register_blueprint(recon_bp)
+
+    @app.cli.command("bootstrap-admin")
+    def bootstrap_admin():
+        env = (os.getenv("FLIPTRYBE_ENV") or os.getenv("FLASK_ENV") or "dev").strip().lower()
+        allow = (os.getenv("ALLOW_ADMIN_BOOTSTRAP") or "").strip() == "1"
+        if env not in ("dev", "development", "local", "test") and not allow:
+            raise click.ClickException("Admin bootstrap disabled. Set ALLOW_ADMIN_BOOTSTRAP=1 or FLIPTRYBE_ENV=dev.")
+
+        email = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
+        password = (os.getenv("ADMIN_PASSWORD") or "").strip()
+        if not email or not password:
+            raise click.ClickException("ADMIN_EMAIL and ADMIN_PASSWORD must be set.")
+
+        u = User.query.filter_by(email=email).first()
+        if u:
+            u.set_password(password)
+            u.role = "admin"
+        else:
+            u = User(name=email.split("@")[0], email=email, role="admin")
+            u.set_password(password)
+            db.session.add(u)
+        db.session.commit()
+        click.echo(f"admin_bootstrap_ok {u.email}")
 
     return app

@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
 
 class ApiConfig {
   /// Override at build/run time:
@@ -10,6 +10,7 @@ class ApiConfig {
   /// Android-specific override (for device/LAN testing):
   /// flutter run --dart-define=ANDROID_BASE_URL=http://192.168.1.50:5000
   static const String _androidBaseUrlEnv = String.fromEnvironment('ANDROID_BASE_URL', defaultValue: '');
+  static const String _clientFingerprintEnv = String.fromEnvironment('CLIENT_FINGERPRINT', defaultValue: '');
 
   static String get baseUrl {
     String candidate;
@@ -34,6 +35,20 @@ class ApiConfig {
     }
 
     return candidate;
+  }
+
+  static String get clientFingerprint {
+    final raw = _clientFingerprintEnv.isNotEmpty
+        ? _clientFingerprintEnv
+        : 'fliptrybe_flutter_unknown_local';
+    // Allow only simple chars in release fingerprints.
+    return raw.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+  }
+
+  static void logStartup() {
+    if (!kDebugMode) return;
+    debugPrint('FlipTrybe API base: $baseUrl');
+    debugPrint('FlipTrybe client: $clientFingerprint');
   }
 
   /// Builds a full API URL under /api

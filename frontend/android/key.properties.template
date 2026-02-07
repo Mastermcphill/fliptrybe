@@ -1,0 +1,4 @@
+storeFile=../keystore/fliptrybe-release.jks
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=fliptrybe
