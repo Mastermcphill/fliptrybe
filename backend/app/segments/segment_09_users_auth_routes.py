@@ -9,6 +9,27 @@ from app.models import User, RoleChangeRequest
 from app.utils.jwt_utils import create_token, decode_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 
+
+def _conflict_message(email_user: User | None, phone_user: User | None) -> str | None:
+    if email_user and phone_user and getattr(email_user, "id", None) != getattr(phone_user, "id", None):
+        return "Email or phone already in use"
+    if phone_user:
+        return "Phone already in use"
+    if email_user:
+        return "Email already in use"
+    return None
+
+
+def _conflict_message_from_integrity(err: Exception) -> str:
+    msg = str(err)
+    if "users_phone_key" in msg or "phone" in msg:
+        if "users_email_key" in msg or "email" in msg:
+            return "Email or phone already in use"
+        return "Phone already in use"
+    if "users_email_key" in msg or "email" in msg:
+        return "Email already in use"
+    return "Email or phone already in use"
+
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
 
 def _get_request_payload(label: str) -> dict:
@@ -47,7 +68,31 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
     if not email or not password:
         return None, None, ({"message": "Email and password are required"}, 400)
 
-    u = User(name=(name or "").strip(), email=email.strip().lower())
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
+    email = email.strip().lower()
+    phone = (phone or "").strip() or None
+
+    try:
+        existing_email = User.query.filter_by(email=email).first()
+    except Exception:
+        existing_email = None
+    try:
+        existing_phone = User.query.filter_by(phone=phone).first() if phone else None
+    except Exception:
+        existing_phone = None
+    conflict_msg = _conflict_message(existing_email, existing_phone)
+    if conflict_msg:
+        try:
+            current_app.logger.info("register_conflict route=/api/auth/register type=%s", conflict_msg)
+        except Exception:
+            pass
+        return None, None, ({"message": conflict_msg}, 409)
+
+    u = User(name=(name or "").strip(), email=email)
     try:
         if phone:
             setattr(u, "phone", (phone or "").strip())
@@ -66,12 +111,12 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
         except Exception:
             pass
         try:
-            existing = User.query.filter_by(email=email.strip().lower()).first()
+            existing = User.query.filter_by(email=email).first()
             if existing:
                 record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})
         except Exception:
             pass
-        return None, None, ({"message": "Email already exists"}, 409)
+        return None, None, ({"message": _conflict_message_from_integrity(e)}, 409)
     except SQLAlchemyError as e:
         db.session.rollback()
         try:
@@ -179,7 +224,41 @@ def login():
     if not email or not password:
         return jsonify({"message": "Email and password are required"}), 400
 
-    u = User.query.filter_by(email=email).first()
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+
+    def _lookup_user():
+        return User.query.filter_by(email=email).first()
+
+    try:
+        u = _lookup_user()
+    except InternalError as e:
+        if "InFailedSqlTransaction" in str(e):
+            try:
+                db.session.rollback()
+                db.session.remove()
+            except Exception:
+                pass
+            try:
+                u = _lookup_user()
+            except Exception:
+                try:
+                    current_app.logger.exception("login_aborted_retry_failed")
+                except Exception:
+                    pass
+                return jsonify({"message": "Database error"}), 500
+        else:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                current_app.logger.exception("login_internal_error")
+            except Exception:
+                pass
+            return jsonify({"message": "Database error"}), 500
     if not u or not u.check_password(password):
         return jsonify({"message": "Invalid credentials"}), 401
 
@@ -265,98 +344,163 @@ def set_role():
 
 def _register_common(payload: dict, role: str, extra: dict | None = None):
     try:
-        db.session.rollback()
-    except Exception:
-        pass
-    name = (payload.get("name") or payload.get("full_name") or payload.get("fullname") or "").strip()
-    email = (payload.get("email") or "").strip().lower()
-    password = (payload.get("password") or "").strip()
-    raw_phone = (
-        payload.get("phone") or
-        payload.get("phone_number") or
-        payload.get("phoneNumber") or
-        payload.get("mobile") or
-        payload.get("mobile_number") or
-        ""
-    )
-    phone = "".join([c for c in str(raw_phone) if c not in [" ", "\t", "\n", "\r"]])
-    role = (role or "").strip().lower()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
-    if role == "admin":
-        return None, (jsonify({"message": "Admin signup is not allowed"}), 403)
+        name = (payload.get("name") or payload.get("full_name") or payload.get("fullname") or "").strip()
+        email = (payload.get("email") or "").strip().lower()
+        password = (payload.get("password") or "").strip()
+        raw_phone = (
+            payload.get("phone") or
+            payload.get("phone_number") or
+            payload.get("phoneNumber") or
+            payload.get("mobile") or
+            payload.get("mobile_number") or
+            ""
+        )
+        phone = "".join([c for c in str(raw_phone) if c not in [" ", "\t", "\n", "\r"]])
+        role = (role or "").strip().lower()
 
-    if not name:
-        return None, (jsonify({"message": "name is required"}), 400)
-    if not email or "@" not in email:
-        return None, (jsonify({"message": "valid email is required"}), 400)
-    if len(password) < 4:
-        return None, (jsonify({"message": "password is required"}), 400)
-    if not phone:
-        return None, (jsonify({"message": "phone is required"}), 400)
+        if role == "admin":
+            return None, (jsonify({"message": "Admin signup is not allowed"}), 403)
 
-    try:
-        existing = User.query.filter_by(email=email).first()
-    except InternalError as e:
-        if "InFailedSqlTransaction" in str(e):
-            try:
-                db.session.rollback()
-                db.session.remove()
-            except Exception:
-                pass
-            try:
-                existing = User.query.filter_by(email=email).first()
-            except Exception:
+        if not name:
+            return None, (jsonify({"message": "name is required"}), 400)
+        if not email or "@" not in email:
+            return None, (jsonify({"message": "valid email is required"}), 400)
+        if len(password) < 4:
+            return None, (jsonify({"message": "password is required"}), 400)
+        if not phone:
+            return None, (jsonify({"message": "phone is required"}), 400)
+
+        def _lookup_email():
+            return User.query.filter_by(email=email).first()
+
+        def _lookup_phone():
+            return User.query.filter_by(phone=phone).first()
+
+        try:
+            existing_phone = _lookup_phone()
+        except InternalError as e:
+            if "InFailedSqlTransaction" in str(e):
                 try:
-                    current_app.logger.exception("register_common_aborted_retry_failed")
+                    db.session.rollback()
+                    db.session.remove()
+                except Exception:
+                    pass
+                try:
+                    existing_phone = _lookup_phone()
+                except Exception:
+                    try:
+                        current_app.logger.exception("register_common_aborted_retry_failed")
+                    except Exception:
+                        pass
+                    return None, (jsonify({"message": "Database error"}), 500)
+            else:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                try:
+                    current_app.logger.exception("register_common_internal_error")
                 except Exception:
                     pass
                 return None, (jsonify({"message": "Database error"}), 500)
-        else:
-            db.session.rollback()
+
+        if existing_phone:
             try:
-                current_app.logger.exception("register_common_internal_error")
+                record_account_flag(int(existing_phone.id), "DUP_PHONE", signal=phone, details={"phone": phone})
             except Exception:
                 pass
-            return None, (jsonify({"message": "Database error"}), 500)
-    if existing:
+            try:
+                current_app.logger.info("register_conflict route=/api/auth/register/%s type=phone", role)
+            except Exception:
+                pass
+            return None, (jsonify({"message": "Phone already in use"}), 409)
+
         try:
-            record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})
-        except Exception:
-            pass
-        return None, (jsonify({"message": "User already exists"}), 400)
-
-    u = User(name=name, email=email, role=role, phone=phone)
-    u.set_password(password)
-
-    try:
-        if extra:
-            if hasattr(u, "profile_json"):
-                u.profile_json = json.dumps(extra)
+            existing = _lookup_email()
+        except InternalError as e:
+            if "InFailedSqlTransaction" in str(e):
+                try:
+                    db.session.rollback()
+                    db.session.remove()
+                except Exception:
+                    pass
+                try:
+                    existing = _lookup_email()
+                except Exception:
+                    try:
+                        current_app.logger.exception("register_common_aborted_retry_failed")
+                    except Exception:
+                        pass
+                    return None, (jsonify({"message": "Database error"}), 500)
             else:
-                setattr(u, "profile_json", json.dumps(extra))
-    except Exception:
-        pass
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                try:
+                    current_app.logger.exception("register_common_internal_error")
+                except Exception:
+                    pass
+                return None, (jsonify({"message": "Database error"}), 500)
 
-    try:
-        db.session.add(u)
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
+        if existing:
+            try:
+                record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})
+            except Exception:
+                pass
+            try:
+                current_app.logger.info("register_conflict route=/api/auth/register/%s type=email", role)
+            except Exception:
+                pass
+            return None, (jsonify({"message": "Email already in use"}), 409)
+
+        u = User(name=name, email=email, role=role, phone=phone)
+        u.set_password(password)
+
         try:
-            current_app.logger.exception("register_common_integrity_error")
+            if extra:
+                if hasattr(u, "profile_json"):
+                    u.profile_json = json.dumps(extra)
+                else:
+                    setattr(u, "profile_json", json.dumps(extra))
         except Exception:
             pass
-        return None, (jsonify({"message": "User already exists"}), 409)
-    except SQLAlchemyError:
-        db.session.rollback()
+
         try:
-            current_app.logger.exception("register_common_db_error")
+            db.session.add(u)
+            db.session.commit()
+        except IntegrityError as e:
+            db.session.rollback()
+            try:
+                current_app.logger.exception("register_common_integrity_error")
+            except Exception:
+                pass
+            try:
+                if User.query.filter_by(phone=phone).first():
+                    return None, (jsonify({"message": "Phone already in use"}), 409)
+            except Exception:
+                pass
+            return None, (jsonify({"message": _conflict_message_from_integrity(e)}), 409)
+        except SQLAlchemyError:
+            db.session.rollback()
+            try:
+                current_app.logger.exception("register_common_db_error")
+            except Exception:
+                pass
+            return None, (jsonify({"message": "Failed to register"}), 500)
+
+        token = create_token(str(u.id))
+        return {"token": token, "user": u.to_dict()}, None
+    finally:
+        try:
+            db.session.remove()
         except Exception:
             pass
-        return None, (jsonify({"message": "Failed to register"}), 500)
-
-    token = create_token(str(u.id))
-    return {"token": token, "user": u.to_dict()}, None
 
 
 @auth_bp.post("/register/buyer")
@@ -411,6 +555,33 @@ def register_merchant():
         return jsonify({"message": "password is required"}), 400
 
     try:
+        existing_phone = User.query.filter_by(phone=phone).first()
+    except InternalError as e:
+        if "InFailedSqlTransaction" in str(e):
+            try:
+                db.session.rollback()
+                db.session.remove()
+            except Exception:
+                pass
+            try:
+                existing_phone = User.query.filter_by(phone=phone).first()
+            except Exception:
+                return jsonify({"message": "Database error"}), 500
+        else:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return jsonify({"message": "Database error"}), 500
+
+    if existing_phone:
+        try:
+            current_app.logger.info("register_conflict route=/api/auth/register/merchant type=phone")
+        except Exception:
+            pass
+        return jsonify({"message": "Phone already in use"}), 409
+
+    try:
         dup_users = find_duplicate_phone_users(0, phone)
         if dup_users:
             for uid in dup_users:
@@ -422,24 +593,45 @@ def register_merchant():
     except Exception:
         pass
 
-    existing = User.query.filter_by(email=email).first()
+    try:
+        existing = User.query.filter_by(email=email).first()
+    except InternalError as e:
+        if "InFailedSqlTransaction" in str(e):
+            try:
+                db.session.rollback()
+                db.session.remove()
+            except Exception:
+                pass
+            try:
+                existing = User.query.filter_by(email=email).first()
+            except Exception:
+                return jsonify({"message": "Database error"}), 500
+        else:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return jsonify({"message": "Database error"}), 500
+
     if existing:
-        if not existing.check_password(password):
-            return jsonify({"message": "Invalid credentials"}), 401
-        user = existing
+        try:
+            current_app.logger.info("register_conflict route=/api/auth/register/merchant type=email")
+        except Exception:
+            pass
+        return jsonify({"message": "Email already in use"}), 409
     else:
         user = User(name=(data.get("owner_name") or data.get("name") or business_name), email=email, role="buyer")
         user.set_password(password)
         try:
             db.session.add(user)
             db.session.commit()
-        except IntegrityError:
+        except IntegrityError as e:
             db.session.rollback()
             try:
                 current_app.logger.exception("register_merchant_integrity_error")
             except Exception:
                 pass
-            return jsonify({"message": "User already exists"}), 409
+            return jsonify({"message": _conflict_message_from_integrity(e)}), 409
         except SQLAlchemyError:
             db.session.rollback()
             try:
@@ -527,6 +719,7 @@ def register_driver():
         "name": name,
         "email": email,
         "password": password,
+        "phone": phone,
     }
     payload, err = _register_common(base_payload, role="buyer", extra={"phone": phone, "state": state, "city": city})
     if err:
@@ -603,6 +796,7 @@ def register_inspector():
         "name": name,
         "email": email,
         "password": password,
+        "phone": phone,
     }
     payload, err = _register_common(base_payload, role="buyer", extra={"phone": phone, "state": state, "city": city})
     if err:

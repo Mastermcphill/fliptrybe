@@ -226,8 +226,7 @@ def create_app():
     @app.teardown_request
     def _cleanup_db_session(exc):
         try:
-            if exc is not None:
-                db.session.rollback()
+            db.session.rollback()
         finally:
             db.session.remove()
 
