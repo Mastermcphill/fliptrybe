@@ -24,6 +24,7 @@ if not _backend_url:
 
 celery = Celery("fliptrybe", broker=_broker_url, backend=_backend_url)
 celery.conf.update(flask_app.config)
+celery.conf.broker_connection_retry_on_startup = True
 
 
 class ContextTask(celery.Task):
