@@ -34,12 +34,12 @@ def upgrade():
 
     with op.batch_alter_table('users') as batch_op:
         batch_op.add_column(
-            sa.Column(
-                'created_at',
-                sa.DateTime(timezone=True),
-                nullable=False,
-                server_default=sa.text('CURRENT_TIMESTAMP')
-            )
+                sa.Column(
+                    'created_at',
+                    sa.DateTime(timezone=True),
+                    nullable=False,
+                    server_default=sa.text('now()')
+                )
         )
 
 
