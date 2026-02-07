@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
@@ -50,6 +51,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       final name = _name.text.trim();
       final email = _email.text.trim();
       final password = _password.text.trim();
+      final phone = _phone.text.trim();
 
       if (name.isEmpty) {
         _toast("Full name is required");
@@ -63,12 +65,17 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         _toast("Password must be at least 4 characters");
         return;
       }
+      if (phone.isEmpty) {
+        _toast("Phone is required");
+        return;
+      }
 
       String path = "/auth/register/buyer";
       Map<String, dynamic> payload = {
         "name": name,
         "email": email,
         "password": password,
+        "phone": phone,
       };
 
       if (_role == "buyer") {
@@ -77,10 +84,6 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       } else if (_role == "merchant") {
         if (_business.text.trim().isEmpty) {
           _toast("Business name is required");
-          return;
-        }
-        if (_phone.text.trim().isEmpty) {
-          _toast("Phone is required");
           return;
         }
         if (_reason.text.trim().isEmpty) {
@@ -92,34 +95,26 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           "owner_name": name,
           "email": email,
           "password": password,
+          "phone": phone,
           "business_name": _business.text.trim(),
-          "phone": _phone.text.trim(),
           "state": _state.text.trim(),
           "city": _city.text.trim(),
           "category": _category.text.trim(),
           "reason": _reason.text.trim(),
         };
       } else if (_role == "driver") {
-        if (_phone.text.trim().isEmpty) {
-          _toast("Phone is required");
-          return;
-        }
         path = "/auth/register/driver";
         payload = {
           "name": name,
           "email": email,
           "password": password,
-          "phone": _phone.text.trim(),
+          "phone": phone,
           "state": _state.text.trim(),
           "city": _city.text.trim(),
           "vehicle_type": _vehicle.text.trim(),
           "plate_number": _plate.text.trim(),
         };
       } else if (_role == "inspector") {
-        if (_phone.text.trim().isEmpty) {
-          _toast("Phone is required");
-          return;
-        }
         if (_inspectorReason.text.trim().isEmpty) {
           _toast("Tell us why you want to be an inspector");
           return;
@@ -129,12 +124,17 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           "name": name,
           "email": email,
           "password": password,
-          "phone": _phone.text.trim(),
+          "phone": phone,
           "state": _state.text.trim(),
           "city": _city.text.trim(),
           "region": _region.text.trim(),
           "reason": _inspectorReason.text.trim(),
         };
+      }
+
+      if (kDebugMode) {
+        final keys = payload.keys.where((k) => k.toLowerCase() != "password").toList();
+        debugPrint("Signup payload keys: $keys role=$_role path=$path");
       }
 
       final res = await ApiClient.instance.postJson(ApiConfig.api(path), payload);
@@ -320,10 +320,10 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
             _field(_name, "Full name"),
             _field(_email, "Email", keyboard: TextInputType.emailAddress),
             _field(_password, "Password"),
+            _field(_phone, "Phone", keyboard: TextInputType.phone),
 
             if (_role != "buyer") ...[
               const SizedBox(height: 6),
-              _field(_phone, "Phone", keyboard: TextInputType.phone),
               _field(_state, "State"),
               _field(_city, "City"),
             ],

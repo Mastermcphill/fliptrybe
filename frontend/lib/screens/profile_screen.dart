@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import 'driver_profile_screen.dart';
-import '../widgets/coming_soon_sheet.dart';
 import '../services/api_service.dart';
 import '../services/api_config.dart';
 import '../services/token_storage.dart';
@@ -370,6 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildMenuItem(IconData icon, String title, {VoidCallback? onTap}) {
+    final enabled = onTap != null;
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       decoration: BoxDecoration(
@@ -379,8 +379,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white),
         title: Text(title, style: const TextStyle(color: Colors.white)),
-        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
-        onTap: () { ComingSoonSheet.show(context); },
+        subtitle: enabled ? null : const Text('In next release', style: TextStyle(color: Colors.grey)),
+        trailing: Icon(enabled ? Icons.arrow_forward_ios : Icons.lock_outline, color: Colors.grey, size: 16),
+        onTap: onTap,
       ),
     );
   }

@@ -68,6 +68,7 @@ class AuthService {
         name: 'FlipTrybe User',
         email: demoEmail,
         password: demoPassword,
+        phone: phone,
       );
 
       final t = reg['token'];

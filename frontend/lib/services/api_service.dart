@@ -53,14 +53,20 @@ class ApiService {
     required String name,
     required String email,
     required String password,
+    String? phone,
   }) async {
     final url = ApiConfig.api('/auth/register');
 
-    final res = await _client.dio.post(url, data: {
+    final payload = {
       'name': name,
       'email': email,
       'password': password,
-    });
+    };
+    if (phone != null && phone.trim().isNotEmpty) {
+      payload['phone'] = phone.trim();
+    }
+
+    final res = await _client.dio.post(url, data: payload);
 
     final data = _asMap(res.data);
 

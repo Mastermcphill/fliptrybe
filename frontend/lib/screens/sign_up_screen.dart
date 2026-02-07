@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
@@ -116,7 +117,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'name': name,
           'email': email,
           'password': password,
+          'phone': phone,
         };
+      }
+
+      if (kDebugMode) {
+        final keys = payload.keys.where((k) => k.toLowerCase() != 'password').toList();
+        debugPrint('Signup payload keys: $keys role=$_role path=$path');
       }
 
       final res = await ApiClient.instance.postJson(ApiConfig.api(path), payload);

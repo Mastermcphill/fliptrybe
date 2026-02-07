@@ -128,8 +128,8 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
           ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Notify Queue'),
-            subtitle: const Text('SMS/WhatsApp/In-app hooks'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotifyQueueScreen())),
+            subtitle: const Text('In next release'),
+            onTap: null,
           ),
           ListTile(
             leading: const Icon(Icons.verified_user_outlined),
