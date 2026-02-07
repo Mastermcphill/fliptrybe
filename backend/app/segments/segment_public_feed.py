@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 
 from app.extensions import db
 from app.models import OrderEvent, Order, Listing
@@ -19,6 +19,10 @@ def sales_ticker():
     except Exception:
         limit = 8
     limit = max(1, min(limit, 20))
+    try:
+        current_app.logger.info("sales_ticker called limit=%s", limit)
+    except Exception:
+        pass
 
     # Only show very recent confirmations (keeps it believable)
     cutoff = datetime.utcnow() - timedelta(days=14)

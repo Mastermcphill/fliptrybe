@@ -48,6 +48,7 @@ from app.segments.segment_merchant_follow import merchant_follow_bp
 from app.segments.segment_inspector_bonds_admin import inspector_bonds_admin_bp
 from app.segments.segment_role_change import role_change_bp
 from app.segments.segment_moneybox import moneybox_bp, moneybox_system_bp
+from app.segments.segment_public_feed import public_bp
 
 
 def create_app():
@@ -137,6 +138,7 @@ def create_app():
     app.register_blueprint(demo_bp)
     app.register_blueprint(moneybox_bp)
     app.register_blueprint(moneybox_system_bp)
+    app.register_blueprint(public_bp)
 
     # Health check
     @app.get("/api/health")
