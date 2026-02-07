@@ -271,6 +271,15 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
     name = (payload.get("name") or payload.get("full_name") or payload.get("fullname") or "").strip()
     email = (payload.get("email") or "").strip().lower()
     password = (payload.get("password") or "").strip()
+    raw_phone = (
+        payload.get("phone") or
+        payload.get("phone_number") or
+        payload.get("phoneNumber") or
+        payload.get("mobile") or
+        payload.get("mobile_number") or
+        ""
+    )
+    phone = "".join([c for c in str(raw_phone) if c not in [" ", "\t", "\n", "\r"]])
     role = (role or "").strip().lower()
 
     if role == "admin":
@@ -282,6 +291,8 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
         return None, (jsonify({"message": "valid email is required"}), 400)
     if len(password) < 4:
         return None, (jsonify({"message": "password is required"}), 400)
+    if not phone:
+        return None, (jsonify({"message": "phone is required"}), 400)
 
     try:
         existing = User.query.filter_by(email=email).first()
@@ -314,7 +325,7 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
             pass
         return None, (jsonify({"message": "User already exists"}), 400)
 
-    u = User(name=name, email=email, role=role)
+    u = User(name=name, email=email, role=role, phone=phone)
     u.set_password(password)
 
     try:
@@ -367,7 +378,15 @@ def register_merchant():
     if role == "admin":
         return jsonify({"message": "Admin signup is not allowed"}), 403
     business_name = (data.get("business_name") or "").strip()
-    phone = (data.get("phone") or "").strip()
+    phone = (
+        data.get("phone") or
+        data.get("phone_number") or
+        data.get("phoneNumber") or
+        data.get("mobile") or
+        data.get("mobile_number") or
+        ""
+    )
+    phone = "".join([c for c in str(phone) if c not in [" ", "\t", "\n", "\r"]])
     state = (data.get("state") or "").strip()
     city = (data.get("city") or "").strip()
     category = (data.get("category") or "").strip()
@@ -473,7 +492,15 @@ def register_driver():
     email = (data.get("email") or "").strip().lower()
     password = (data.get("password") or "").strip()
 
-    phone = (data.get("phone") or "").strip()
+    phone = (
+        data.get("phone") or
+        data.get("phone_number") or
+        data.get("phoneNumber") or
+        data.get("mobile") or
+        data.get("mobile_number") or
+        ""
+    )
+    phone = "".join([c for c in str(phone) if c not in [" ", "\t", "\n", "\r"]])
     state = (data.get("state") or "").strip()
     city = (data.get("city") or "").strip()
     vehicle_type = (data.get("vehicle_type") or "").strip()
@@ -544,7 +571,15 @@ def register_inspector():
     email = (data.get("email") or "").strip().lower()
     password = (data.get("password") or "").strip()
 
-    phone = (data.get("phone") or "").strip()
+    phone = (
+        data.get("phone") or
+        data.get("phone_number") or
+        data.get("phoneNumber") or
+        data.get("mobile") or
+        data.get("mobile_number") or
+        ""
+    )
+    phone = "".join([c for c in str(phone) if c not in [" ", "\t", "\n", "\r"]])
     state = (data.get("state") or "").strip()
     city = (data.get("city") or "").strip()
     region = (data.get("region") or "").strip()
