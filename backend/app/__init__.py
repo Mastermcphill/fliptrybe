@@ -154,6 +154,14 @@ def create_app():
             payload["db_error"] = db_error
         return jsonify(payload)
 
+    @app.get("/")
+    def root():
+        return jsonify({
+            "ok": True,
+            "service": "fliptrybe-backend",
+            "env": env,
+        })
+
     @app.get("/api/version")
     def version():
         def _get_alembic_head() -> str:
