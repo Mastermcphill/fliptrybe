@@ -1,8 +1,8 @@
 import os
 import json
 from datetime import datetime
-from flask import Blueprint, request, jsonify
-from sqlalchemy.exc import IntegrityError
+from flask import Blueprint, request, jsonify, current_app
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.extensions import db
 from app.models import User, RoleChangeRequest
@@ -32,8 +32,12 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
     try:
         db.session.add(u)
         db.session.commit()
-    except IntegrityError:
+    except IntegrityError as e:
         db.session.rollback()
+        try:
+            current_app.logger.exception("create_user_integrity_error")
+        except Exception:
+            pass
         try:
             existing = User.query.filter_by(email=email.strip().lower()).first()
             if existing:
@@ -41,6 +45,13 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
         except Exception:
             pass
         return None, None, ({"message": "Email already exists"}, 409)
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("create_user_db_error")
+        except Exception:
+            pass
+        return None, None, ({"message": "Failed to create user"}, 500)
 
     token = create_token(u.id)
     return u, token, None
@@ -68,9 +79,13 @@ def _create_role_request(*, user: User, requested_role: str, meta: dict | None =
         db.session.add(req)
         db.session.commit()
         return req, None
-    except Exception as e:
+    except SQLAlchemyError:
         db.session.rollback()
-        return None, ({"message": "Failed to create role request", "error": str(e)}, 500)
+        try:
+            current_app.logger.exception("role_request_db_error")
+        except Exception:
+            pass
+        return None, ({"message": "Failed to create role request"}, 500)
 
 
 def _bearer_token() -> str | None:
@@ -231,9 +246,20 @@ def _register_common(name: str, email: str, password: str, role: str, extra: dic
     try:
         db.session.add(u)
         db.session.commit()
-    except Exception as e:
+    except IntegrityError:
         db.session.rollback()
-        return None, (jsonify({"message": "Failed to register", "error": str(e)}), 500)
+        try:
+            current_app.logger.exception("register_common_integrity_error")
+        except Exception:
+            pass
+        return None, (jsonify({"message": "User already exists"}), 409)
+    except SQLAlchemyError:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("register_common_db_error")
+        except Exception:
+            pass
+        return None, (jsonify({"message": "Failed to register"}), 500)
 
     token = create_token(str(u.id))
     return {"token": token, "user": u.to_dict()}, None
@@ -310,9 +336,20 @@ def register_merchant():
         try:
             db.session.add(user)
             db.session.commit()
-        except Exception as e:
+        except IntegrityError:
             db.session.rollback()
-            return jsonify({"message": "Failed to register", "error": str(e)}), 500
+            try:
+                current_app.logger.exception("register_merchant_integrity_error")
+            except Exception:
+                pass
+            return jsonify({"message": "User already exists"}), 409
+        except SQLAlchemyError:
+            db.session.rollback()
+            try:
+                current_app.logger.exception("register_merchant_db_error")
+            except Exception:
+                pass
+            return jsonify({"message": "Failed to register"}), 500
 
     if user.role not in ("buyer", "driver", "inspector"):
         return jsonify({"message": "Role change not allowed"}), 403

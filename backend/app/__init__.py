@@ -66,6 +66,10 @@ def create_app():
     # Basic config
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True,
+        "pool_reset_on_return": "rollback",
+    }
 
     # Ensure instance dir exists for SQLite paths
     instance_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "instance"))
@@ -208,6 +212,21 @@ def create_app():
             fp = request.headers.get("X-Fliptrybe-Client")
             if fp:
                 app.logger.info("X-Fliptrybe-Client=%s path=%s", fp, request.path)
+
+    @app.before_request
+    def _reset_db_session():
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+    @app.teardown_request
+    def _cleanup_db_session(exc):
+        try:
+            if exc is not None:
+                db.session.rollback()
+        finally:
+            db.session.remove()
 
 
     # -------------------------
