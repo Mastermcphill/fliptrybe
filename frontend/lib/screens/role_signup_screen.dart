@@ -17,6 +17,7 @@ class RoleSignupScreen extends StatefulWidget {
 class _RoleSignupScreenState extends State<RoleSignupScreen> {
   String _role = "buyer";
   bool _loading = false;
+  bool _compact = false;
 
   final _name = TextEditingController();
   final _email = TextEditingController();
@@ -172,17 +173,28 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     required String title,
     required String subtitle,
     required IconData icon,
+    bool primary = false,
   }) {
     final selected = _role == value;
+    final borderColor = selected
+        ? Colors.black
+        : primary
+            ? const Color(0xFF0F172A)
+            : const Color(0xFFE5E7EB);
+    final bg = selected
+        ? const Color(0xFF0B1220)
+        : primary
+            ? const Color(0xFFF8FAFC)
+            : Colors.white;
     return InkWell(
       onTap: _loading ? null : () => setState(() => _role = value),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(primary ? 18 : 16),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF0B1220) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? Colors.black : const Color(0xFFE5E7EB)),
+          color: bg,
+          borderRadius: BorderRadius.circular(primary ? 18 : 16),
+          border: Border.all(color: borderColor),
           boxShadow: selected
               ? [
                   BoxShadow(
@@ -196,8 +208,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         child: Row(
           children: [
             Container(
-              width: 44,
-              height: 44,
+              width: primary ? 48 : 44,
+              height: primary ? 48 : 44,
               decoration: BoxDecoration(
                 color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(14),
@@ -229,6 +241,22 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                 ],
               ),
             ),
+            if (primary)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFE2E8F0),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  "Primary",
+                  style: TextStyle(
+                    color: selected ? Colors.white : const Color(0xFF0F172A),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -269,103 +297,110 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _compact = MediaQuery.of(context).size.width < 360;
     return Scaffold(
       appBar: AppBar(title: const Text("Choose your path")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Secure deals. Verified delivery. Peace of mind.",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "Pick how you want to use FlipTrybe. You can upgrade roles later, but this helps us set you up right from day one.",
-              style: TextStyle(color: Colors.black.withOpacity(0.65), height: 1.3),
-            ),
-            const SizedBox(height: 14),
-
-            _roleCard(
-              value: "buyer",
-              title: "Users (Buy & Sell)",
-              subtitle: "Buy and sell items safely with escrow and delivery confirmation.",
-              icon: Icons.shopping_bag_rounded,
-            ),
-            const SizedBox(height: 10),
-            _roleCard(
-              value: "merchant",
-              title: "Merchants",
-              subtitle: "List items, manage orders, and grow followers.",
-              icon: Icons.storefront_rounded,
-            ),
-            const SizedBox(height: 10),
-            _roleCard(
-              value: "driver",
-              title: "Drivers",
-              subtitle: "Deliver orders and earn. Access driver jobs based on locality.",
-              icon: Icons.delivery_dining_rounded,
-            ),
-            const SizedBox(height: 10),
-            _roleCard(
-              value: "inspector",
-              title: "Inspectors",
-              subtitle: "Verify items and approve inspection tasks.",
-              icon: Icons.verified_user_rounded,
-            ),
-
-            const Divider(height: 28),
-
-            _field(_name, "Full name"),
-            _field(_email, "Email", keyboard: TextInputType.emailAddress),
-            _field(_password, "Password"),
-            _field(_phone, "Phone", keyboard: TextInputType.phone),
-
-            if (_role != "buyer") ...[
-              const SizedBox(height: 6),
-              _field(_state, "State"),
-              _field(_city, "City"),
-            ],
-
-            if (_role == "merchant") ...[
-              const Divider(height: 28),
-              _field(_business, "Business name"),
-              _field(_category, "Category"),
-              _field(_reason, "Why do you want a merchant account?"),
-            ],
-
-            if (_role == "driver") ...[
-              const Divider(height: 28),
-              _field(_vehicle, "Vehicle type"),
-              _field(_plate, "Plate number"),
-            ],
-
-            if (_role == "inspector") ...[
-              const Divider(height: 28),
-              _field(_region, "Region (optional)"),
-              _field(_inspectorReason, "Why do you want to be an inspector?"),
-            ],
-
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _loading ? null : _signup,
-                icon: _loading
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.lock_rounded),
-                label: Text(_loading ? "Creating..." : "Create account"),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Choose your role",
+                style: TextStyle(
+                  fontSize: _compact ? 20 : 22,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _role == "buyer"
-                  ? "Tip: You can start buying/selling instantly."
-                  : "Note: ${_role.toUpperCase()} activation is reviewed for safety. You'll still have access to Buy & Sell while we verify you.",
-              style: TextStyle(color: Colors.black.withOpacity(0.6)),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Text(
+                "Pick how you want to use FlipTrybe. You can upgrade roles later, but this helps us set you up right from day one.",
+                style: TextStyle(color: Colors.black.withOpacity(0.65), height: 1.35),
+              ),
+              const SizedBox(height: 14),
+
+              _roleCard(
+                value: "buyer",
+                title: "Buy & Sell",
+                subtitle: "Buy and sell items safely with escrow and delivery confirmation.",
+                icon: Icons.shopping_bag_rounded,
+                primary: true,
+              ),
+              const SizedBox(height: 10),
+              _roleCard(
+                value: "merchant",
+                title: "Merchant",
+                subtitle: "List items, manage orders, and grow followers.",
+                icon: Icons.storefront_rounded,
+              ),
+              const SizedBox(height: 10),
+              _roleCard(
+                value: "driver",
+                title: "Driver",
+                subtitle: "Deliver orders and earn. Access driver jobs based on locality.",
+                icon: Icons.delivery_dining_rounded,
+              ),
+              const SizedBox(height: 10),
+              _roleCard(
+                value: "inspector",
+                title: "Inspector",
+                subtitle: "Verify items and approve inspection tasks.",
+                icon: Icons.verified_user_rounded,
+              ),
+
+              const Divider(height: 28),
+
+              _field(_name, "Full name"),
+              _field(_email, "Email", keyboard: TextInputType.emailAddress),
+              _field(_password, "Password"),
+              _field(_phone, "Phone", keyboard: TextInputType.phone),
+
+              if (_role != "buyer") ...[
+                const SizedBox(height: 6),
+                _field(_state, "State"),
+                _field(_city, "City"),
+              ],
+
+              if (_role == "merchant") ...[
+                const Divider(height: 28),
+                _field(_business, "Business name"),
+                _field(_category, "Category"),
+                _field(_reason, "Why do you want a merchant account?"),
+              ],
+
+              if (_role == "driver") ...[
+                const Divider(height: 28),
+                _field(_vehicle, "Vehicle type"),
+                _field(_plate, "Plate number"),
+              ],
+
+              if (_role == "inspector") ...[
+                const Divider(height: 28),
+                _field(_region, "Region (optional)"),
+                _field(_inspectorReason, "Why do you want to be an inspector?"),
+              ],
+
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _loading ? null : _signup,
+                  icon: _loading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.lock_rounded),
+                  label: Text(_loading ? "Creating..." : "Create account"),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _role == "buyer"
+                    ? "Tip: You can start buying and selling instantly."
+                    : "Note: ${_role.toUpperCase()} activation is reviewed for safety. You'll still have access to Buy & Sell while we verify you.",
+                style: TextStyle(color: Colors.black.withOpacity(0.6)),
+              ),
+            ],
+          ),
         ),
       ),
     );
