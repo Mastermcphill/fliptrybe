@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import or_
 
 from app.extensions import db
@@ -169,13 +169,21 @@ def admin_threads():
         return jsonify({"message": "Forbidden"}), 403
 
     # Basic list: users with recent activity
-    q = db.session.query(
-        SupportMessage.user_id,
-        db.func.max(SupportMessage.created_at).label("last_at"),
-        db.func.count(SupportMessage.id).label("count"),
-    ).group_by(SupportMessage.user_id).order_by(db.text("last_at desc")).limit(200)
-
-    rows = q.all()
+    try:
+        db.session.rollback()
+        q = db.session.query(
+            SupportMessage.user_id,
+            db.func.max(SupportMessage.created_at).label("last_at"),
+            db.func.count(SupportMessage.id).label("count"),
+        ).group_by(SupportMessage.user_id).order_by(db.text("last_at desc")).limit(200)
+        rows = q.all()
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("support_threads_error")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "threads": []}), 200
     out = []
     for user_id, last_at, count in rows:
         user = User.query.get(int(user_id))
