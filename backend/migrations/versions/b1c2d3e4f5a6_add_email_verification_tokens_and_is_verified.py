@@ -42,10 +42,28 @@ def upgrade():
         op.create_index("ix_email_verification_tokens_user_id", "email_verification_tokens", ["user_id"])
         op.create_index("ix_email_verification_tokens_token_hash", "email_verification_tokens", ["token_hash"], unique=True)
 
+    if not _has_table(inspector, "password_reset_tokens"):
+        op.create_table(
+            "password_reset_tokens",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("user_id", sa.Integer(), nullable=False),
+            sa.Column("token_hash", sa.String(length=128), nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP") if bind.dialect.name == "sqlite" else sa.text("now()")),
+            sa.Column("expires_at", sa.DateTime(), nullable=False),
+            sa.Column("used_at", sa.DateTime(), nullable=True),
+        )
+        op.create_index("ix_password_reset_tokens_user_id", "password_reset_tokens", ["user_id"])
+        op.create_index("ix_password_reset_tokens_token_hash", "password_reset_tokens", ["token_hash"], unique=True)
+
 
 def downgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
+    if _has_table(inspector, "password_reset_tokens"):
+        op.drop_index("ix_password_reset_tokens_token_hash", table_name="password_reset_tokens")
+        op.drop_index("ix_password_reset_tokens_user_id", table_name="password_reset_tokens")
+        op.drop_table("password_reset_tokens")
+
     if _has_table(inspector, "email_verification_tokens"):
         op.drop_index("ix_email_verification_tokens_token_hash", table_name="email_verification_tokens")
         op.drop_index("ix_email_verification_tokens_user_id", table_name="email_verification_tokens")

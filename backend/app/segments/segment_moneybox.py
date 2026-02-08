@@ -89,7 +89,7 @@ def _allowed_role(u: User | None) -> bool:
 def _is_email_verified(u: User | None) -> bool:
     if not u:
         return False
-    return bool(getattr(u, "email_verified_at", None))
+    return bool(getattr(u, "is_verified", False))
 
 
 def _account_response(acct: MoneyBoxAccount) -> dict:
@@ -315,6 +315,8 @@ def withdraw():
         return jsonify({"message": "Unauthorized"}), 401
     if not _allowed_role(u):
         return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
+    if not _is_email_verified(u):
+        return jsonify({"message": "Email verification required"}), 403
 
     acct = get_or_create_account(int(u.id))
 

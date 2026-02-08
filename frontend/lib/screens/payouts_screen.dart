@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/wallet_service.dart';
 import '../services/bank_store.dart';
+import '../services/api_service.dart';
 
 class PayoutsScreen extends StatefulWidget {
   const PayoutsScreen({super.key});
@@ -14,6 +15,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
   final _svc = WalletService();
   final _store = BankStore();
   bool _remember = true;
+  bool _sendingVerify = false;
 
   final _amount = TextEditingController(text: '5000');
   final _bank = TextEditingController(text: 'GTBank');
@@ -22,6 +24,52 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
 
   bool _loading = true;
   List<dynamic> _rows = const [];
+
+  bool _isVerifyMessage(String msg) {
+    final m = msg.toLowerCase();
+    return m.contains('verify your email') || m.contains('email verification required');
+  }
+
+  Future<void> _showVerifyDialog(String msg) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Email verification required'),
+          content: Text(msg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: _sendingVerify
+                  ? null
+                  : () async {
+                      try {
+                        _sendingVerify = true;
+                        await ApiService.verifySend();
+                        if (!mounted) return;
+                        Navigator.of(ctx).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Verification email sent')),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Resend failed: $e')),
+                        );
+                      } finally {
+                        _sendingVerify = false;
+                      }
+                    },
+              child: const Text('Resend verification'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -59,7 +107,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
       );
     }
 
-    final ok = await _svc.requestPayout(
+    final res = await _svc.requestPayout(
       amount: amt,
       bankName: _bank.text,
       accountNumber: _acctNo.text,
@@ -67,8 +115,13 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(ok ? 'Payout requested' : 'Request failed')));
+    final ok = res['ok'] == true;
+    final msg = (res['message'] ?? res['error'] ?? (ok ? 'Payout requested' : 'Request failed')).toString();
+    if (!ok && _isVerifyMessage(msg)) {
+      await _showVerifyDialog(msg);
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     if (ok) _load();
   }
 

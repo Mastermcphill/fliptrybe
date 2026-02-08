@@ -76,7 +76,7 @@ def _role(u: User | None) -> str:
 def _is_email_verified(u: User | None) -> bool:
     if not u:
         return False
-    return bool(getattr(u, "email_verified_at", None))
+    return bool(getattr(u, "is_verified", False))
 
 
 def _platform_user_id() -> int:

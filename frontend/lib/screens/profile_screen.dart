@@ -41,6 +41,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
   String? _error;
+  bool _sendingVerify = false;
 
   @override
   void initState() {
@@ -118,6 +119,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       (route) => false,
     );
+  }
+
+  Future<void> _resendVerify() async {
+    if (_sendingVerify) return;
+    setState(() => _sendingVerify = true);
+    try {
+      await ApiService.verifySend();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification email sent (check inbox).')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Resend failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sendingVerify = false);
+    }
   }
 
   @override
@@ -265,6 +285,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
 
                       const SizedBox(height: 25),
+
+                      if (!isVerified) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2A2A2A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orangeAccent.withOpacity(0.6)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Verify your email to withdraw, upgrade tiers, and sell.',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 8),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _sendingVerify ? null : _resendVerify,
+                                  icon: _sendingVerify
+                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                      : const Icon(Icons.mail_outline),
+                                  label: Text(_sendingVerify ? 'Sending...' : 'Resend verification email'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                      ],
 
                       // 2. ACTION GRID
                       Row(

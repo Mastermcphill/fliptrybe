@@ -10,7 +10,6 @@ class ResetPasswordScreen extends StatefulWidget {
 }
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
-  final _emailCtrl = TextEditingController();
   final _tokenCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
@@ -23,7 +22,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _submit() async {
     if (_loading) return;
-    final email = _emailCtrl.text.trim();
     final tokenOrCode = _tokenCtrl.text.trim();
     final pw = _passwordCtrl.text.trim();
     final pw2 = _confirmCtrl.text.trim();
@@ -43,12 +41,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     setState(() => _loading = true);
     try {
-      final isToken = tokenOrCode.length > 8 && !RegExp(r'^\d{6}$').hasMatch(tokenOrCode);
-      if (isToken) {
-        await ApiService.passwordReset(newPassword: pw, token: tokenOrCode);
-      } else {
-        await ApiService.passwordReset(newPassword: pw, code: tokenOrCode, email: email);
-      }
+      await ApiService.passwordReset(newPassword: pw, token: tokenOrCode);
       _toast('Password reset successful. You can log in now.');
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -60,7 +53,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
     _tokenCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
@@ -75,18 +67,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
-            controller: _emailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email (required for code flow)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
             controller: _tokenCtrl,
             decoration: const InputDecoration(
-              labelText: 'Token or 6-digit code',
+              labelText: 'Token',
               border: OutlineInputBorder(),
             ),
           ),

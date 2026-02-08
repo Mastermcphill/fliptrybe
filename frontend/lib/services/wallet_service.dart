@@ -2,6 +2,12 @@ import 'api_client.dart';
 import 'api_config.dart';
 
 class WalletService {
+  Map<String, dynamic> _asMap(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return data.map((k, v) => MapEntry('$k', v));
+    return <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>?> getWallet() async {
     try {
       final data = await ApiClient.instance.getJson(ApiConfig.api('/wallet'));
@@ -43,22 +49,27 @@ class WalletService {
     }
   }
 
-  Future<bool> requestPayout({
+  Future<Map<String, dynamic>> requestPayout({
     required double amount,
     required String bankName,
     required String accountNumber,
     required String accountName,
   }) async {
     try {
-      final data = await ApiClient.instance.postJson(ApiConfig.api('/wallet/payouts'), {
+      final res = await ApiClient.instance.dio.post(ApiConfig.api('/wallet/payouts'), data: {
         'amount': amount,
         'bank_name': bankName,
         'account_number': accountNumber,
         'account_name': accountName,
       });
-      return data is Map && data['ok'] == true;
+      final data = _asMap(res.data);
+      final status = res.statusCode ?? 0;
+      final ok = status >= 200 && status < 300 && data['ok'] != false;
+      data['ok'] = ok;
+      data['status'] = status;
+      return data;
     } catch (_) {
-      return false;
+      return {'ok': false, 'message': 'Request failed'};
     }
   }
 }

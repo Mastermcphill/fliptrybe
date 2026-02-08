@@ -114,34 +114,23 @@ class ApiService {
   // EMAIL VERIFICATION + PASSWORD RESET
   // ---------------------------
 
-  static Future<Map<String, dynamic>> verifySend({String? email}) async {
-    final url = ApiConfig.api('/auth/verify/send');
-    final payload = <String, dynamic>{};
-    if (email != null && email.trim().isNotEmpty) {
-      payload['email'] = email.trim();
-    }
-    final res = await _client.dio.post(url, data: payload);
+  static Future<Map<String, dynamic>> verifySend() async {
+    final url = ApiConfig.api('/auth/verify-email/resend');
+    final res = await _client.dio.post(url, data: {});
     return _asMap(res.data);
   }
 
   static Future<Map<String, dynamic>> verifyConfirm({
-    String? token,
-    String? code,
-    String? email,
+    required String token,
   }) async {
-    final url = ApiConfig.api('/auth/verify/confirm');
-    final payload = <String, dynamic>{};
-    if (token != null && token.trim().isNotEmpty) {
-      payload['token'] = token.trim();
-    } else {
-      if (code != null && code.trim().isNotEmpty) {
-        payload['code'] = code.trim();
-      }
-      if (email != null && email.trim().isNotEmpty) {
-        payload['email'] = email.trim();
-      }
-    }
-    final res = await _client.dio.post(url, data: payload);
+    final url = ApiConfig.api('/auth/verify-email');
+    final res = await _client.dio.get(url, queryParameters: {'token': token.trim()});
+    return _asMap(res.data);
+  }
+
+  static Future<Map<String, dynamic>> verifyStatus() async {
+    final url = ApiConfig.api('/auth/verify-email/status');
+    final res = await _client.dio.get(url);
     return _asMap(res.data);
   }
 
@@ -153,22 +142,11 @@ class ApiService {
 
   static Future<Map<String, dynamic>> passwordReset({
     required String newPassword,
-    String? token,
-    String? code,
-    String? email,
+    required String token,
   }) async {
     final url = ApiConfig.api('/auth/password/reset');
     final payload = <String, dynamic>{'new_password': newPassword};
-    if (token != null && token.trim().isNotEmpty) {
-      payload['token'] = token.trim();
-    } else {
-      if (code != null && code.trim().isNotEmpty) {
-        payload['code'] = code.trim();
-      }
-      if (email != null && email.trim().isNotEmpty) {
-        payload['email'] = email.trim();
-      }
-    }
+    payload['token'] = token.trim();
     final res = await _client.dio.post(url, data: payload);
     return _asMap(res.data);
   }

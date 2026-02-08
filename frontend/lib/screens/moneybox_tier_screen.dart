@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/moneybox_service.dart';
+import '../services/api_service.dart';
 
 class MoneyBoxTierScreen extends StatefulWidget {
   const MoneyBoxTierScreen({super.key});
@@ -20,19 +21,67 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
     {'tier': 4, 'label': 'Tier 4', 'duration': '11 months', 'bonus': '15% bonus'},
   ];
 
+  bool _isVerifyMessage(String msg) {
+    final m = msg.toLowerCase();
+    return m.contains('verify your email') || m.contains('email verification required');
+  }
+
+  Future<void> _showVerifyDialog(String msg) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Email verification required'),
+          content: Text(msg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await ApiService.verifySend();
+                  if (!mounted) return;
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Verification email sent')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Resend failed: $e')),
+                  );
+                }
+              },
+              child: const Text('Resend verification'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _open(int tier) async {
     if (_loading) return;
     setState(() => _loading = true);
     final res = await _svc.openTier(tier);
     if (!mounted) return;
     setState(() => _loading = false);
-    if (res['error'] != null) {
+    final ok = res['ok'] == true;
+    final msg = (res['message'] ?? res['error'] ?? '').toString();
+    if (!ok) {
+      final showMsg = msg.isNotEmpty ? msg : 'Request failed';
+      if (_isVerifyMessage(showMsg)) {
+        await _showVerifyDialog(msg);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res['error'].toString())),
+        SnackBar(content: Text(showMsg)),
       );
       return;
     }
-    Navigator.of(context).pop(true);
+    if (ok) Navigator.of(context).pop(true);
   }
 
   @override

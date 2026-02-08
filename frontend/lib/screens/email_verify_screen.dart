@@ -27,7 +27,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
   Future<void> _loadStatus() async {
     try {
       final me = await ApiService.getProfile();
-      final verified = me['email_verified'] == true;
+      final verified = me['is_verified'] == true || me['email_verified'] == true;
       final email = me['email']?.toString() ?? '';
       if (_emailCtrl.text.trim().isEmpty && email.isNotEmpty) {
         _emailCtrl.text = email;
@@ -51,9 +51,8 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
   Future<void> _send() async {
     if (_loading) return;
     setState(() => _loading = true);
-    final email = _emailCtrl.text.trim();
     try {
-      await ApiService.verifySend(email: email.isEmpty ? null : email);
+      await ApiService.verifySend();
       _toast('If the account exists, a verification message was sent.');
     } catch (e) {
       _toast('Send failed: $e');
@@ -64,7 +63,6 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
 
   Future<void> _confirm() async {
     if (_loading) return;
-    final email = _emailCtrl.text.trim();
     final codeOrToken = _codeCtrl.text.trim();
     if (codeOrToken.isEmpty) {
       _toast('Enter the code or token.');
@@ -72,12 +70,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
     }
     setState(() => _loading = true);
     try {
-      final isToken = codeOrToken.length > 8 && !RegExp(r'^\d{6}$').hasMatch(codeOrToken);
-      if (isToken) {
-        await ApiService.verifyConfirm(token: codeOrToken);
-      } else {
-        await ApiService.verifyConfirm(code: codeOrToken, email: email);
-      }
+      await ApiService.verifyConfirm(token: codeOrToken);
       _toast('Email verified.');
       await _loadStatus();
     } catch (e) {
@@ -116,7 +109,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
           TextField(
             controller: _codeCtrl,
             decoration: const InputDecoration(
-              labelText: 'Code or Token',
+              labelText: 'Token',
               border: OutlineInputBorder(),
             ),
           ),

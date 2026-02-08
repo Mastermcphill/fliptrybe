@@ -106,6 +106,12 @@ def _is_admin(u: User | None) -> bool:
     return _role(u) == "admin"
 
 
+def _is_verified(u: User | None) -> bool:
+    if not u:
+        return False
+    return bool(getattr(u, "is_verified", False))
+
+
 def _event(order_id: int, actor_id: int | None, event: str, note: str = "") -> None:
     try:
         key = f"order:{int(order_id)}:{event}:{int(actor_id) if actor_id is not None else 'system'}"
@@ -805,6 +811,8 @@ def merchant_accept(order_id: int):
 
     if int(o.merchant_id) != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
+    if not _is_admin(u) and not _is_verified(u):
+        return jsonify({"message": "Email verification required"}), 403
 
     if not _availability_is_confirmed(int(o.id)):
         return jsonify({"message": "Availability confirmation required"}), 409
@@ -1009,6 +1017,8 @@ def assign_driver(order_id: int):
     # merchant or admin can assign. Drivers accept via /driver/jobs/<id>/accept
     if int(o.merchant_id) != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
+    if not _is_admin(u) and not _is_verified(u):
+        return jsonify({"message": "Email verification required"}), 403
 
     payload = request.get_json(silent=True) or {}
     try:
@@ -1266,6 +1276,8 @@ def seller_confirm_pickup(order_id: int):
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u) and not _is_verified(u):
+        return jsonify({"message": "Email verification required"}), 403
 
     o = Order.query.get(order_id)
     if not o:

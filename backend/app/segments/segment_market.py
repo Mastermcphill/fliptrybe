@@ -150,7 +150,7 @@ def _is_owner(u: User | None, listing: Listing) -> bool:
 def _is_email_verified(u: User | None) -> bool:
     if not u:
         return False
-    return bool(getattr(u, "email_verified_at", None))
+    return bool(getattr(u, "is_verified", False))
 
 
 def _is_active_listing(listing: Listing) -> bool:
@@ -487,6 +487,8 @@ def update_listing(listing_id: int):
         return jsonify({"message": "Not found"}), 404
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
+    if not _is_admin(u) and not _is_email_verified(u):
+        return jsonify({"message": "Email verification required"}), 403
 
     payload = request.get_json(silent=True) or {}
     # Listing cap enforcement on activation
@@ -564,6 +566,8 @@ def delete_listing(listing_id: int):
         return jsonify({"message": "Not found"}), 404
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
+    if not _is_admin(u) and not _is_email_verified(u):
+        return jsonify({"message": "Email verification required"}), 403
 
     try:
         db.session.delete(item)
