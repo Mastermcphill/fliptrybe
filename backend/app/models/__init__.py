@@ -11,7 +11,7 @@ from .withdrawals import Withdrawal  # noqa: F401
 from .merchant import MerchantProfile, MerchantReview  # noqa: F401
 from .notification import Notification  # noqa: F401
 from .receipt import Receipt  # noqa: F401
-from .support import SupportTicket  # noqa: F401
+from .support import SupportTicket, SupportMessage  # noqa: F401
 from .kyc import KycRequest  # noqa: F401
 from .otp_attempt import OTPAttempt  # noqa: F401
 from .email_verification_token import EmailVerificationToken  # noqa: F401

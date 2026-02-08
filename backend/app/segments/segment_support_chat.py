@@ -6,49 +6,11 @@ from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import or_
 
 from app.extensions import db
-from app.models import User
+from app.models import User, SupportMessage
 from app.utils.jwt_utils import decode_token
 
 support_bp = Blueprint("support_chat_bp", __name__, url_prefix="/api/support")
 support_admin_bp = Blueprint("support_admin_bp", __name__, url_prefix="/api/admin/support")
-
-_INIT = False
-
-
-@support_bp.before_app_request
-def _ensure_tables_once():
-    global _INIT
-    if _INIT:
-        return
-    try:
-        db.create_all()
-    except Exception:
-        pass
-    _INIT = True
-
-
-class SupportMessage(db.Model):
-    __tablename__ = "support_messages"
-    __table_args__ = {"extend_existing": True}
-
-    id = db.Column(db.Integer, primary_key=True)
-
-    user_id = db.Column(db.Integer, nullable=False, index=True)      # the non-admin user
-    sender_role = db.Column(db.String(16), nullable=False)           # user/admin
-    sender_id = db.Column(db.Integer, nullable=False)                # who sent
-
-    body = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
-
-    def to_dict(self):
-        return {
-            "id": int(self.id),
-            "user_id": int(self.user_id),
-            "sender_role": self.sender_role,
-            "sender_id": int(self.sender_id),
-            "body": self.body,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
 
 
 def _bearer_token() -> str | None:
@@ -172,14 +134,19 @@ def admin_threads():
             pass
         return jsonify({"message": "Forbidden"}), 403
 
-    # Basic list: users with recent activity
     try:
         db.session.rollback()
         q = db.session.query(
             SupportMessage.user_id,
             db.func.max(SupportMessage.created_at).label("last_at"),
             db.func.count(SupportMessage.id).label("count"),
-        ).group_by(SupportMessage.user_id).order_by(db.text("last_at desc")).limit(200)
+            User.name,
+            User.email,
+        ).outerjoin(User, User.id == SupportMessage.user_id).group_by(
+            SupportMessage.user_id,
+            User.name,
+            User.email,
+        ).order_by(db.text("last_at desc")).limit(200)
         rows = q.all()
     except Exception:
         db.session.rollback()
@@ -189,12 +156,11 @@ def admin_threads():
             pass
         return jsonify({"ok": True, "threads": []}), 200
     out = []
-    for user_id, last_at, count in rows:
-        user = User.query.get(int(user_id))
+    for user_id, last_at, count, name, email in rows:
         out.append({
             "user_id": int(user_id),
-            "name": getattr(user, "name", "") if user else "",
-            "email": getattr(user, "email", "") if user else "",
+            "name": name or "",
+            "email": email or "",
             "last_at": last_at.isoformat() if last_at else None,
             "count": int(count or 0),
         })

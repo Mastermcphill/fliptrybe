@@ -26,3 +26,26 @@ class SupportTicket(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class SupportMessage(db.Model):
+    __tablename__ = "support_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, nullable=False, index=True)      # the non-admin user
+    sender_role = db.Column(db.String(16), nullable=False)           # user/admin
+    sender_id = db.Column(db.Integer, nullable=False)                # who sent
+
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    def to_dict(self):
+        return {
+            "id": int(self.id),
+            "user_id": int(self.user_id),
+            "sender_role": self.sender_role,
+            "sender_id": int(self.sender_id),
+            "body": self.body,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
