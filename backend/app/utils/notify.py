@@ -50,6 +50,20 @@ def queue_whatsapp(user_id: int, title: str, message: str, provider: str = "stub
     return n
 
 
+def queue_email(user_id: int, title: str, message: str, provider: str = "stub", meta: Optional[Dict[str, Any]] = None) -> Notification:
+    n = Notification(
+        user_id=user_id,
+        channel="email",
+        title=title[:160] if title else "",
+        message=message or "",
+        status="queued",
+        provider=provider,
+        meta=json.dumps(meta or {}),
+    )
+    db.session.add(n)
+    return n
+
+
 def mark_sent(n: Notification, provider_ref: str = "") -> None:
     n.status = "sent"
     n.provider_ref = provider_ref[:120] if provider_ref else None

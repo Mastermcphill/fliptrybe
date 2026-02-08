@@ -19,6 +19,8 @@ class User(db.Model, UserMixin):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+    is_verified = db.Column(db.Boolean, nullable=False, default=False)
+
     role = db.Column(db.String(32), nullable=False, default='buyer')
 
     # KYC tier: 0=unverified, 1=basic, 2=verified
@@ -40,6 +42,7 @@ class User(db.Model, UserMixin):
             "email": self.email,
             "phone": getattr(self, "phone", None),
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "is_verified": bool(self.is_verified),
             "role": self.role or "buyer",
             "kyc_tier": int(getattr(self, "kyc_tier", 0) or 0),
             "is_available": bool(getattr(self, "is_available", True)),

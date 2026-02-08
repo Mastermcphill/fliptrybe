@@ -11,6 +11,7 @@ import 'merchant_dashboard_screen.dart';
 import 'inspector_dashboard_screen.dart';
 import 'pending_approval_screen.dart';
 import 'role_signup_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -173,6 +174,17 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 14),
+            TextButton(
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                      );
+                    },
+              child: const Text('Forgot Password?'),
+            ),
+            const SizedBox(height: 6),
             TextButton(
               onPressed: _isLoading
                   ? null

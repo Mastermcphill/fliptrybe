@@ -28,6 +28,7 @@ import 'leaderboards_screen.dart';
 import 'orders_screen.dart';
 import 'investor_metrics_screen.dart';
 import 'sales_analytics_screen.dart';
+import 'email_verify_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -310,6 +311,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }),
                       _buildMenuItem(Icons.support_agent, "Help & Disputes", onTap: () {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportTicketsScreen()));
+                      }),
+                      _buildMenuItem(Icons.mark_email_read, "Verify Email", onTap: () {
+                        final email = _profile?['email']?.toString();
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => EmailVerifyScreen(initialEmail: email)));
                       }),
 
                       const SizedBox(height: 20),

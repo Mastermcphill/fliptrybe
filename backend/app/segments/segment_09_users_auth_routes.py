@@ -1,13 +1,17 @@
 import os
 import json
-from datetime import datetime
+import secrets
+import hashlib
+import hmac
+from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
-from app.models import User, RoleChangeRequest
+from app.models import User, RoleChangeRequest, EmailToken
 from app.utils.jwt_utils import create_token, decode_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
+from app.utils.notify import queue_email
 
 
 def _conflict_message(email_user: User | None, phone_user: User | None) -> str | None:
@@ -31,6 +35,76 @@ def _conflict_message_from_integrity(err: Exception) -> str:
     return "Email or phone already in use"
 
 auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
+
+
+def _hash_token(value: str) -> str:
+    secret = (current_app.config.get("SECRET_KEY") or os.getenv("SECRET_KEY") or "fliptrybe").encode("utf-8")
+    return hmac.new(secret, value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _generate_code() -> str:
+    return f"{secrets.randbelow(1000000):06d}"
+
+
+def _issue_email_token(email: str, purpose: str, ttl_minutes: int = 30):
+    now = datetime.utcnow()
+    last = None
+    try:
+        last = EmailToken.query.filter_by(email=email, purpose=purpose).order_by(EmailToken.created_at.desc()).first()
+    except Exception:
+        last = None
+    if last and last.last_sent_at:
+        try:
+            if (now - last.last_sent_at).total_seconds() < 120:
+                return None, None, None, "rate_limited"
+        except Exception:
+            pass
+
+    token = secrets.token_urlsafe(32)
+    code = _generate_code()
+    rec = EmailToken(
+        email=email,
+        purpose=purpose,
+        token_hash=_hash_token(token),
+        code_hash=_hash_token(f"code:{email}:{code}"),
+        expires_at=now + timedelta(minutes=ttl_minutes),
+        used_at=None,
+        created_at=now,
+        last_sent_at=now,
+        send_count=1,
+    )
+    db.session.add(rec)
+    db.session.commit()
+    return rec, token, code, None
+
+
+def _send_email_verification(user: User) -> None:
+    if not user or not getattr(user, "email", None):
+        return
+    if getattr(user, "email_verified_at", None):
+        return
+    email = (user.email or "").strip().lower()
+    if not email:
+        return
+    try:
+        rec, token, code, rate = _issue_email_token(email, "verify_email", ttl_minutes=30)
+    except Exception:
+        db.session.rollback()
+        return
+    if not rec or not token or not code:
+        return
+    try:
+        queue_email(
+            user_id=int(user.id),
+            title="Verify your FlipTrybe email",
+            message=f"Your verification code is {code}. You can also use this token: {token}",
+            provider="stub",
+            meta={"purpose": "verify_email"},
+        )
+        db.session.commit()
+        current_app.logger.info("email_verify_sent email=%s", email)
+    except Exception:
+        db.session.rollback()
 
 def _get_request_payload(label: str) -> dict:
     data_json = request.get_json(silent=True)
@@ -126,6 +200,10 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
         return None, None, ({"message": "Failed to create user"}, 500)
 
     token = create_token(u.id)
+    try:
+        _send_email_verification(u)
+    except Exception:
+        pass
     return u, token, None
 
 
@@ -520,6 +598,11 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
                 pass
             return None, (jsonify({"message": "Failed to register"}), 500)
 
+        try:
+            _send_email_verification(u)
+        except Exception:
+            pass
+
         token = create_token(str(u.id))
         return {"token": token, "user": u.to_dict()}, None
     finally:
@@ -659,6 +742,10 @@ def register_merchant():
             except Exception:
                 pass
             return jsonify({"message": "Failed to register"}), 500
+        try:
+            _send_email_verification(user)
+        except Exception:
+            pass
 
     if user.role not in ("buyer", "driver", "inspector"):
         return jsonify({"message": "Role change not allowed"}), 403
@@ -848,3 +935,200 @@ def register_inspector():
         "request": req.to_dict(),
         "message": "Inspector signup submitted. Activation is admin-mediated.",
     }), 201
+
+
+@auth_bp.post("/verify/send")
+def verify_send():
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        token = _bearer_token()
+        payload = decode_token(token) if token else None
+        sub = payload.get("sub") if isinstance(payload, dict) else None
+        try:
+            uid = int(sub) if sub is not None else None
+        except Exception:
+            uid = None
+        if uid:
+            try:
+                u = User.query.get(uid)
+                email = (u.email or "").strip().lower() if u else ""
+            except Exception:
+                email = ""
+    if not email:
+        return jsonify({"ok": True, "message": "If account exists, we sent a verification email."}), 200
+
+    try:
+        u = User.query.filter_by(email=email).first()
+    except Exception:
+        u = None
+    if not u:
+        return jsonify({"ok": True, "message": "If account exists, we sent a verification email."}), 200
+
+    if getattr(u, "email_verified_at", None):
+        return jsonify({"ok": True, "message": "Email already verified"}), 200
+
+    try:
+        rec, token, code, rate = _issue_email_token(email, "verify_email", ttl_minutes=30)
+        if rec and token and code:
+            queue_email(
+                user_id=int(u.id),
+                title="Verify your FlipTrybe email",
+                message=f"Your verification code is {code}. You can also use this token: {token}",
+                provider="stub",
+                meta={"purpose": "verify_email"},
+            )
+            db.session.commit()
+        current_app.logger.info("email_verify_send email=%s", email)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("email_verify_send_failed")
+
+    return jsonify({"ok": True, "message": "If account exists, we sent a verification email."}), 200
+
+
+@auth_bp.post("/verify/confirm")
+def verify_confirm():
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    code = (data.get("code") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    if not token and not (code and email):
+        return jsonify({"message": "token or code+email required"}), 400
+
+    now = datetime.utcnow()
+    rec = None
+    try:
+        if token:
+            rec = EmailToken.query.filter_by(
+                token_hash=_hash_token(token), purpose="verify_email"
+            ).filter(EmailToken.used_at.is_(None)).first()
+        elif code and email:
+            rec = EmailToken.query.filter_by(
+                email=email, purpose="verify_email", code_hash=_hash_token(f"code:{email}:{code}")
+            ).filter(EmailToken.used_at.is_(None)).first()
+    except Exception:
+        rec = None
+
+    if not rec or (rec.expires_at and rec.expires_at < now):
+        return jsonify({"message": "Invalid or expired token"}), 400
+
+    try:
+        u = User.query.filter_by(email=rec.email).first()
+    except Exception:
+        u = None
+    if not u:
+        return jsonify({"message": "Invalid or expired token"}), 400
+
+    u.email_verified_at = now
+    rec.used_at = now
+    try:
+        db.session.add(u)
+        db.session.add(rec)
+        db.session.commit()
+        current_app.logger.info("email_verify_confirmed email=%s", u.email)
+        return jsonify({"ok": True}), 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("email_verify_confirm_failed")
+        return jsonify({"message": "Failed"}), 500
+
+
+@auth_bp.post("/password/forgot")
+def password_forgot():
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        return jsonify({"ok": True, "message": "If account exists, we sent a reset email."}), 200
+
+    try:
+        u = User.query.filter_by(email=email).first()
+    except Exception:
+        u = None
+    if not u:
+        return jsonify({"ok": True, "message": "If account exists, we sent a reset email."}), 200
+
+    try:
+        rec, token, code, rate = _issue_email_token(email, "reset_password", ttl_minutes=30)
+        if rec and token and code:
+            queue_email(
+                user_id=int(u.id),
+                title="Reset your FlipTrybe password",
+                message=f"Your password reset code is {code}. You can also use this token: {token}",
+                provider="stub",
+                meta={"purpose": "reset_password"},
+            )
+            db.session.commit()
+        current_app.logger.info("password_reset_requested email=%s", email)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("password_reset_request_failed")
+
+    return jsonify({"ok": True, "message": "If account exists, we sent a reset email."}), 200
+
+
+@auth_bp.post("/password/reset")
+def password_reset():
+    try:
+        db.session.rollback()
+    except Exception:
+        pass
+    data = request.get_json(silent=True) or {}
+    token = (data.get("token") or "").strip()
+    code = (data.get("code") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    new_password = (data.get("new_password") or "").strip()
+
+    if not new_password or len(new_password) < 4:
+        return jsonify({"message": "new_password is required"}), 400
+    if not token and not (code and email):
+        return jsonify({"message": "token or code+email required"}), 400
+
+    now = datetime.utcnow()
+    rec = None
+    try:
+        if token:
+            rec = EmailToken.query.filter_by(
+                token_hash=_hash_token(token), purpose="reset_password"
+            ).filter(EmailToken.used_at.is_(None)).first()
+        elif code and email:
+            rec = EmailToken.query.filter_by(
+                email=email, purpose="reset_password", code_hash=_hash_token(f"code:{email}:{code}")
+            ).filter(EmailToken.used_at.is_(None)).first()
+    except Exception:
+        rec = None
+
+    if not rec or (rec.expires_at and rec.expires_at < now):
+        return jsonify({"message": "Invalid or expired token"}), 400
+
+    try:
+        u = User.query.filter_by(email=rec.email).first()
+    except Exception:
+        u = None
+    if not u:
+        return jsonify({"message": "Invalid or expired token"}), 400
+
+    u.set_password(new_password)
+    rec.used_at = now
+    try:
+        db.session.add(u)
+        db.session.add(rec)
+        db.session.commit()
+        current_app.logger.info("password_reset_completed email=%s", u.email)
+        return jsonify({"ok": True}), 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("password_reset_failed")
+        return jsonify({"message": "Failed"}), 500

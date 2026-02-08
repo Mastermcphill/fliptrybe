@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from app.extensions import db
 from sqlalchemy.exc import IntegrityError
-from app.models import User, MoneyBoxAccount, MoneyBoxLedger
+from app.models import User, MoneyBoxAccount, MoneyBoxLedger, RoleChangeRequest
 from app.utils.jwt_utils import decode_token
 from app.utils.moneybox import (
     TIER_CONFIG,
@@ -86,9 +86,34 @@ def _allowed_role(u: User | None) -> bool:
     return _role(u) in ("merchant", "driver", "inspector")
 
 
+def _is_email_verified(u: User | None) -> bool:
+    if not u:
+        return False
+    return bool(getattr(u, "email_verified_at", None))
+
+
 def _account_response(acct: MoneyBoxAccount) -> dict:
     data = acct.to_dict()
     return {"ok": True, "account": data}
+
+
+@moneybox_bp.get("/status")
+def status():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _allowed_role(u):
+        try:
+            pending = RoleChangeRequest.query.filter_by(user_id=int(u.id), status="PENDING").first()
+            if pending and pending.requested_role in ("merchant", "driver", "inspector"):
+                return jsonify({"status": "pending_approval"}), 200
+        except Exception:
+            pass
+        return jsonify({"status": "not_eligible"}), 200
+
+    acct = get_or_create_account(int(u.id))
+    data = acct.to_dict()
+    return jsonify({"ok": True, **data}), 200
 
 
 @moneybox_bp.get("/me")
@@ -118,6 +143,8 @@ def open_moneybox():
         tier = 1
     if tier not in (1, 2, 3, 4):
         return jsonify({"message": "Invalid tier"}), 400
+    if tier > 1 and not _is_email_verified(u):
+        return jsonify({"message": "Verify your email to unlock higher MoneyBox tiers"}), 403
 
     acct = get_or_create_account(int(u.id))
     try:
@@ -184,6 +211,15 @@ def relock_moneybox():
         tier = 1
     if tier not in (1, 2, 3, 4):
         return jsonify({"message": "Invalid tier"}), 400
+    if tier > 1 and not _is_email_verified(u):
+        return jsonify({"message": "Verify your email to unlock higher MoneyBox tiers"}), 403
+
+    acct = get_or_create_account(int(u.id))
+    try:
+        if acct.status not in ("ACTIVE", "OPEN", "MATURED"):
+            return open_moneybox()
+    except Exception:
+        pass
 
     acct = get_or_create_account(int(u.id))
     try:
@@ -340,6 +376,38 @@ def withdraw():
         "penalty_amount": float(penalty_amount),
         "account": acct.to_dict(),
     }), 200
+
+
+@moneybox_bp.get("/ledger")
+def ledger():
+    u = _current_user()
+    if not u:
+        return jsonify({"items": []}), 200
+    if not _allowed_role(u):
+        return jsonify({"items": []}), 200
+    rows = MoneyBoxLedger.query.filter_by(user_id=int(u.id)).order_by(MoneyBoxLedger.created_at.desc()).limit(200).all()
+    items = []
+    for r in rows:
+        d = r.to_dict()
+        d["type"] = d.pop("entry_type", "")
+        items.append(d)
+    return jsonify({"ok": True, "items": items}), 200
+
+
+@moneybox_bp.post("/tier")
+def set_tier():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _allowed_role(u):
+        return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
+    acct = get_or_create_account(int(u.id))
+    try:
+        if acct.status in ("ACTIVE", "OPEN", "MATURED"):
+            return relock_moneybox()
+    except Exception:
+        pass
+    return open_moneybox()
 
 
 @moneybox_system_bp.post("/process-maturity")

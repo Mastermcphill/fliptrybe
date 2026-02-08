@@ -73,6 +73,12 @@ def _role(u: User | None) -> str:
     return (getattr(u, "role", None) or "buyer").strip().lower()
 
 
+def _is_email_verified(u: User | None) -> bool:
+    if not u:
+        return False
+    return bool(getattr(u, "email_verified_at", None))
+
+
 def _platform_user_id() -> int:
     raw = (os.getenv("PLATFORM_USER_ID") or "").strip()
     if raw.isdigit():
@@ -141,6 +147,8 @@ def request_payout():
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
+    if not _is_email_verified(u):
+        return jsonify({"message": "Verify your email to request a payout"}), 403
     payload = request.get_json(silent=True) or {}
     try:
         amount = float(payload.get("amount") or 0.0)

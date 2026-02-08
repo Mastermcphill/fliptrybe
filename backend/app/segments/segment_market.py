@@ -147,6 +147,12 @@ def _is_owner(u: User | None, listing: Listing) -> bool:
     return False
 
 
+def _is_email_verified(u: User | None) -> bool:
+    if not u:
+        return False
+    return bool(getattr(u, "email_verified_at", None))
+
+
 def _is_active_listing(listing: Listing) -> bool:
     try:
         if hasattr(listing, "is_active"):
@@ -656,6 +662,12 @@ def create_listing():
 
     if owner_id is None:
         return jsonify({"message": "Unauthorized"}), 401
+    try:
+        owner_user = User.query.get(int(owner_id))
+    except Exception:
+        owner_user = None
+    if not _is_email_verified(owner_user):
+        return jsonify({"message": "Verify your email to create listings"}), 403
 
     account_role = _account_role(owner_id)
     ok, info = enforce_listing_cap(int(owner_id), account_role, "declutter")

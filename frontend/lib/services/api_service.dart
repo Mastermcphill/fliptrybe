@@ -110,6 +110,69 @@ class ApiService {
     return _asMap(res.data);
   }
 
+  // ---------------------------
+  // EMAIL VERIFICATION + PASSWORD RESET
+  // ---------------------------
+
+  static Future<Map<String, dynamic>> verifySend({String? email}) async {
+    final url = ApiConfig.api('/auth/verify/send');
+    final payload = <String, dynamic>{};
+    if (email != null && email.trim().isNotEmpty) {
+      payload['email'] = email.trim();
+    }
+    final res = await _client.dio.post(url, data: payload);
+    return _asMap(res.data);
+  }
+
+  static Future<Map<String, dynamic>> verifyConfirm({
+    String? token,
+    String? code,
+    String? email,
+  }) async {
+    final url = ApiConfig.api('/auth/verify/confirm');
+    final payload = <String, dynamic>{};
+    if (token != null && token.trim().isNotEmpty) {
+      payload['token'] = token.trim();
+    } else {
+      if (code != null && code.trim().isNotEmpty) {
+        payload['code'] = code.trim();
+      }
+      if (email != null && email.trim().isNotEmpty) {
+        payload['email'] = email.trim();
+      }
+    }
+    final res = await _client.dio.post(url, data: payload);
+    return _asMap(res.data);
+  }
+
+  static Future<Map<String, dynamic>> passwordForgot(String email) async {
+    final url = ApiConfig.api('/auth/password/forgot');
+    final res = await _client.dio.post(url, data: {'email': email.trim()});
+    return _asMap(res.data);
+  }
+
+  static Future<Map<String, dynamic>> passwordReset({
+    required String newPassword,
+    String? token,
+    String? code,
+    String? email,
+  }) async {
+    final url = ApiConfig.api('/auth/password/reset');
+    final payload = <String, dynamic>{'new_password': newPassword};
+    if (token != null && token.trim().isNotEmpty) {
+      payload['token'] = token.trim();
+    } else {
+      if (code != null && code.trim().isNotEmpty) {
+        payload['code'] = code.trim();
+      }
+      if (email != null && email.trim().isNotEmpty) {
+        payload['email'] = email.trim();
+      }
+    }
+    final res = await _client.dio.post(url, data: payload);
+    return _asMap(res.data);
+  }
+
   static Future<Response<dynamic>> getProfileResponse() async {
     final url = ApiConfig.api('/auth/me');
     try {

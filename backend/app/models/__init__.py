@@ -14,6 +14,8 @@ from .receipt import Receipt  # noqa: F401
 from .support import SupportTicket  # noqa: F401
 from .kyc import KycRequest  # noqa: F401
 from .otp_attempt import OTPAttempt  # noqa: F401
+from .email_verification_token import EmailVerificationToken  # noqa: F401
+from .password_reset_token import PasswordResetToken  # noqa: F401
 from .availability_confirmation import AvailabilityConfirmation  # noqa: F401
 from .escrow_unlock import EscrowUnlock  # noqa: F401
 from .qr_challenge import QRChallenge  # noqa: F401
