@@ -111,8 +111,38 @@ def send_to_admin():
 
     payload = request.get_json(silent=True) or {}
     body = (payload.get("body") or "").strip()
+    target_raw = payload.get("user_id") or payload.get("recipient_id") or payload.get("target_user_id")
     if not body:
         return jsonify({"message": "body required"}), 400
+
+    # Non-admins can only chat with admin.
+    if target_raw is not None and not _is_admin(u):
+        return jsonify({"error": "chat_not_allowed", "message": "You can only chat with Admin."}), 403
+
+    if target_raw is not None and _is_admin(u):
+        try:
+            target_id = int(target_raw)
+        except Exception:
+            return jsonify({"message": "Invalid user_id"}), 400
+        target = User.query.get(int(target_id))
+        if not target:
+            return jsonify({"message": "Not found"}), 404
+
+        msg = SupportMessage(
+            user_id=int(target_id),
+            sender_role="admin",
+            sender_id=int(u.id),
+            body=body[:2000],
+            created_at=datetime.utcnow(),
+        )
+
+        try:
+            db.session.add(msg)
+            db.session.commit()
+            return jsonify({"ok": True, "message": msg.to_dict()}), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"message": "Failed", "error": str(e)}), 500
 
     # Users can only message admin (support). Never other users.
     msg = SupportMessage(
