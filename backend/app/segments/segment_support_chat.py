@@ -34,7 +34,14 @@ def _current_user() -> User | None:
         uid = int(sub)
     except Exception:
         return None
-    return User.query.get(uid)
+    try:
+        return User.query.get(uid)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
 
 
 def _role(u: User | None) -> str:
@@ -127,6 +134,8 @@ def send_to_admin():
 @support_admin_bp.get("/threads")
 def admin_threads():
     u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
     if not _is_admin(u):
         try:
             current_app.logger.info("support_admin_forbidden role=%s", _role(u))
