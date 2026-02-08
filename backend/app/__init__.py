@@ -281,4 +281,28 @@ def create_app():
         db.session.commit()
         click.echo(f"admin_bootstrap_ok {u.email}")
 
+    @app.cli.command("admin-reset-password")
+    @click.option("--email", "email", required=False, help="Admin email to reset")
+    @click.option("--password", "password", required=False, help="New password")
+    def admin_reset_password(email: str | None, password: str | None):
+        env = (os.getenv("FLIPTRYBE_ENV") or os.getenv("FLASK_ENV") or "dev").strip().lower()
+        allow = (os.getenv("ALLOW_ADMIN_BOOTSTRAP") or "").strip() == "1"
+        if env not in ("dev", "development", "local", "test") and not allow:
+            raise click.ClickException("Admin reset disabled. Set ALLOW_ADMIN_BOOTSTRAP=1 or FLIPTRYBE_ENV=dev.")
+
+        email = (email or os.getenv("ADMIN_EMAIL") or "").strip().lower()
+        password = (password or os.getenv("ADMIN_PASSWORD") or "").strip()
+        if not email or not password:
+            raise click.ClickException("Provide --email/--password or set ADMIN_EMAIL and ADMIN_PASSWORD.")
+
+        u = User.query.filter_by(email=email).first()
+        if not u:
+            raise click.ClickException("Admin user not found.")
+        if (getattr(u, "role", "") or "").lower() != "admin":
+            raise click.ClickException("Target user is not admin.")
+
+        u.set_password(password)
+        db.session.commit()
+        click.echo(f"admin_password_reset_ok {u.email}")
+
     return app
