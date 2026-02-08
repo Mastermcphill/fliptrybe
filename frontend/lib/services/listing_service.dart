@@ -4,6 +4,12 @@ import 'api_config.dart';
 class ListingService {
   final ApiClient _client = ApiClient.instance;
 
+  Map<String, dynamic> _asMap(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return data.map((k, v) => MapEntry('$k', v));
+    return <String, dynamic>{};
+  }
+
   Future<List<dynamic>> listListings() async {
     try {
       final res = await _client.dio.get(ApiConfig.api('/listings'));
@@ -32,7 +38,7 @@ class ListingService {
     }
   }
 
-  Future<Map<String, dynamic>?> createListing({
+  Future<Map<String, dynamic>> createListing({
     required String title,
     String description = '',
     double price = 0,
@@ -51,9 +57,13 @@ class ListingService {
           fileField: 'image',
           filePath: imagePath,
         );
-        final data = res;
-        if (data is Map && data['listing'] is Map) return Map<String, dynamic>.from(data['listing']);
-        return null;
+        final data = _asMap(res);
+        final status = data['status'] ?? 0;
+        data['ok'] = data['ok'] ?? true;
+        if (data['listing'] is Map) {
+          data['listing'] = Map<String, dynamic>.from(data['listing'] as Map);
+        }
+        return data;
       }
 
       final res = await _client.dio.post(ApiConfig.api('/listings'), data: {
@@ -61,11 +71,18 @@ class ListingService {
         'description': description,
         'price': price,
       });
-      final data = res.data;
-      if (data is Map && data['listing'] is Map) return Map<String, dynamic>.from(data['listing']);
-      return null;
-    } catch (_) {
-      return null;
+      final data = _asMap(res.data);
+      data['ok'] = data['ok'] ?? true;
+      if (data['listing'] is Map) {
+        data['listing'] = Map<String, dynamic>.from(data['listing'] as Map);
+      }
+      return data;
+    } catch (e) {
+      return {
+        'ok': false,
+        'message': 'Failed to upload',
+        'error': e.toString(),
+      };
     }
   }
 }

@@ -45,6 +45,24 @@ class ApiService {
     return null;
   }
 
+  static bool isEmailNotVerified(dynamic data) {
+    if (data is Map) {
+      final err = (data['error'] ?? '').toString().toLowerCase();
+      if (err == 'email_not_verified') return true;
+      final msg = (data['message'] ?? '').toString().toLowerCase();
+      if (msg.contains('verify your email') || msg.contains('email verification required')) {
+        return true;
+      }
+    }
+    if (data is String) {
+      final msg = data.toLowerCase();
+      if (msg.contains('verify your email') || msg.contains('email verification required')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ---------------------------
   // AUTH
   // ---------------------------

@@ -4,6 +4,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../services/listing_service.dart';
 import '../services/feed_service.dart';
+import '../services/api_service.dart';
+import '../widgets/email_verification_dialog.dart';
 
 class CreateListingScreen extends StatefulWidget {
   const CreateListingScreen({super.key});
@@ -145,7 +147,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     setState(() => _isLoading = true);
 
     final price = double.tryParse(priceText) ?? 0;
-    final listing = await _listingService.createListing(
+    final res = await _listingService.createListing(
       title: title,
       description: desc,
       price: price,
@@ -155,11 +157,19 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (listing != null) {
+    final ok = res['ok'] == true;
+    final msg = (res['message'] ?? res['error'] ?? 'Failed to upload. Try again.').toString();
+
+    if (!ok && ApiService.isEmailNotVerified(res)) {
+      await showEmailVerificationRequiredDialog(context, message: msg);
+      return;
+    }
+
+    if (ok && res['listing'] != null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Listing Posted!")));
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to upload. Try again.")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 

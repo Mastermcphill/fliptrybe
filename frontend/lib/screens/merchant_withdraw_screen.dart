@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/wallet_service.dart';
 import '../services/api_service.dart';
+import '../widgets/email_verification_dialog.dart';
 
 class MerchantWithdrawScreen extends StatefulWidget {
   const MerchantWithdrawScreen({super.key});
@@ -18,52 +19,8 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
   final _acctNo = TextEditingController();
   final _acctName = TextEditingController();
   bool _loading = false;
-  bool _sendingVerify = false;
-
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
-  bool _isVerifyMessage(String msg) {
-    final m = msg.toLowerCase();
-    return m.contains('verify your email') || m.contains('email verification required');
-  }
-
-  Future<void> _showVerifyDialog(String msg) async {
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Email verification required'),
-          content: Text(msg),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Close'),
-            ),
-            ElevatedButton(
-              onPressed: _sendingVerify
-                  ? null
-                  : () async {
-                      try {
-                        _sendingVerify = true;
-                        await ApiService.verifySend();
-                        if (!mounted) return;
-                        Navigator.of(ctx).pop();
-                        _toast('Verification email sent');
-                      } catch (e) {
-                        _toast('Resend failed: $e');
-                      } finally {
-                        _sendingVerify = false;
-                      }
-                    },
-              child: const Text('Resend verification'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   Future<void> _submit() async {
@@ -88,8 +45,8 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
     setState(() => _loading = false);
     final ok = res['ok'] == true;
     final msg = (res['message'] ?? res['error'] ?? (ok ? 'Payout request sent' : 'Failed')).toString();
-    if (!ok && _isVerifyMessage(msg)) {
-      await _showVerifyDialog(msg);
+    if (!ok && (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(msg))) {
+      await showEmailVerificationRequiredDialog(context, message: msg);
       return;
     }
     _toast(msg);

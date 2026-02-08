@@ -67,12 +67,16 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _toast('This demo item is not purchasable yet.');
       return;
     }
+    final merchantId = _asInt(widget.listing['user_id']) ??
+        _asInt(widget.listing['merchant_id']) ??
+        _asInt(widget.listing['owner_id']);
+    if (_viewerId != null && merchantId != null && merchantId == _viewerId) {
+      _toast("You can't buy your own listing.");
+      return;
+    }
     setState(() => _busy = true);
     try {
       final listingId = _asInt(widget.listing['id']);
-      final merchantId = _asInt(widget.listing['user_id']) ??
-          _asInt(widget.listing['merchant_id']) ??
-          _asInt(widget.listing['owner_id']);
       final amount = _asDouble(widget.listing['price']);
       final deliveryFee = _asDouble(_deliveryFeeCtrl.text);
 
