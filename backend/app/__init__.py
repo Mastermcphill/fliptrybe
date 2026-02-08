@@ -267,19 +267,33 @@ def create_app():
 
         email = (os.getenv("ADMIN_EMAIL") or "").strip().lower()
         password = (os.getenv("ADMIN_PASSWORD") or "").strip()
+        phone = (os.getenv("ADMIN_PHONE") or "").strip()
         if not email or not password:
             raise click.ClickException("ADMIN_EMAIL and ADMIN_PASSWORD must be set.")
+        if not phone:
+            raise click.ClickException("ADMIN_PHONE must be set to create admin.")
 
         u = User.query.filter_by(email=email).first()
-        if u:
-            u.set_password(password)
-            u.role = "admin"
-        else:
-            u = User(name=email.split("@")[0], email=email, role="admin")
-            u.set_password(password)
-            db.session.add(u)
-        db.session.commit()
-        click.echo(f"admin_bootstrap_ok {u.email}")
+        try:
+            if u:
+                u.set_password(password)
+                u.role = "admin"
+                if not getattr(u, "phone", None):
+                    u.phone = phone
+            else:
+                u = User(name=email.split("@")[0], email=email, role="admin", phone=phone)
+                u.set_password(password)
+                db.session.add(u)
+            db.session.commit()
+            click.echo(f"admin_bootstrap_ok {u.email}")
+        except Exception as e:
+            db.session.rollback()
+            msg = str(e).lower()
+            if "phone" in msg and "unique" in msg:
+                raise click.ClickException("Phone already in use, choose a unique ADMIN_PHONE.")
+            if "unique" in msg and "email" in msg:
+                raise click.ClickException("Admin user already exists.")
+            raise click.ClickException("Failed to bootstrap admin.")
 
     @app.cli.command("admin-reset-password")
     @click.option("--email", "email", required=False, help="Admin email to reset")
