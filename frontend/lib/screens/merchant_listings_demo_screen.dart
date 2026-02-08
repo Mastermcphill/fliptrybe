@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/listing_service.dart';
-import 'listing_detail_screen.dart';
+import 'listing_detail_placeholder_screen.dart';
 
 class MerchantListingsDemoScreen extends StatefulWidget {
   const MerchantListingsDemoScreen({super.key});
@@ -65,16 +65,15 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
                 margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: ListTile(
                   onTap: () {
-                    if (id == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Listing details not available yet.')),
-                      );
-                      return;
-                    }
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ListingDetailScreen(listing: m),
+                        builder: (_) => ListingDetailPlaceholderScreen(
+                          id: id is int ? id : int.tryParse(id?.toString() ?? ''),
+                          title: title,
+                          price: price,
+                          category: 'My Listings',
+                        ),
                       ),
                     );
                   },

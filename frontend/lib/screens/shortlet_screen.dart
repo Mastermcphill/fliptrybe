@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/shortlet_service.dart';
-import 'shortlet_detail_screen.dart';
+import 'listing_detail_placeholder_screen.dart';
 
 class ShortletScreen extends StatefulWidget {
   const ShortletScreen({super.key});
@@ -125,17 +125,16 @@ class _ShortletScreenState extends State<ShortletScreen> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
-                            if (id == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Shortlet details not available yet.')),
-                              );
-                              return;
-                            }
+                            final loc = _fmtLocation(city, state);
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => ShortletDetailScreen(
-                                  shortlet: Map<String, dynamic>.from(m),
+                                builder: (_) => ListingDetailPlaceholderScreen(
+                                  id: id is int ? id : int.tryParse(id?.toString() ?? ''),
+                                  title: title,
+                                  price: m['nightly_price'] ?? m['price'],
+                                  location: loc,
+                                  category: 'Shortlet',
                                 ),
                               ),
                             );

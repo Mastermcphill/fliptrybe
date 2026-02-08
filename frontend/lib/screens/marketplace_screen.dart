@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'create_listing_screen.dart';
-import 'listing_detail_screen.dart';
+import 'listing_detail_placeholder_screen.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -233,17 +233,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
                         onTap: () {
-                          if (id == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Listing details not available yet.')),
-                            );
-                            return;
-                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ListingDetailScreen(
-                                listing: Map<String, dynamic>.from(item),
+                              builder: (_) => ListingDetailPlaceholderScreen(
+                                id: id is int ? id : int.tryParse(id?.toString() ?? ''),
+                                title: title,
+                                price: price,
+                                location: item['category']?.toString(),
+                                category: 'Marketplace',
                               ),
                             ),
                           );
