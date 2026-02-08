@@ -166,6 +166,10 @@ def send_to_admin():
 def admin_threads():
     u = _current_user()
     if not _is_admin(u):
+        try:
+            current_app.logger.info("support_admin_forbidden role=%s", _role(u))
+        except Exception:
+            pass
         return jsonify({"message": "Forbidden"}), 403
 
     # Basic list: users with recent activity
@@ -201,21 +205,47 @@ def admin_threads():
 def admin_get_thread(user_id: int):
     u = _current_user()
     if not _is_admin(u):
+        try:
+            current_app.logger.info("support_admin_forbidden role=%s", _role(u))
+        except Exception:
+            pass
         return jsonify({"message": "Forbidden"}), 403
 
-    rows = SupportMessage.query.filter_by(user_id=int(user_id)).order_by(SupportMessage.created_at.asc()).limit(1000).all()
-    return jsonify({"ok": True, "items": [r.to_dict() for r in rows]}), 200
+    try:
+        db.session.rollback()
+        rows = SupportMessage.query.filter_by(user_id=int(user_id)).order_by(SupportMessage.created_at.asc()).limit(1000).all()
+        return jsonify({"ok": True, "items": [r.to_dict() for r in rows]}), 200
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("support_admin_thread_error")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "items": []}), 200
 
 
 @support_admin_bp.post("/messages/<int:user_id>")
 def admin_send(user_id: int):
     u = _current_user()
     if not _is_admin(u):
+        try:
+            current_app.logger.info("support_admin_forbidden role=%s", _role(u))
+        except Exception:
+            pass
         return jsonify({"message": "Forbidden"}), 403
 
-    target = User.query.get(int(user_id))
-    if not target:
-        return jsonify({"message": "Not found"}), 404
+    try:
+        db.session.rollback()
+        target = User.query.get(int(user_id))
+        if not target:
+            return jsonify({"message": "Not found"}), 404
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("support_admin_target_error")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "message": "Not found"}), 404
 
     payload = request.get_json(silent=True) or {}
     body = (payload.get("body") or "").strip()
