@@ -1,9 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
-
 import '../services/api_client.dart';
-import '../services/api_config.dart';
 
 class LandingScreen extends StatefulWidget {
   final VoidCallback onLogin;
@@ -87,6 +84,11 @@ class _LandingScreenState extends State<LandingScreen> {
         builder: (context, c) {
           final alignment = _heroAlignment(c);
           final fit = _heroFit(c);
+          final isCompact = c.maxWidth < 360;
+          final headlineSize = isCompact ? 30.0 : 36.0;
+          final bodySize = isCompact ? 14.0 : 15.0;
+          final ctaHeight = isCompact ? 48.0 : 52.0;
+          final ctaRadius = isCompact ? 12.0 : 14.0;
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -158,11 +160,11 @@ class _LandingScreenState extends State<LandingScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 18),
-                      const Text(
+                      const SizedBox(height: 16),
+                      Text(
                         "Trade with trust.\nMove with confidence.",
                         style: TextStyle(
-                          fontSize: 36,
+                          fontSize: headlineSize,
                           height: 1.05,
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
@@ -172,35 +174,23 @@ class _LandingScreenState extends State<LandingScreen> {
                       Text(
                         "Listings, inspections, and delivery that keep your money safe.\nBuilt for real-world hustle, without the chaos.",
                         style: TextStyle(
-                          fontSize: 15,
-                          height: 1.4,
+                          fontSize: bodySize,
+                          height: 1.45,
                           color: Colors.white.withOpacity(0.92),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (kDebugMode) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'API: ${ApiConfig.baseUrl}\nFP: ${ApiConfig.clientFingerprint}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            height: 1.25,
-                            color: Colors.white.withOpacity(0.8),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
                       const Spacer(),
                       SizedBox(
                         width: double.infinity,
-                        height: 52,
+                        height: ctaHeight,
                         child: ElevatedButton(
                           onPressed: widget.onLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF0F172A),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(ctaRadius),
                             ),
                           ),
                           child: const Text(
@@ -212,23 +202,23 @@ class _LandingScreenState extends State<LandingScreen> {
                       const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
-                        height: 52,
+                        height: ctaHeight,
                         child: OutlinedButton(
                           onPressed: widget.onSignup,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
                             side: BorderSide(color: Colors.white.withOpacity(0.75)),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
+                              borderRadius: BorderRadius.circular(ctaRadius),
                             ),
                           ),
                           child: const Text(
                             "Sign up (Choose role)",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 10),
                       Text(
                         "Merchants can sell globally, while we handle inspection + delivery in Nigeria.",
                         style: TextStyle(color: Colors.white.withOpacity(0.85), fontWeight: FontWeight.w600),
