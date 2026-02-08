@@ -63,6 +63,24 @@ class ApiService {
     return false;
   }
 
+  static bool isChatNotAllowed(dynamic data) {
+    if (data is Map) {
+      final err = (data['error'] ?? '').toString().toLowerCase();
+      if (err == 'chat_not_allowed') return true;
+      final msg = (data['message'] ?? '').toString().toLowerCase();
+      if (msg.contains('chat with admin') || msg.contains('only chat with admin')) {
+        return true;
+      }
+    }
+    if (data is String) {
+      final msg = data.toLowerCase();
+      if (msg.contains('chat with admin') || msg.contains('only chat with admin')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // ---------------------------
   // AUTH
   // ---------------------------

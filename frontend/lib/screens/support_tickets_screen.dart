@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/support_service.dart';
+import '../services/api_service.dart';
+import '../widgets/chat_not_allowed_dialog.dart';
 
 class SupportTicketsScreen extends StatefulWidget {
   const SupportTicketsScreen({super.key});
@@ -63,10 +65,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
     final message = msgCtrl.text.trim();
     if (subject.isEmpty || message.isEmpty) return;
 
-    await _svc.createTicket(subject: subject, message: message);
-    if (!mounted) return;
-    _reload();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ticket created.')));
+    await _submitTicket(subject: subject, message: message);
   }
 
   Future<void> _contactAdmin() async {
@@ -112,10 +111,24 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
     final reason = msgCtrl.text.trim();
     if (orderId.isEmpty || reason.isEmpty) return;
 
-    await _svc.createTicket(subject: 'Dispute: Order #$orderId', message: reason);
+    await _submitTicket(subject: 'Dispute: Order #$orderId', message: reason);
+  }
+
+  Future<void> _submitTicket({required String subject, required String message}) async {
+    final res = await _svc.createTicket(subject: subject, message: message);
     if (!mounted) return;
+    final ok = res['ok'] == true;
+    final msg = (res['message'] ?? res['error'] ?? (ok ? 'Ticket created.' : 'Request failed')).toString();
+    if (!ok && ApiService.isChatNotAllowed(res)) {
+      await showChatNotAllowedDialog(context, onChatWithAdmin: _contactAdmin);
+      return;
+    }
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      return;
+    }
     _reload();
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dispute ticket created.')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   Widget _chip(String status) {
