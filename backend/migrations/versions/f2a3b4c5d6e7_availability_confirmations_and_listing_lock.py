@@ -62,8 +62,9 @@ def upgrade():
             op.create_index('ix_availability_confirmations_seller_id', 'availability_confirmations', ['seller_id'])
 
     if _col_exists("listings", "is_active") is False:
+        default_active = sa.text('1') if bind.dialect.name == "sqlite" else sa.text('true')
         with op.batch_alter_table('listings') as batch_op:
-            batch_op.add_column(sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('1')))
+            batch_op.add_column(sa.Column('is_active', sa.Boolean(), nullable=False, server_default=default_active))
 
     if _col_exists("orders", "fulfillment_mode") is False:
         with op.batch_alter_table('orders') as batch_op:
