@@ -21,6 +21,13 @@ def upgrade():
     insp = sa.inspect(bind)
     existing_tables = set(insp.get_table_names())
 
+    def _index_exists(table_name: str, index_name: str) -> bool:
+        try:
+            idxs = [i.get("name") for i in sa.inspect(bind).get_indexes(table_name)]
+            return index_name in idxs
+        except Exception:
+            return False
+
     if "escrow_unlocks" not in existing_tables:
         op.create_table(
             'escrow_unlocks',
@@ -41,8 +48,11 @@ def upgrade():
             sa.Column('admin_unlock_expires_at', sa.DateTime(), nullable=True),
             sa.UniqueConstraint('order_id', 'step', name='uq_escrow_unlock_order_step'),
         )
-        op.create_index('ix_escrow_unlocks_order_id', 'escrow_unlocks', ['order_id'])
-        op.create_index('ix_escrow_unlocks_step', 'escrow_unlocks', ['step'])
+    if "escrow_unlocks" in sa.inspect(bind).get_table_names():
+        if not _index_exists('escrow_unlocks', 'ix_escrow_unlocks_order_id'):
+            op.create_index('ix_escrow_unlocks_order_id', 'escrow_unlocks', ['order_id'])
+        if not _index_exists('escrow_unlocks', 'ix_escrow_unlocks_step'):
+            op.create_index('ix_escrow_unlocks_step', 'escrow_unlocks', ['step'])
 
     if "qr_challenges" not in existing_tables:
         op.create_table(
@@ -59,9 +69,13 @@ def upgrade():
             sa.Column('expires_at', sa.DateTime(), nullable=True),
             sa.UniqueConstraint('challenge_hash', name='uq_qr_challenge_hash'),
         )
-        op.create_index('ix_qr_challenges_order_id', 'qr_challenges', ['order_id'])
-        op.create_index('ix_qr_challenges_step', 'qr_challenges', ['step'])
-        op.create_index('ix_qr_challenges_scanned_by_user_id', 'qr_challenges', ['scanned_by_user_id'])
+    if "qr_challenges" in sa.inspect(bind).get_table_names():
+        if not _index_exists('qr_challenges', 'ix_qr_challenges_order_id'):
+            op.create_index('ix_qr_challenges_order_id', 'qr_challenges', ['order_id'])
+        if not _index_exists('qr_challenges', 'ix_qr_challenges_step'):
+            op.create_index('ix_qr_challenges_step', 'qr_challenges', ['step'])
+        if not _index_exists('qr_challenges', 'ix_qr_challenges_scanned_by_user_id'):
+            op.create_index('ix_qr_challenges_scanned_by_user_id', 'qr_challenges', ['scanned_by_user_id'])
 
     if "inspection_tickets" not in existing_tables:
         op.create_table(
@@ -79,8 +93,11 @@ def upgrade():
             sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
             sa.UniqueConstraint('order_id', name='uq_inspection_ticket_order'),
         )
-        op.create_index('ix_inspection_tickets_order_id', 'inspection_tickets', ['order_id'])
-        op.create_index('ix_inspection_tickets_inspector_id', 'inspection_tickets', ['inspector_id'])
+    if "inspection_tickets" in sa.inspect(bind).get_table_names():
+        if not _index_exists('inspection_tickets', 'ix_inspection_tickets_order_id'):
+            op.create_index('ix_inspection_tickets_order_id', 'inspection_tickets', ['order_id'])
+        if not _index_exists('inspection_tickets', 'ix_inspection_tickets_inspector_id'):
+            op.create_index('ix_inspection_tickets_inspector_id', 'inspection_tickets', ['inspector_id'])
 
 
 def downgrade():

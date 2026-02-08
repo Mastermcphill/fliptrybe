@@ -28,6 +28,13 @@ def upgrade():
         except Exception:
             return False
 
+    def _index_exists(table: str, idx_name: str) -> bool:
+        try:
+            idxs = [i.get("name") for i in sa.inspect(bind).get_indexes(table)]
+            return idx_name in idxs
+        except Exception:
+            return False
+
     if "availability_confirmations" not in existing_tables:
         op.create_table(
             'availability_confirmations',
@@ -44,10 +51,15 @@ def upgrade():
             sa.UniqueConstraint('order_id', name='uq_availability_confirmations_order'),
             sa.UniqueConstraint('response_token', name='uq_availability_confirmations_token'),
         )
-        op.create_index('ix_availability_confirmations_order_id', 'availability_confirmations', ['order_id'])
-        op.create_index('ix_availability_confirmations_listing_id', 'availability_confirmations', ['listing_id'])
-        op.create_index('ix_availability_confirmations_merchant_id', 'availability_confirmations', ['merchant_id'])
-        op.create_index('ix_availability_confirmations_seller_id', 'availability_confirmations', ['seller_id'])
+    if "availability_confirmations" in sa.inspect(bind).get_table_names():
+        if not _index_exists('availability_confirmations', 'ix_availability_confirmations_order_id'):
+            op.create_index('ix_availability_confirmations_order_id', 'availability_confirmations', ['order_id'])
+        if not _index_exists('availability_confirmations', 'ix_availability_confirmations_listing_id'):
+            op.create_index('ix_availability_confirmations_listing_id', 'availability_confirmations', ['listing_id'])
+        if not _index_exists('availability_confirmations', 'ix_availability_confirmations_merchant_id'):
+            op.create_index('ix_availability_confirmations_merchant_id', 'availability_confirmations', ['merchant_id'])
+        if not _index_exists('availability_confirmations', 'ix_availability_confirmations_seller_id'):
+            op.create_index('ix_availability_confirmations_seller_id', 'availability_confirmations', ['seller_id'])
 
     if _col_exists("listings", "is_active") is False:
         with op.batch_alter_table('listings') as batch_op:

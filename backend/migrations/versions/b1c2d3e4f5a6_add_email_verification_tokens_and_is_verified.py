@@ -22,6 +22,14 @@ def _has_column(inspector, table_name: str, column_name: str) -> bool:
         return False
 
 
+def _has_index(inspector, table_name: str, index_name: str) -> bool:
+    try:
+        idxs = inspector.get_indexes(table_name)
+        return any(i.get("name") == index_name for i in idxs)
+    except Exception:
+        return False
+
+
 def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -39,8 +47,11 @@ def upgrade():
             sa.Column("expires_at", sa.DateTime(), nullable=False),
             sa.Column("used_at", sa.DateTime(), nullable=True),
         )
-        op.create_index("ix_email_verification_tokens_user_id", "email_verification_tokens", ["user_id"])
-        op.create_index("ix_email_verification_tokens_token_hash", "email_verification_tokens", ["token_hash"], unique=True)
+    if _has_table(inspector, "email_verification_tokens"):
+        if not _has_index(inspector, "email_verification_tokens", "ix_email_verification_tokens_user_id"):
+            op.create_index("ix_email_verification_tokens_user_id", "email_verification_tokens", ["user_id"])
+        if not _has_index(inspector, "email_verification_tokens", "ix_email_verification_tokens_token_hash"):
+            op.create_index("ix_email_verification_tokens_token_hash", "email_verification_tokens", ["token_hash"], unique=True)
 
     if not _has_table(inspector, "password_reset_tokens"):
         op.create_table(
@@ -52,8 +63,11 @@ def upgrade():
             sa.Column("expires_at", sa.DateTime(), nullable=False),
             sa.Column("used_at", sa.DateTime(), nullable=True),
         )
-        op.create_index("ix_password_reset_tokens_user_id", "password_reset_tokens", ["user_id"])
-        op.create_index("ix_password_reset_tokens_token_hash", "password_reset_tokens", ["token_hash"], unique=True)
+    if _has_table(inspector, "password_reset_tokens"):
+        if not _has_index(inspector, "password_reset_tokens", "ix_password_reset_tokens_user_id"):
+            op.create_index("ix_password_reset_tokens_user_id", "password_reset_tokens", ["user_id"])
+        if not _has_index(inspector, "password_reset_tokens", "ix_password_reset_tokens_token_hash"):
+            op.create_index("ix_password_reset_tokens_token_hash", "password_reset_tokens", ["token_hash"], unique=True)
 
 
 def downgrade():
