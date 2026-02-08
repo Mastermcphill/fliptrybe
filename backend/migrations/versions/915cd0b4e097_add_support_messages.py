@@ -17,17 +17,28 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        'support_messages',
-        sa.Column('id', sa.Integer(), primary_key=True),
-        sa.Column('user_id', sa.Integer(), nullable=False, index=True),
-        sa.Column('sender_role', sa.String(length=16), nullable=False),
-        sa.Column('sender_id', sa.Integer(), nullable=False),
-        sa.Column('body', sa.Text(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-    )
-    op.create_index('ix_support_messages_user_id', 'support_messages', ['user_id'])
-    op.create_index('ix_support_messages_created_at', 'support_messages', ['created_at'])
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    tables = insp.get_table_names()
+    if 'support_messages' not in tables:
+        op.create_table(
+            'support_messages',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('user_id', sa.Integer(), nullable=False, index=True),
+            sa.Column('sender_role', sa.String(length=16), nullable=False),
+            sa.Column('sender_id', sa.Integer(), nullable=False),
+            sa.Column('body', sa.Text(), nullable=False),
+            sa.Column('created_at', sa.DateTime(), nullable=False),
+        )
+    # indexes
+    try:
+        idx = {i['name'] for i in insp.get_indexes('support_messages')}
+    except Exception:
+        idx = set()
+    if 'ix_support_messages_user_id' not in idx:
+        op.create_index('ix_support_messages_user_id', 'support_messages', ['user_id'])
+    if 'ix_support_messages_created_at' not in idx:
+        op.create_index('ix_support_messages_created_at', 'support_messages', ['created_at'])
 
 
 def downgrade():
