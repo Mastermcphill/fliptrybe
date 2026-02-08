@@ -17,23 +17,40 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        'account_flags',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('flag_type', sa.String(length=32), nullable=False),
-        sa.Column('signal', sa.String(length=120), nullable=True),
-        sa.Column('details', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id')
-    )
-    with op.batch_alter_table('account_flags', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_account_flags_user_id'), ['user_id'], unique=False)
-        batch_op.create_index(batch_op.f('ix_account_flags_flag_type'), ['flag_type'], unique=False)
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    tables = set(insp.get_table_names())
 
-    with op.batch_alter_table('merchant_profiles', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('phone', sa.String(length=32), nullable=True))
+    if 'account_flags' not in tables:
+        op.create_table(
+            'account_flags',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('flag_type', sa.String(length=32), nullable=False),
+            sa.Column('signal', sa.String(length=120), nullable=True),
+            sa.Column('details', sa.Text(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+            sa.PrimaryKeyConstraint('id')
+        )
+    try:
+        idx = {i['name'] for i in insp.get_indexes('account_flags')}
+    except Exception:
+        idx = set()
+    if 'ix_account_flags_user_id' not in idx:
+        with op.batch_alter_table('account_flags', schema=None) as batch_op:
+            batch_op.create_index(batch_op.f('ix_account_flags_user_id'), ['user_id'], unique=False)
+    if 'ix_account_flags_flag_type' not in idx:
+        with op.batch_alter_table('account_flags', schema=None) as batch_op:
+            batch_op.create_index(batch_op.f('ix_account_flags_flag_type'), ['flag_type'], unique=False)
+
+    try:
+        merchant_cols = {c['name'] for c in insp.get_columns('merchant_profiles')}
+    except Exception:
+        merchant_cols = set()
+    if 'phone' not in merchant_cols:
+        with op.batch_alter_table('merchant_profiles', schema=None) as batch_op:
+            batch_op.add_column(sa.Column('phone', sa.String(length=32), nullable=True))
 
 
 def downgrade():
