@@ -17,18 +17,18 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
   @override
   void initState() {
     super.initState();
-    _items = _svc.listListings();
+    _items = _svc.listMyListings();
   }
 
   void _reload() {
-    setState(() => _items = _svc.listListings());
+    setState(() => _items = _svc.listMyListings());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Listings (Demo)'),
+        title: const Text('My Listings'),
         actions: [IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))],
       ),
       body: FutureBuilder<List<dynamic>>(
@@ -39,7 +39,9 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
           }
           final items = snap.data ?? const [];
           if (items.isEmpty) {
-            return const Center(child: Text('No listings yet. Create one from Sell screen.'));
+            return const Center(
+              child: Text('No listings found. If you are a merchant, create one from the Sell screen.'),
+            );
           }
           return ListView.builder(
             itemCount: items.length,
@@ -57,7 +59,7 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
               final meta = [
                 if (priceText.isNotEmpty) priceText,
                 if (createdText.isNotEmpty) createdText,
-              ].join('  •  ');
+              ].join('  -  ');
               return Card(
                 margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: ListTile(

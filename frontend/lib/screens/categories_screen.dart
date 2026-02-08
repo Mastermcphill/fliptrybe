@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'search_demo_screen.dart';
+import 'shortlet_screen.dart';
 
 class CategoriesScreen extends StatelessWidget {
   const CategoriesScreen({super.key});
@@ -32,6 +33,10 @@ class CategoriesScreen extends StatelessWidget {
             title: Text(c),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
+              if (c == "Shortlets") {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ShortletScreen()));
+                return;
+              }
               Navigator.push(context, MaterialPageRoute(builder: (_) => SearchDemoScreen(initialQuery: c)));
             },
           );

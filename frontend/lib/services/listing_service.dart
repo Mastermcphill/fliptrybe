@@ -18,6 +18,20 @@ class ListingService {
     }
   }
 
+  Future<List<dynamic>> listMyListings() async {
+    try {
+      final res = await _client.dio.get(ApiConfig.api('/merchant/listings'));
+      final status = res.statusCode ?? 0;
+      if (status < 200 || status >= 300) return <dynamic>[];
+      final data = res.data;
+      if (data is Map && data['items'] is List) return data['items'] as List;
+      if (data is List) return data;
+      return <dynamic>[];
+    } catch (_) {
+      return <dynamic>[];
+    }
+  }
+
   Future<Map<String, dynamic>?> createListing({
     required String title,
     String description = '',

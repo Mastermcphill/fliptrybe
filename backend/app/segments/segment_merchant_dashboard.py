@@ -1,4 +1,7 @@
-from flask import Blueprint, jsonify, request
+from datetime import datetime, timedelta
+
+from flask import Blueprint, jsonify, request, current_app
+from app.extensions import db
 from app.models import Listing, User, Order, Receipt
 from app.utils.jwt_utils import decode_token
 
@@ -121,6 +124,64 @@ def merchant_kpis():
             "score": score,
         }
     }), 200
+
+
+@merchant_bp.get("/analytics")
+def merchant_analytics():
+    """Lightweight sales analytics for merchant accounts."""
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": True, "paid_last_7": 0, "paid_last_30": 0, "recent_paid": []}), 200
+
+    try:
+        mid = int(u.id)
+    except Exception:
+        return jsonify({"ok": True, "paid_last_7": 0, "paid_last_30": 0, "recent_paid": []}), 200
+
+    paid_statuses = {
+        "paid",
+        "merchant_accepted",
+        "driver_assigned",
+        "picked_up",
+        "delivered",
+        "completed",
+    }
+
+    try:
+        now = datetime.utcnow()
+        base_q = Order.query.filter_by(merchant_id=mid).filter(Order.status.in_(list(paid_statuses)))
+        paid_last_7 = base_q.filter(Order.created_at >= (now - timedelta(days=7))).count()
+        paid_last_30 = base_q.filter(Order.created_at >= (now - timedelta(days=30))).count()
+
+        recent = (
+            base_q.order_by(Order.created_at.desc())
+            .limit(12)
+            .all()
+        )
+
+        recent_out = []
+        for o in recent:
+            recent_out.append({
+                "order_id": int(o.id),
+                "listing_id": int(o.listing_id) if o.listing_id is not None else None,
+                "amount": float(o.amount or 0.0),
+                "status": (o.status or "").strip().lower(),
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+            })
+
+        return jsonify({
+            "ok": True,
+            "paid_last_7": int(paid_last_7),
+            "paid_last_30": int(paid_last_30),
+            "recent_paid": recent_out,
+        }), 200
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("merchant_analytics_error")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "paid_last_7": 0, "paid_last_30": 0, "recent_paid": []}), 200
 
 
 @merchant_bp.get("/leaderboard")

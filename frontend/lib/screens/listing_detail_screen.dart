@@ -174,7 +174,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             child: Text(
               _busy
                   ? 'Processing...'
-                  : (canBuy ? 'Buy Now + Request Delivery' : 'Buy (coming soon)'),
+                  : (canBuy ? 'Buy Now + Request Delivery' : 'Not available yet'),
             ),
           ),
         ],

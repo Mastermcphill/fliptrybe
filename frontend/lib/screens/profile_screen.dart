@@ -12,7 +12,6 @@ import 'heatmap_screen.dart';
 import 'shortlets_screen.dart';
 import 'fees_demo_screen.dart';
 import 'shortlet_screen.dart';
-import 'merchant_dashboard_screen.dart';
 import 'merchant_listings_demo_screen.dart';
 import 'settings_demo_screen.dart';
 import 'notifications_inbox_screen.dart';
@@ -27,8 +26,8 @@ import 'kyc_demo_screen.dart';
 import 'admin_broadcast_screen.dart';
 import 'leaderboards_screen.dart';
 import 'orders_screen.dart';
-import 'metrics_screen.dart';
 import 'investor_metrics_screen.dart';
+import 'sales_analytics_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -291,18 +290,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildMenuItem(Icons.shopping_bag, "My Orders", onTap: () {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen()));
                       }),
-                      _buildMenuItem(Icons.store, "My Listings", onTap: () {
-                        final role = (_profile?["role"] ?? "buyer").toString();
-                        if (role == "merchant" || role == "admin") {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantDashboardScreen()));
-                        } else {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantListingsDemoScreen()));
-                        }
-                      }),
+                      _buildMenuItem(Icons.store, "My Listings",
+                          onTap: (() {
+                            final role = (_profile?["role"] ?? "buyer").toString();
+                            final isMerchant = role == "merchant" || role == "admin";
+                            if (!isMerchant) return null;
+                            return () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantListingsDemoScreen()));
+                            };
+                          })(),
+                      ),
                       _buildMenuItem(Icons.analytics, "Sales Analytics", onTap: () {
                         final role = (_profile?["role"] ?? "buyer").toString();
                         if (role == "merchant" || role == "admin") {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const MetricsScreen()));
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesAnalyticsScreen()));
                         } else {
                           Navigator.push(context, MaterialPageRoute(builder: (_) => const InvestorMetricsScreen()));
                         }
