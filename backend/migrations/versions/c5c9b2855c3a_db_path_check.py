@@ -31,6 +31,17 @@ def _index_exists(table_name: str, index_name: str) -> bool:
         return False
 
 
+def _columns_exist(table_name: str, columns) -> bool:
+    try:
+        existing = {c.get("name") for c in sa.inspect(op.get_bind()).get_columns(table_name)}
+    except Exception:
+        return False
+    try:
+        return all(col in existing for col in columns)
+    except Exception:
+        return False
+
+
 def _create_table_if_missing(table_name: str, *args, **kwargs):
     if _table_exists(table_name):
         return None
@@ -41,6 +52,10 @@ def _guard_batch_create_index(batch_op, table_name: str) -> None:
     orig_create = batch_op.create_index
 
     def _create(name, columns, **kw):
+        if not _table_exists(table_name):
+            return None
+        if not _columns_exist(table_name, columns):
+            return None
         if _index_exists(table_name, name):
             return None
         return orig_create(name, columns, **kw)
