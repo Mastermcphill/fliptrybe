@@ -226,12 +226,19 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     final title = item['title']?.toString() ?? '';
                     final price = item['price'] ?? 0;
                     final condition = item['condition']?.toString() ?? '';
+                    final id = item['id'];
 
                     return Material(
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
                         onTap: () {
+                          if (id == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Listing details not available yet.')),
+                            );
+                            return;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(

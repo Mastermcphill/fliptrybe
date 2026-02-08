@@ -98,6 +98,11 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
             Text(_status!, style: const TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 12),
           ],
+          const Text(
+            'Paste the verification token from your email link. If you did not receive it, resend a new link.',
+            style: TextStyle(height: 1.35),
+          ),
+          const SizedBox(height: 12),
           TextField(
             controller: _emailCtrl,
             decoration: const InputDecoration(
@@ -109,7 +114,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
           TextField(
             controller: _codeCtrl,
             decoration: const InputDecoration(
-              labelText: 'Token',
+              labelText: 'Verification token',
               border: OutlineInputBorder(),
             ),
           ),

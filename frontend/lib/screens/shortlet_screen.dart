@@ -88,6 +88,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
                       final price = (m['nightly_price'] ?? m['price'] ?? 0).toString();
                       final city = (m['city'] ?? '').toString();
                       final state = (m['state'] ?? '').toString();
+                      final id = m['id'];
                       final beds = (m['rooms'] ?? m['beds'] ?? '').toString();
                       final baths = (m['bathrooms'] ?? m['baths'] ?? '').toString();
 
@@ -124,6 +125,12 @@ class _ShortletScreenState extends State<ShortletScreen> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
+                            if (id == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Shortlet details not available yet.')),
+                              );
+                              return;
+                            }
                             Navigator.push(
                               context,
                               MaterialPageRoute(

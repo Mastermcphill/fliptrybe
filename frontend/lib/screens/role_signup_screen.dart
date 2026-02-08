@@ -80,7 +80,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       };
 
       if (_role == "buyer") {
-        // “Buy & Sell” = buyer role in backend
+        // "Buy & Sell" maps to buyer role in backend
         path = "/auth/register/buyer";
       } else if (_role == "merchant") {
         if (_business.text.trim().isEmpty) {
@@ -176,6 +176,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     bool primary = false,
   }) {
     final selected = _role == value;
+    final double cardPadding = _compact ? 14 : 16;
     final borderColor = selected
         ? Colors.black
         : primary
@@ -190,7 +191,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       onTap: _loading ? null : () => setState(() => _role = value),
       borderRadius: BorderRadius.circular(primary ? 18 : 16),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(cardPadding),
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(primary ? 18 : 16),
@@ -208,8 +209,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         child: Row(
           children: [
             Container(
-              width: primary ? 48 : 44,
-              height: primary ? 48 : 44,
+              width: primary ? (_compact ? 42 : 48) : (_compact ? 40 : 44),
+              height: primary ? (_compact ? 42 : 48) : (_compact ? 40 : 44),
               decoration: BoxDecoration(
                 color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(14),
@@ -226,6 +227,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
                       color: selected ? Colors.white : const Color(0xFF0F172A),
+                      fontSize: _compact ? 14.5 : 16,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -235,7 +237,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                       height: 1.25,
                       color: selected ? Colors.white.withOpacity(0.9) : const Color(0xFF475569),
                       fontWeight: FontWeight.w600,
-                      fontSize: 12.5,
+                      fontSize: _compact ? 11.5 : 12.5,
                     ),
                   ),
                 ],
@@ -249,10 +251,10 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  "Primary",
+                  "Recommended",
                   style: TextStyle(
                     color: selected ? Colors.white : const Color(0xFF0F172A),
-                    fontSize: 11,
+                    fontSize: _compact ? 10 : 11,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

@@ -53,6 +53,7 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
               final description = (m['description'] ?? '').toString();
               final price = m['price'];
               final createdAt = (m['created_at'] ?? '').toString();
+              final id = m['id'];
 
               final priceText = (price == null) ? '' : 'Price: ${price.toString()}';
               final createdText = createdAt.isEmpty ? '' : 'Created: $createdAt';
@@ -64,6 +65,12 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
                 margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: ListTile(
                   onTap: () {
+                    if (id == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Listing details not available yet.')),
+                      );
+                      return;
+                    }
                     Navigator.push(
                       context,
                       MaterialPageRoute(

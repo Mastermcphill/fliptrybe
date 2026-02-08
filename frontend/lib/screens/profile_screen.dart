@@ -289,7 +289,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (!isVerified) ...[
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: const Color(0xFF2A2A2A),
                             borderRadius: BorderRadius.circular(12),
@@ -299,10 +299,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Verify your email to withdraw, upgrade tiers, and sell.',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                'Verify your email to unlock withdrawals, tier upgrades, and selling.',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, height: 1.3),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
+                              Text(
+                                'We will email you a secure link to confirm your account.',
+                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12.5),
+                              ),
+                              const SizedBox(height: 10),
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
@@ -310,7 +315,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   icon: _sendingVerify
                                       ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                                       : const Icon(Icons.mail_outline),
-                                  label: Text(_sendingVerify ? 'Sending...' : 'Resend verification email'),
+                                  label: Text(_sendingVerify ? 'Sending...' : 'Resend verification link'),
                                 ),
                               ),
                             ],
