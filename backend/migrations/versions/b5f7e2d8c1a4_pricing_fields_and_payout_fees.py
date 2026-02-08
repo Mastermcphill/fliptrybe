@@ -17,23 +17,46 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    def _cols(table):
+        try:
+            return {c['name'] for c in insp.get_columns(table)}
+        except Exception:
+            return set()
+
+    listing_cols = _cols('listings')
+    shortlet_cols = _cols('shortlets')
+    merchant_cols = _cols('merchant_profiles')
+    payout_cols = _cols('payout_requests')
+
     with op.batch_alter_table('listings', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('base_price', sa.Float(), nullable=False, server_default='0.0'))
-        batch_op.add_column(sa.Column('platform_fee', sa.Float(), nullable=False, server_default='0.0'))
-        batch_op.add_column(sa.Column('final_price', sa.Float(), nullable=False, server_default='0.0'))
+        if 'base_price' not in listing_cols:
+            batch_op.add_column(sa.Column('base_price', sa.Float(), nullable=False, server_default='0.0'))
+        if 'platform_fee' not in listing_cols:
+            batch_op.add_column(sa.Column('platform_fee', sa.Float(), nullable=False, server_default='0.0'))
+        if 'final_price' not in listing_cols:
+            batch_op.add_column(sa.Column('final_price', sa.Float(), nullable=False, server_default='0.0'))
 
     with op.batch_alter_table('shortlets', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('base_price', sa.Float(), nullable=False, server_default='0.0'))
-        batch_op.add_column(sa.Column('platform_fee', sa.Float(), nullable=False, server_default='0.0'))
-        batch_op.add_column(sa.Column('final_price', sa.Float(), nullable=False, server_default='0.0'))
+        if 'base_price' not in shortlet_cols:
+            batch_op.add_column(sa.Column('base_price', sa.Float(), nullable=False, server_default='0.0'))
+        if 'platform_fee' not in shortlet_cols:
+            batch_op.add_column(sa.Column('platform_fee', sa.Float(), nullable=False, server_default='0.0'))
+        if 'final_price' not in shortlet_cols:
+            batch_op.add_column(sa.Column('final_price', sa.Float(), nullable=False, server_default='0.0'))
 
     with op.batch_alter_table('merchant_profiles', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_top_tier', sa.Boolean(), nullable=False, server_default=sa.text('0')))
+        if 'is_top_tier' not in merchant_cols:
+            batch_op.add_column(sa.Column('is_top_tier', sa.Boolean(), nullable=False, server_default=sa.text('0')))
 
     with op.batch_alter_table('payout_requests', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('fee_amount', sa.Float(), nullable=False, server_default='0.0'))
-        batch_op.add_column(sa.Column('net_amount', sa.Float(), nullable=False, server_default='0.0'))
-        batch_op.add_column(sa.Column('speed', sa.String(length=16), nullable=False, server_default='standard'))
+        if 'fee_amount' not in payout_cols:
+            batch_op.add_column(sa.Column('fee_amount', sa.Float(), nullable=False, server_default='0.0'))
+        if 'net_amount' not in payout_cols:
+            batch_op.add_column(sa.Column('net_amount', sa.Float(), nullable=False, server_default='0.0'))
+        if 'speed' not in payout_cols:
+            batch_op.add_column(sa.Column('speed', sa.String(length=16), nullable=False, server_default='standard'))
 
 
 def downgrade():
