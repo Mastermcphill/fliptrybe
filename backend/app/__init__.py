@@ -242,7 +242,10 @@ def create_app():
             try:
                 _autopilot_tick_hook()
             except Exception:
-                pass
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
     except Exception:
         pass
 

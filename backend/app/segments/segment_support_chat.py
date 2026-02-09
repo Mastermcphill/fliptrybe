@@ -41,7 +41,14 @@ def _current_user() -> User | None:
             db.session.rollback()
         except Exception:
             pass
-        return None
+        try:
+            return User.query.get(uid)
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            return None
 
 
 def _role(u: User | None) -> str:
