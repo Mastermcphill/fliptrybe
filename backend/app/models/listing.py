@@ -36,7 +36,7 @@ class Listing(db.Model):
     #   /api/uploads/<filename>
     # Still supports legacy absolute URLs already saved.
     image_path = db.Column(db.String(512), nullable=True)
-    image_filename = db.Column(db.String(255), nullable=False, default="")
+    image_filename = db.Column(db.String(255), nullable=False, default="", server_default="")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
