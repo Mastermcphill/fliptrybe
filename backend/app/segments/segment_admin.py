@@ -1,6 +1,7 @@
 import uuid
 import inspect
 from datetime import datetime, timezone
+from sqlalchemy import String, Text, Integer, Float, Numeric, Boolean, DateTime, Enum
 from flask import Blueprint, jsonify, request, current_app
 from app.extensions import db
 from app.models.user import User
@@ -155,6 +156,36 @@ def seed_listing():
     )
     try:
         listing.date_posted = datetime.now(timezone.utc)
+    except Exception:
+        pass
+    # Seed safety: fill any NOT NULL columns that are still None.
+    try:
+        for col in Listing.__table__.columns:
+            if col.primary_key:
+                continue
+            if col.nullable:
+                continue
+            key = col.name
+            try:
+                val = getattr(listing, key, None)
+            except Exception:
+                val = None
+            if val is not None:
+                continue
+            ctype = col.type
+            try:
+                if isinstance(ctype, (String, Text)):
+                    setattr(listing, key, "")
+                elif isinstance(ctype, (Integer, Float, Numeric)):
+                    setattr(listing, key, 0)
+                elif isinstance(ctype, Boolean):
+                    setattr(listing, key, True)
+                elif isinstance(ctype, DateTime):
+                    setattr(listing, key, datetime.now(timezone.utc))
+                elif isinstance(ctype, Enum) and getattr(ctype, "enums", None):
+                    setattr(listing, key, ctype.enums[0])
+            except Exception:
+                pass
     except Exception:
         pass
     try:
