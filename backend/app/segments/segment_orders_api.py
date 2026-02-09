@@ -434,7 +434,7 @@ def _mark_paid(order: Order, reference: str | None = None, actor_id: int | None 
     seller_id = None
     if listing:
         try:
-            seller_id = int(getattr(listing, "owner_id") or getattr(listing, "user_id") or 0) or None
+            seller_id = int(getattr(listing, "user_id") or 0) or None
         except Exception:
             seller_id = None
 
@@ -530,9 +530,9 @@ def create_order():
     if listing_id_int and not listing:
         return jsonify({"ok": False, "message": "listing not found"}), 404
     if listing:
-        if listing and getattr(listing, "owner_id", None):
+        if listing and getattr(listing, "user_id", None):
             try:
-                merchant_id = int(getattr(listing, "owner_id"))
+                merchant_id = int(getattr(listing, "user_id"))
             except Exception:
                 pass
         if listing and hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
@@ -975,7 +975,7 @@ def admin_listings():
         for r in rows:
             merchant_id = None
             try:
-                merchant_id = int(r.owner_id) if r.owner_id is not None else int(r.user_id) if r.user_id is not None else None
+                merchant_id = int(r.user_id) if r.user_id is not None else None
             except Exception:
                 merchant_id = None
             items.append({

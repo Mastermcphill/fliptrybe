@@ -10,7 +10,7 @@ class Listing(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
-    # Seller/merchant user id (nullable for legacy rows)
+    # Seller/merchant user id (legacy owner_id retained for drifted DBs)
     owner_id = db.Column(db.Integer, nullable=True, index=True)
 
     title = db.Column(db.String(120), nullable=False)
@@ -68,7 +68,7 @@ class Listing(db.Model):
         return {
             "id": self.id,
             "user_id": self.user_id,
-            "owner_id": self.owner_id,
+            "owner_id": self.user_id,
             "state": (self.state or ""),
             "city": (self.city or ""),
             "locality": (self.locality or ""),

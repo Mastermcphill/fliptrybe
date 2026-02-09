@@ -135,11 +135,6 @@ def _is_owner(u: User | None, listing: Listing) -> bool:
     if not u:
         return False
     try:
-        if listing.owner_id and int(listing.owner_id) == int(u.id):
-            return True
-    except Exception:
-        pass
-    try:
         if listing.user_id and int(listing.user_id) == int(u.id):
             return True
     except Exception:
@@ -409,7 +404,7 @@ def get_feed():
         q = q.filter(or_(Listing.title.ilike(like), Listing.description.ilike(like)))
 
     try:
-        q = q.filter(or_(Listing.user_id.isnot(None), Listing.owner_id.isnot(None)))
+        q = q.filter(Listing.user_id.isnot(None))
     except Exception:
         pass
 
@@ -478,7 +473,7 @@ def merchant_listings():
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
-    q = Listing.query.filter(or_(Listing.owner_id == u.id, Listing.user_id == u.id))
+    q = Listing.query.filter(Listing.user_id == u.id)
     q = _apply_listing_active_filter(q)
     q = _apply_listing_ordering(q)
     items = q.all()
@@ -546,17 +541,12 @@ def update_listing(listing_id: int):
     if "price" in payload:
         try:
             base_price = float(payload.get("price") or 0.0)
-            owner_id = None
+            seller_id = None
             try:
-                owner_id = int(item.owner_id) if item.owner_id else None
+                seller_id = int(item.user_id) if item.user_id else None
             except Exception:
-                owner_id = None
-            if owner_id is None:
-                try:
-                    owner_id = int(item.user_id) if item.user_id else None
-                except Exception:
-                    owner_id = None
-            _apply_pricing_for_listing(item, base_price=base_price, seller_role=_seller_role(owner_id))
+                seller_id = None
+            _apply_pricing_for_listing(item, base_price=base_price, seller_role=_seller_role(seller_id))
         except Exception:
             item.price = 0.0
     if "image_path" in payload or "image" in payload:
@@ -672,31 +662,31 @@ def create_listing():
         return jsonify({"message": "title is required"}), 400
 
     # Best-effort: attach listing to authenticated user
-    owner_id = None
+    user_id = None
     try:
         token = get_bearer_token(request.headers.get("Authorization", ""))
         payload = decode_token(token) if token else None
         sub = payload.get("sub") if isinstance(payload, dict) else None
-        owner_id = int(sub) if sub is not None and str(sub).isdigit() else None
+        user_id = int(sub) if sub is not None and str(sub).isdigit() else None
     except Exception:
-        owner_id = None
+        user_id = None
 
-    if owner_id is None:
+    if user_id is None:
         return jsonify({"message": "Unauthorized"}), 401
     try:
-        owner_user = User.query.get(int(owner_id))
+        owner_user = User.query.get(int(user_id))
     except Exception:
         owner_user = None
     if not _is_email_verified(owner_user):
         return jsonify({"message": "Verify your email to create listings"}), 403
 
-    account_role = _account_role(owner_id)
-    ok, info = enforce_listing_cap(int(owner_id), account_role, "declutter")
+    account_role = _account_role(user_id)
+    ok, info = enforce_listing_cap(int(user_id), account_role, "declutter")
     if not ok:
         return jsonify(info), 403
 
     listing = Listing(
-        owner_id=owner_id,
+        user_id=user_id,
         title=title,
         state=state,
         city=city,
@@ -707,7 +697,7 @@ def create_listing():
     )
 
     try:
-        seller_role = _seller_role(owner_id)
+        seller_role = _seller_role(user_id)
     except Exception:
         seller_role = "guest"
     _apply_pricing_for_listing(listing, base_price=price, seller_role=seller_role)
