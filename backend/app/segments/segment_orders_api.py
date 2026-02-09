@@ -789,7 +789,12 @@ def order_delivery(order_id: int):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
     try:
-        o = db.session.get(Order, int(order_id))
+        oid = int(order_id)
+    except Exception:
+        return jsonify({"ok": False, "error": "order_not_found"}), 404
+
+    try:
+        o = db.session.get(Order, oid)
     except Exception as e:
         db.session.rollback()
         try:
