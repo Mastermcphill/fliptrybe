@@ -467,6 +467,10 @@ def create_order():
         return jsonify({"ok": False, "message": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
+    if not payload:
+        form_data = request.form.to_dict(flat=True) if request.form else {}
+        args_data = request.args.to_dict(flat=True) if request.args else {}
+        payload = {**args_data, **form_data}
 
     buyer_id_raw = payload.get("buyer_id")
     try:
