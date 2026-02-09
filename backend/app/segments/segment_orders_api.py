@@ -591,7 +591,20 @@ def create_order():
         return jsonify({"ok": True, "order": order.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"message": "Failed to create order", "error": str(e)}), 500
+        try:
+            current_app.logger.exception(
+                "orders.create_failed buyer_id=%s merchant_id=%s user_id=%s",
+                int(buyer_id),
+                int(merchant_id),
+                int(getattr(u, "id", 0) or 0),
+            )
+        except Exception:
+            pass
+        debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
+        if debug_requested and _is_admin(u):
+            detail = f"{type(e).__name__}: {e}"
+            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
+        return jsonify({"ok": False, "error": "db_error"}), 500
 
 
 @orders_bp.post("/orders/<int:order_id>/mark-paid")
@@ -895,6 +908,69 @@ def admin_orders():
         db.session.rollback()
         try:
             current_app.logger.exception("admin_orders_list_failed")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "items": []}), 200
+
+
+@orders_bp.get("/admin/users")
+def admin_users():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    role = (request.args.get("role") or "").strip().lower()
+    try:
+        q = User.query
+        if role:
+            q = q.filter_by(role=role)
+        rows = q.order_by(User.id.desc()).limit(200).all()
+        items = []
+        for r in rows:
+            items.append({
+                "id": int(r.id),
+                "email": (r.email or ""),
+                "name": (r.name or ""),
+                "role": (getattr(r, "role", "") or "buyer"),
+            })
+        return jsonify({"ok": True, "items": items}), 200
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("admin_users_list_failed")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "items": []}), 200
+
+
+@orders_bp.get("/admin/listings")
+def admin_listings():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    try:
+        rows = Listing.query.order_by(Listing.created_at.desc()).limit(200).all()
+        items = []
+        for r in rows:
+            merchant_id = None
+            try:
+                merchant_id = int(r.owner_id) if r.owner_id is not None else int(r.user_id) if r.user_id is not None else None
+            except Exception:
+                merchant_id = None
+            items.append({
+                "id": int(r.id),
+                "merchant_id": merchant_id,
+            })
+        return jsonify({"ok": True, "items": items}), 200
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("admin_listings_list_failed")
         except Exception:
             pass
         return jsonify({"ok": True, "items": []}), 200
