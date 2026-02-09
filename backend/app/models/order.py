@@ -27,6 +27,7 @@ class Order(db.Model):
 
     payment_reference = db.Column(db.String(80), nullable=True, index=True)
     seed_key = db.Column(db.String(64), nullable=True, unique=True, index=True)
+    handshake_id = db.Column(db.String(64), nullable=True, index=True)
 
     driver_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
@@ -111,6 +112,7 @@ class Order(db.Model):
             "status": self.status,
             "fulfillment_mode": self.fulfillment_mode or "unselected",
             "payment_reference": self.payment_reference or "",
+            "handshake_id": self.handshake_id or "",
             "driver_id": int(self.driver_id) if self.driver_id is not None else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

@@ -4,6 +4,7 @@ import os
 import hmac
 import random
 import secrets
+import uuid
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
@@ -467,10 +468,14 @@ def create_order():
 
     payload = request.get_json(silent=True) or {}
 
+    buyer_id_raw = payload.get("buyer_id")
     try:
-        buyer_id = int(payload.get("buyer_id") or u.id)
+        buyer_id = int(buyer_id_raw or u.id)
     except Exception:
         buyer_id = int(u.id)
+
+    if _is_admin(u) and not buyer_id_raw:
+        return jsonify({"ok": False, "message": "buyer_id required for admin"}), 400
 
     if buyer_id != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
@@ -478,13 +483,15 @@ def create_order():
     try:
         merchant_id = int(payload.get("merchant_id"))
     except Exception:
-        return jsonify({"message": "merchant_id required"}), 400
+        return jsonify({"ok": False, "message": "merchant_id required"}), 400
 
     listing_id = payload.get("listing_id")
     try:
         listing_id_int = int(listing_id) if listing_id is not None else None
     except Exception:
         listing_id_int = None
+    if listing_id_int is None:
+        return jsonify({"ok": False, "message": "listing_id required"}), 400
 
     try:
         amount = float(payload.get("amount") or 0.0)
@@ -519,9 +526,10 @@ def create_order():
             return jsonify({"message": "payment_reference already used"}), 409
 
     # If listing_id is supplied, align merchant if listing exists and has owner.
-    listing = None
-    if listing_id_int:
-        listing = Listing.query.get(listing_id_int)
+    listing = Listing.query.get(listing_id_int) if listing_id_int else None
+    if listing_id_int and not listing:
+        return jsonify({"ok": False, "message": "listing not found"}), 404
+    if listing:
         if listing and getattr(listing, "owner_id", None):
             try:
                 merchant_id = int(getattr(listing, "owner_id"))
@@ -530,7 +538,7 @@ def create_order():
         if listing and hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
             return jsonify({"message": "Listing is no longer available"}), 409
 
-        # Seller cannot buy their own listing
+    # Seller cannot buy their own listing
     try:
         if int(buyer_id) == int(merchant_id) and not _is_admin(u):
             return jsonify({"message": "Sellers cannot buy their own listings"}), 409
@@ -562,6 +570,10 @@ def create_order():
         else:
             amount = float(base_price)
 
+    handshake_id = (payload.get("handshake_id") or "").strip()
+    if not handshake_id:
+        handshake_id = str(uuid.uuid4())
+
     order = Order(
         buyer_id=buyer_id,
         merchant_id=merchant_id,
@@ -575,6 +587,7 @@ def create_order():
         inspection_required=inspection_required,
         status="created",
         updated_at=datetime.utcnow(),
+        handshake_id=handshake_id,
     )
 
     try:
