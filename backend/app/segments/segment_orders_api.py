@@ -922,8 +922,11 @@ def admin_users():
         return jsonify({"message": "Forbidden"}), 403
 
     role = (request.args.get("role") or "").strip().lower()
+    email = (request.args.get("email") or "").strip().lower()
     try:
         q = User.query
+        if email:
+            q = q.filter(db.func.lower(User.email) == email)
         if role:
             q = q.filter_by(role=role)
         rows = q.order_by(User.id.desc()).limit(200).all()
