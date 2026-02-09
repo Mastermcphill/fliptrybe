@@ -21,6 +21,9 @@ class Listing(db.Model):
     city = db.Column(db.String(64), nullable=True)
     locality = db.Column(db.String(64), nullable=True)
 
+    # Listing category (e.g., declutter)
+    category = db.Column(db.String(64), nullable=True)
+
     # Keep float for now (matches your current usage)
     price = db.Column(db.Float, nullable=False, default=0.0)
 
@@ -81,6 +84,7 @@ class Listing(db.Model):
             "state": (self.state or ""),
             "city": (self.city or ""),
             "locality": (self.locality or ""),
+            "category": (getattr(self, "category", None) or ""),
             "title": self.title,
             "description": self.description or "",
             "price": float(final_price),

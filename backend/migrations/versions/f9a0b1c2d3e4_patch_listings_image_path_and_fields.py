@@ -30,6 +30,7 @@ def upgrade():
     cols = {c["name"] for c in insp.get_columns("listings")}
     missing = [
         ("image_path", sa.Column("image_path", sa.String(512), nullable=True)),
+        ("category", sa.Column("category", sa.String(64), nullable=True)),
         ("seed_key", sa.Column("seed_key", sa.String(64), nullable=True)),
         ("description", sa.Column("description", sa.Text(), nullable=True)),
         ("state", sa.Column("state", sa.String(64), nullable=True)),
@@ -58,6 +59,7 @@ def downgrade():
         return
     cols = {c["name"] for c in insp.get_columns("listings")}
     to_drop = [n for n in (
+        "category",
         "created_at",
         "is_active",
         "final_price",

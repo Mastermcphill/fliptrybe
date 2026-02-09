@@ -150,6 +150,11 @@ def seed_listing():
         seed_key=uuid.uuid4().hex,
     )
     try:
+        if hasattr(listing, "category"):
+            listing.category = "declutter"
+    except Exception:
+        pass
+    try:
         db.session.add(listing)
         db.session.commit()
         return jsonify({"ok": True, "merchant_id": int(merchant.id), "listing_id": int(listing.id)}), 201
