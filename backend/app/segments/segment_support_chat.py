@@ -7,7 +7,7 @@ from sqlalchemy import or_
 
 from app.extensions import db
 from app.models import User, SupportMessage
-from app.utils.jwt_utils import decode_token
+from app.utils.jwt_utils import decode_token, get_bearer_token
 
 support_bp = Blueprint("support_chat_bp", __name__, url_prefix="/api/support")
 support_admin_bp = Blueprint("support_admin_bp", __name__, url_prefix="/api/admin/support")
@@ -15,9 +15,12 @@ support_admin_bp = Blueprint("support_admin_bp", __name__, url_prefix="/api/admi
 
 def _bearer_token() -> str | None:
     header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
-        return None
-    return header.replace("Bearer ", "", 1).strip() or None
+    token = get_bearer_token(header)
+    if token:
+        return token
+    if header.startswith("Token "):
+        return header.replace("Token ", "", 1).strip() or None
+    return None
 
 
 def _current_user() -> User | None:

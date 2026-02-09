@@ -49,6 +49,7 @@ from app.segments.segment_inspector_bonds_admin import inspector_bonds_admin_bp
 from app.segments.segment_role_change import role_change_bp
 from app.segments.segment_moneybox import moneybox_bp, moneybox_system_bp
 from app.segments.segment_public_feed import public_bp
+from app.utils.jwt_utils import decode_token, get_bearer_token
 
 
 def create_app():
@@ -208,6 +209,79 @@ def create_app():
             "received_user_agent": request.headers.get("User-Agent"),
             "request_path": request.path,
         })
+
+    def _debug_user_from_request():
+        header = request.headers.get("Authorization", "")
+        token = get_bearer_token(header)
+        if not token and header.lower().startswith("token "):
+            token = header.replace("Token ", "", 1).strip()
+        info = {
+            "has_auth": bool(header),
+            "token_ok": False,
+            "sub": None,
+            "user_id": None,
+            "role": None,
+        }
+        if not token:
+            return None, info
+        payload = decode_token(token)
+        if not payload:
+            return None, info
+        info["token_ok"] = True
+        info["sub"] = payload.get("sub")
+        try:
+            uid = int(info["sub"])
+        except Exception:
+            return None, info
+        info["user_id"] = uid
+        try:
+            user = db.session.get(User, uid)
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            user = None
+        if user:
+            role = (getattr(user, "role", None) or "buyer").strip().lower()
+            info["role"] = role
+        return user, info
+
+    def _is_admin_user(user: User | None) -> bool:
+        if not user:
+            return False
+        role = (getattr(user, "role", None) or "").strip().lower()
+        if role == "admin":
+            return True
+        if getattr(user, "is_admin", False):
+            return True
+        try:
+            return int(user.id or 0) == 1
+        except Exception:
+            return False
+
+    @app.get("/api/debug/whoami")
+    def debug_whoami():
+        user, info = _debug_user_from_request()
+        if not info.get("token_ok"):
+            return jsonify({"ok": False, **info}), 401
+        return jsonify({"ok": True, **info}), 200
+
+    @app.get("/api/debug/routes")
+    def debug_routes():
+        user, info = _debug_user_from_request()
+        if not info.get("token_ok"):
+            return jsonify({"ok": False, "message": "Unauthorized"}), 401
+        if not _is_admin_user(user):
+            return jsonify({"ok": False, "message": "Forbidden"}), 403
+        items = []
+        for rule in app.url_map.iter_rules():
+            methods = sorted(m for m in rule.methods if m in ("GET", "POST", "PUT", "PATCH", "DELETE"))
+            items.append({
+                "rule": rule.rule,
+                "methods": methods,
+            })
+        return jsonify({"ok": True, "count": len(items), "items": items}), 200
 
     @app.before_request
     def _log_client_fingerprint():
