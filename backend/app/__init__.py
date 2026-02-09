@@ -126,6 +126,7 @@ def create_app():
     app.register_blueprint(kpi_bp)
     app.register_blueprint(notify_bp)
     app.register_blueprint(admin_notify_bp)
+    app.register_blueprint(admin_bp)
     app.register_blueprint(leaderboards_bp)
     app.register_blueprint(dispatcher_bp)
     app.register_blueprint(support_bp)
