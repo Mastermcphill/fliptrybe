@@ -464,7 +464,7 @@ def _mark_paid(order: Order, reference: str | None = None, actor_id: int | None 
 def create_order():
     u = _current_user()
     if not u:
-        return jsonify({"message": "Unauthorized"}), 401
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
 
@@ -478,12 +478,7 @@ def create_order():
         return jsonify({"ok": False, "message": "buyer_id required for admin"}), 400
 
     if buyer_id != int(u.id) and not _is_admin(u):
-        return jsonify({"message": "Forbidden"}), 403
-
-    try:
-        merchant_id = int(payload.get("merchant_id"))
-    except Exception:
-        return jsonify({"ok": False, "message": "merchant_id required"}), 400
+        return jsonify({"ok": False, "message": "Forbidden"}), 403
 
     listing_id = payload.get("listing_id")
     try:
@@ -492,6 +487,37 @@ def create_order():
         listing_id_int = None
     if listing_id_int is None:
         return jsonify({"ok": False, "message": "listing_id required"}), 400
+
+    # Listing is authoritative for merchant ownership.
+    listing = Listing.query.get(listing_id_int) if listing_id_int else None
+    if listing_id_int and not listing:
+        return jsonify({"ok": False, "message": "listing not found"}), 404
+
+    listing_merchant_id = None
+    if listing:
+        try:
+            if getattr(listing, "user_id", None) is not None:
+                listing_merchant_id = int(getattr(listing, "user_id"))
+            elif getattr(listing, "merchant_id", None) is not None:
+                listing_merchant_id = int(getattr(listing, "merchant_id"))
+        except Exception:
+            listing_merchant_id = None
+
+    merchant_id_raw = payload.get("merchant_id")
+    merchant_id = None
+    if merchant_id_raw is None or str(merchant_id_raw).strip() == "":
+        merchant_id = listing_merchant_id
+    else:
+        try:
+            merchant_id = int(merchant_id_raw)
+        except Exception:
+            return jsonify({"ok": False, "message": "merchant_id invalid"}), 400
+
+    if listing_merchant_id is not None and merchant_id is not None and int(merchant_id) != int(listing_merchant_id):
+        return jsonify({"ok": False, "message": "merchant_id must match listing owner"}), 400
+
+    if merchant_id is None:
+        return jsonify({"ok": False, "message": "merchant_id unavailable for listing"}), 400
 
     try:
         amount = float(payload.get("amount") or 0.0)
@@ -512,7 +538,7 @@ def create_order():
     payment_reference = (payload.get("payment_reference") or "").strip()
     inspection_required = _parse_bool(payload.get("inspection_required"))
 
-    # Idempotency: same payment reference + same buyer/merchant returns existing order.
+    # Idempotency: same payment reference + same buyer/merchant/listing returns existing order.
     if payment_reference:
         existing = Order.query.filter_by(payment_reference=payment_reference).order_by(Order.id.asc()).first()
         if existing:
@@ -523,25 +549,16 @@ def create_order():
             )
             if same_buyer and same_merchant and same_listing:
                 return jsonify({"ok": True, "order": existing.to_dict(), "idempotent": True}), 200
-            return jsonify({"message": "payment_reference already used"}), 409
+            return jsonify({"ok": False, "message": "payment_reference already used"}), 409
 
-    # If listing_id is supplied, align merchant if listing exists and has owner.
-    listing = Listing.query.get(listing_id_int) if listing_id_int else None
-    if listing_id_int and not listing:
-        return jsonify({"ok": False, "message": "listing not found"}), 404
-    if listing:
-        if listing and getattr(listing, "user_id", None):
-            try:
-                merchant_id = int(getattr(listing, "user_id"))
-            except Exception:
-                pass
-        if listing and hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
-            return jsonify({"message": "Listing is no longer available"}), 409
+    if listing and hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
+        return jsonify({"ok": False, "message": "Listing is no longer available"}), 409
 
     # Seller cannot buy their own listing
     try:
-        if int(buyer_id) == int(merchant_id) and not _is_admin(u):
-            return jsonify({"message": "Sellers cannot buy their own listings"}), 409
+        seller_id_for_check = listing_merchant_id if listing_merchant_id is not None else merchant_id
+        if seller_id_for_check is not None and int(buyer_id) == int(seller_id_for_check) and not _is_admin(u):
+            return jsonify({"ok": False, "message": "Sellers cannot buy their own listings"}), 409
     except Exception:
         pass
 

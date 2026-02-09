@@ -84,10 +84,6 @@ if (-not $listings.Json -or -not $listings.Json.items -or $listings.Json.items.C
 $listing = $listings.Json.items | Select-Object -First 1
 $listingId = [int]$listing.id
 $merchantId = $listing.merchant_id
-if (-not $merchantId) {
-  Write-Host "Listing missing merchant_id. Use a seeded listing with owner."
-  exit 6
-}
 
 $buyerEmail = $env:BUYER_EMAIL
 $buyerPassword = $env:BUYER_PASSWORD
@@ -114,13 +110,17 @@ if (-not $buyerLogin.Json -or -not $buyerLogin.Json.token) {
 $buyerHeaders = @{ Authorization = "Bearer $($buyerLogin.Json.token)" }
 
 $orderPayload = @{
-  merchant_id = [int]$merchantId
   listing_id = [int]$listingId
   payment_reference = ("smoke_{0}" -f (Get-Random))
   pickup = "Ikeja"
   dropoff = "Yaba"
 }
 $order = Invoke-Api -Method "POST" -Url "$Base/api/orders" -Headers $buyerHeaders -BodyObj $orderPayload
+if (($order.StatusCode -eq 400) -and $order.Body -and ($order.Body -match "merchant_id") -and $merchantId) {
+  Write-Host "POST /api/orders requested merchant_id fallback; retrying with merchant_id."
+  $orderPayload.merchant_id = [int]$merchantId
+  $order = Invoke-Api -Method "POST" -Url "$Base/api/orders" -Headers $buyerHeaders -BodyObj $orderPayload
+}
 Write-Host "POST /api/orders => $($order.StatusCode)"
 if ($order.Body) { Write-Host $order.Body }
 if ($order.StatusCode -lt 200 -or $order.StatusCode -ge 300) { exit 7 }
