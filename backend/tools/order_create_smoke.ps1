@@ -69,9 +69,17 @@ if ($listings.StatusCode -lt 200 -or $listings.StatusCode -ge 300) {
   exit 4
 }
 if (-not $listings.Json -or -not $listings.Json.items -or $listings.Json.items.Count -lt 1) {
-  Write-Host $listings.Body
-  Write-Host "No listings available for order create."
-  exit 5
+  Write-Host "No listings available. Seeding demo listing..."
+  $seed = Invoke-Api -Method "POST" -Url "$Base/api/admin/demo/seed-listing" -Headers $adminHeaders
+  Write-Host "POST /api/admin/demo/seed-listing => $($seed.StatusCode)"
+  if ($seed.Body) { Write-Host $seed.Body }
+  $listings = Invoke-Api -Url "$Base/api/admin/listings" -Headers $adminHeaders
+  Write-Host "GET /api/admin/listings => $($listings.StatusCode)"
+  if (-not $listings.Json -or -not $listings.Json.items -or $listings.Json.items.Count -lt 1) {
+    Write-Host $listings.Body
+    Write-Host "No listings available after seeding."
+    exit 5
+  }
 }
 $listing = $listings.Json.items | Select-Object -First 1
 $listingId = [int]$listing.id

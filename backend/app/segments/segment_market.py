@@ -445,15 +445,32 @@ def get_feed():
 
 @market_bp.get("/listings")
 def list_listings():
-    q = _apply_listing_active_filter(Listing.query)
-    search_q = (request.args.get('q') or request.args.get('search') or '').strip()
-    if search_q:
-        like = f"%{search_q}%"
-        q = q.filter(or_(Listing.title.ilike(like), Listing.description.ilike(like)))
-    q = _apply_listing_ordering(q)
-    items = q.all()
-    base = _base_url()
-    return jsonify([x.to_dict(base_url=base) for x in items]), 200
+    try:
+        q = _apply_listing_active_filter(Listing.query)
+        search_q = (request.args.get('q') or request.args.get('search') or '').strip()
+        if search_q:
+            like = f"%{search_q}%"
+            q = q.filter(or_(Listing.title.ilike(like), Listing.description.ilike(like)))
+        q = _apply_listing_ordering(q)
+        items = q.all()
+        base = _base_url()
+        return jsonify([x.to_dict(base_url=base) for x in items]), 200
+    except Exception as e:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("listings_list_failed")
+        except Exception:
+            pass
+        detail = None
+        try:
+            u = _current_user()
+            if request.headers.get("X-Debug", "").strip() == "1" and _is_admin(u):
+                detail = f"{type(e).__name__}: {e}"
+        except Exception:
+            detail = None
+        if detail:
+            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
+        return jsonify({"ok": False, "error": "db_error"}), 500
 
 
 @market_bp.get("/merchant/listings")
