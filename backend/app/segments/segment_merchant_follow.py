@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 
 from app.extensions import db
 from app.models import User, MerchantFollow
-from app.utils.jwt_utils import decode_token
+from app.utils.jwt_utils import decode_token, get_bearer_token
 
 merchant_follow_bp = Blueprint("merchant_follow_bp", __name__, url_prefix="/api")
 
@@ -27,9 +27,7 @@ def _ensure_tables_once():
 
 def _bearer_token() -> str | None:
     header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
-        return None
-    return header.replace("Bearer ", "", 1).strip() or None
+    return get_bearer_token(header)
 
 
 def _current_user() -> User | None:

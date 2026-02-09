@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
-from app.models import User, RoleChangeRequest, EmailVerificationToken, PasswordResetToken
+from app.models import User, RoleChangeRequest, EmailVerificationToken, PasswordResetToken, AuditLog
 from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 from app.utils.notify import queue_email
@@ -425,31 +425,32 @@ def set_role():
     """Demo helper: set current user's role to buyer/merchant/driver."""
     env = (os.getenv("FLIPTRYBE_ENV", "dev") or "dev").strip().lower()
     allow_override = (os.getenv("ALLOW_DEV_ROLE_SWITCH", "") or "").strip() == "1"
-    if env not in ("dev", "development", "local", "test") or not allow_override:
-        return jsonify({"message": "Not found"}), 404
-    token = request.headers.get("Authorization", "")
-    if not token.startswith("Bearer "):
-        return jsonify({"message": "Not found"}), 404
-    token = token.replace("Bearer ", "", 1).strip()
+    token = get_bearer_token(request.headers.get("Authorization", ""))
+    if not token:
+        return jsonify({"message": "Unauthorized"}), 401
     payload = decode_token(token)
     if not payload:
-        return jsonify({"message": "Not found"}), 404
+        return jsonify({"message": "Unauthorized"}), 401
     sub = payload.get("sub")
     if not sub:
-        return jsonify({"message": "Not found"}), 404
+        return jsonify({"message": "Unauthorized"}), 401
     try:
         uid = int(sub)
     except Exception:
-        return jsonify({"message": "Not found"}), 404
+        return jsonify({"message": "Unauthorized"}), 401
 
     u = User.query.get(uid)
     if not u:
-        return jsonify({"message": "Not found"}), 404
+        return jsonify({"message": "Unauthorized"}), 401
     try:
-        if int(u.id or 0) != 1:
-            return jsonify({"message": "Not found"}), 404
+        is_admin = int(u.id or 0) == 1 or (getattr(u, "role", "") or "").lower() == "admin"
     except Exception:
-        return jsonify({"message": "Not found"}), 404
+        is_admin = False
+
+    if not is_admin:
+        return jsonify({"message": "Forbidden"}), 403
+    if env not in ("dev", "development", "local", "test") or not allow_override:
+        return jsonify({"message": "Role change not allowed"}), 403
 
     data = request.get_json(silent=True) or {}
     role = (data.get("role") or "").strip().lower()
@@ -461,6 +462,10 @@ def set_role():
     u.role = role
     try:
         db.session.add(u)
+        try:
+            db.session.add(AuditLog(actor_user_id=int(u.id), action="set_role", target_type="user", target_id=int(u.id), meta=f"role={role}"))
+        except Exception:
+            pass
         db.session.commit()
         return jsonify({"ok": True, "user": u.to_dict()}), 200
     except Exception as e:
