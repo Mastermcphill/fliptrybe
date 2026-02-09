@@ -871,6 +871,35 @@ def timeline(order_id: int):
     return jsonify({"ok": True, "items": [e.to_dict() for e in events]}), 200
 
 
+@orders_bp.get("/admin/orders")
+def admin_orders():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    try:
+        rows = Order.query.order_by(Order.created_at.desc()).limit(50).all()
+        items = []
+        for o in rows:
+            items.append({
+                "id": int(o.id),
+                "status": o.status,
+                "buyer_id": int(o.buyer_id) if o.buyer_id is not None else None,
+                "merchant_id": int(o.merchant_id) if o.merchant_id is not None else None,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+            })
+        return jsonify({"ok": True, "items": items}), 200
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("admin_orders_list_failed")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "items": []}), 200
+
+
 @orders_bp.post("/orders/<int:order_id>/merchant/accept")
 def merchant_accept(order_id: int):
     u = _current_user()
