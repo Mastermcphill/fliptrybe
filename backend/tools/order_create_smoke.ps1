@@ -108,6 +108,10 @@ if (-not $buyerLogin.Json -or -not $buyerLogin.Json.token) {
   exit 7
 }
 $buyerHeaders = @{ Authorization = "Bearer $($buyerLogin.Json.token)" }
+$orderHeaders = @{
+  Authorization = $buyerHeaders.Authorization
+  "X-Debug" = "1"
+}
 
 $orderPayload = @{
   listing_id = [int]$listingId
@@ -115,15 +119,22 @@ $orderPayload = @{
   pickup = "Ikeja"
   dropoff = "Yaba"
 }
-$order = Invoke-Api -Method "POST" -Url "$Base/api/orders" -Headers $buyerHeaders -BodyObj $orderPayload
+$order = Invoke-Api -Method "POST" -Url "$Base/api/orders" -Headers $orderHeaders -BodyObj $orderPayload
 if (($order.StatusCode -eq 400) -and $order.Body -and ($order.Body -match "merchant_id") -and $merchantId) {
   Write-Host "POST /api/orders requested merchant_id fallback; retrying with merchant_id."
   $orderPayload.merchant_id = [int]$merchantId
-  $order = Invoke-Api -Method "POST" -Url "$Base/api/orders" -Headers $buyerHeaders -BodyObj $orderPayload
+  $order = Invoke-Api -Method "POST" -Url "$Base/api/orders" -Headers $orderHeaders -BodyObj $orderPayload
 }
 Write-Host "POST /api/orders => $($order.StatusCode)"
 if ($order.Body) { Write-Host $order.Body }
-if ($order.StatusCode -lt 200 -or $order.StatusCode -ge 300) { exit 7 }
+if ($order.StatusCode -lt 200 -or $order.StatusCode -ge 300) {
+  if ($order.Body) {
+    Write-Host $order.Body
+  } else {
+    Write-Host "(empty response body)"
+  }
+  exit 7
+}
 
 $orderId = $order.Json.order.id
 if (-not $orderId) {
