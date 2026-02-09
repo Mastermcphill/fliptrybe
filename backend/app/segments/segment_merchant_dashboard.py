@@ -86,7 +86,7 @@ def merchant_kpis():
 
     mid = int(u.id)
 
-    listings_count = Listing.query.filter_by(owner_id=mid).count()
+    listings_count = Listing.query.filter_by(user_id=mid).count()
 
     orders = Order.query.filter_by(merchant_id=mid).all()
     orders_count = len(orders)
@@ -195,13 +195,13 @@ def merchant_leaderboard():
     )
     merchant_ids = []
     for l in rows:
-        if l.owner_id and int(l.owner_id) not in merchant_ids:
-            merchant_ids.append(int(l.owner_id))
+        if l.user_id and int(l.user_id) not in merchant_ids:
+            merchant_ids.append(int(l.user_id))
 
     out = []
     for mid in merchant_ids[:50]:
         # compute score quickly from existing kpis function logic
-        listings_count = Listing.query.filter_by(owner_id=mid).count()
+        listings_count = Listing.query.filter_by(user_id=mid).count()
         orders = Order.query.filter_by(merchant_id=mid).all()
         orders_count = len(orders)
         by_status = {}

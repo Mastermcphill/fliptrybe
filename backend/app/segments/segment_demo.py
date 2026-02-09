@@ -186,7 +186,7 @@ def demo_seed():
         if reset_flag:
             demo_listing_ids = [
                 int(r.id) for r in Listing.query.filter(
-                    Listing.owner_id == int(merchant_user.id),
+                    Listing.user_id == int(merchant_user.id),
                     or_(
                         Listing.seed_key.ilike("demo_listing_%"),
                         Listing.title.ilike("Demo Listing #%"),
@@ -240,7 +240,7 @@ def demo_seed():
         l = Listing.query.filter_by(seed_key=seed_key).first()
         if not l:
             try:
-                l = Listing.query.filter_by(title=title, owner_id=int(merchant_user.id)).first()
+                l = Listing.query.filter_by(title=title, user_id=int(merchant_user.id)).first()
             except Exception:
                 l = None
             if l and not getattr(l, "seed_key", None):
@@ -254,7 +254,6 @@ def demo_seed():
         l.platform_fee = platform_fee
         l.final_price = final_price
         l.user_id = merchant_user.id
-        l.owner_id = merchant_user.id
         l.state = (loc.get('state') or '').strip()
         l.city = (city or '').strip()
         l.locality = (city or '').strip()
@@ -293,7 +292,6 @@ def demo_seed():
                 l.platform_fee = platform_fee
                 l.final_price = final_price
                 l.user_id = merchant_user.id
-                l.owner_id = merchant_user.id
                 l.state = (loc.get('state') or '').strip()
                 l.city = (city or '').strip()
                 l.locality = (city or '').strip()

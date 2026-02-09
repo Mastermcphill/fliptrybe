@@ -10,8 +10,7 @@ class Listing(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
-    # Seller/merchant user id (legacy owner_id retained for drifted DBs)
-    owner_id = db.Column(db.Integer, nullable=True, index=True)
+    # Seller/merchant user id
 
     title = db.Column(db.String(120), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -37,6 +36,16 @@ class Listing(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    @property
+    def owner_id(self):
+        # Backwards-compatible alias for older clients; not a DB column.
+        return self.user_id
+
+    @owner_id.setter
+    def owner_id(self, value):
+        # Map legacy assignments to user_id.
+        self.user_id = value
 
     def to_dict(self, base_url: str | None = None):
         """

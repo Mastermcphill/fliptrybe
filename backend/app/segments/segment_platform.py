@@ -586,9 +586,7 @@ def orders_create():
         return jsonify({"message": "listing not found"}), 404
     merchant_id = None
     try:
-        if listing.owner_id:
-            merchant_id = int(listing.owner_id)
-        elif listing.user_id:
+        if listing.user_id:
             merchant_id = int(listing.user_id)
     except Exception:
         merchant_id = None

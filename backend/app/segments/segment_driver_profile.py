@@ -140,7 +140,7 @@ def list_drivers_for_merchants():
     if not (q_state or q_city or q_locality):
         try:
             last_listing = (
-                Listing.query.filter_by(owner_id=u.id)
+                Listing.query.filter_by(user_id=u.id)
                 .order_by(Listing.created_at.desc())
                 .first()
             )

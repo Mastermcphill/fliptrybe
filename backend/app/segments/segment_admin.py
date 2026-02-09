@@ -84,7 +84,7 @@ def seed_listing():
         listing = None
 
     if listing:
-        merchant_id = getattr(listing, "owner_id", None) or getattr(listing, "user_id", None)
+        merchant_id = getattr(listing, "user_id", None)
         return jsonify({"ok": True, "merchant_id": merchant_id, "listing_id": listing.id}), 200
 
     try:
@@ -126,7 +126,6 @@ def seed_listing():
 
     listing = Listing(
         user_id=int(merchant.id),
-        owner_id=int(merchant.id),
         title="Seed Listing",
         description="Auto-seeded listing for order creation smoke tests.",
         state="Lagos",

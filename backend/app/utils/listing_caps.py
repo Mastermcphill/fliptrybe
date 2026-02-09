@@ -34,7 +34,7 @@ def _listing_active_filter(q):
 
 def active_declutter_count(user_id: int) -> int:
     try:
-        q = Listing.query.filter(or_(Listing.owner_id == int(user_id), Listing.user_id == int(user_id)))
+        q = Listing.query.filter(Listing.user_id == int(user_id))
         q = _listing_active_filter(q)
         return int(q.count())
     except Exception:
