@@ -1,8 +1,8 @@
-$ErrorActionPreference = "Stop"
-
 param(
   [string]$Base = $env:BASE_URL
 )
+
+$ErrorActionPreference = "Stop"
 
 if (-not $Base) { $Base = "https://tri-o-fliptrybe.onrender.com" }
 
@@ -63,17 +63,22 @@ $adminHeaders = @{ Authorization = "Bearer $($adminLogin.Json.token)" }
 
 $listings = Invoke-Api -Url "$Base/api/admin/listings" -Headers $adminHeaders
 Write-Host "GET /api/admin/listings => $($listings.StatusCode)"
+if ($listings.StatusCode -lt 200 -or $listings.StatusCode -ge 300) {
+  if ($listings.Body) { Write-Host $listings.Body }
+  Write-Host "Listings endpoint failed. Cannot create order."
+  exit 4
+}
 if (-not $listings.Json -or -not $listings.Json.items -or $listings.Json.items.Count -lt 1) {
   Write-Host $listings.Body
   Write-Host "No listings available for order create."
-  exit 4
+  exit 5
 }
 $listing = $listings.Json.items | Select-Object -First 1
 $listingId = [int]$listing.id
 $merchantId = $listing.merchant_id
 if (-not $merchantId) {
   Write-Host "Listing missing merchant_id. Use a seeded listing with owner."
-  exit 5
+  exit 6
 }
 
 $buyerEmail = $env:BUYER_EMAIL
@@ -96,7 +101,7 @@ if (-not $buyerLogin -or -not $buyerLogin.Json -or -not $buyerLogin.Json.token) 
 Write-Host "POST /api/auth/login (buyer) => $($buyerLogin.StatusCode)"
 if (-not $buyerLogin.Json -or -not $buyerLogin.Json.token) {
   Write-Host $buyerLogin.Body
-  exit 6
+  exit 7
 }
 $buyerHeaders = @{ Authorization = "Bearer $($buyerLogin.Json.token)" }
 
