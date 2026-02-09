@@ -466,11 +466,26 @@ def create_order():
     if not u:
         return jsonify({"ok": False, "message": "Unauthorized"}), 401
 
+    debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
+    debug_enabled = debug_requested and _is_admin(u)
+
     payload = request.get_json(silent=True) or {}
     if not payload:
         form_data = request.form.to_dict(flat=True) if request.form else {}
         args_data = request.args.to_dict(flat=True) if request.args else {}
         payload = {**args_data, **form_data}
+
+    def _debug_payload(extra: dict | None = None) -> dict:
+        if not debug_enabled:
+            return {}
+        out = {
+            "debug": {
+                "keys": sorted([str(k) for k in payload.keys()]),
+            }
+        }
+        if extra:
+            out["debug"].update(extra)
+        return out
 
     buyer_id_raw = payload.get("buyer_id")
     try:
@@ -479,18 +494,27 @@ def create_order():
         buyer_id = int(u.id)
 
     if _is_admin(u) and not buyer_id_raw:
-        return jsonify({"ok": False, "message": "buyer_id required for admin"}), 400
+        return jsonify({"ok": False, "message": "buyer_id required for admin", **_debug_payload({
+            "buyer_id_raw": buyer_id_raw,
+        })}), 400
 
     if buyer_id != int(u.id) and not _is_admin(u):
         return jsonify({"ok": False, "message": "Forbidden"}), 403
 
+    listing_obj = payload.get("listing") if isinstance(payload.get("listing"), dict) else {}
     listing_id = payload.get("listing_id")
+    if listing_id is None:
+        listing_id = payload.get("listingId")
+    if listing_id is None and listing_obj:
+        listing_id = listing_obj.get("id")
     try:
         listing_id_int = int(listing_id) if listing_id is not None else None
     except Exception:
         listing_id_int = None
     if listing_id_int is None:
-        return jsonify({"ok": False, "message": "listing_id required"}), 400
+        return jsonify({"ok": False, "message": "listing_id required", **_debug_payload({
+            "listing_id_raw": listing_id,
+        })}), 400
 
     # Listing is authoritative for merchant ownership.
     listing = Listing.query.get(listing_id_int) if listing_id_int else None
@@ -507,7 +531,14 @@ def create_order():
         except Exception:
             listing_merchant_id = None
 
+    merchant_obj = payload.get("merchant") if isinstance(payload.get("merchant"), dict) else {}
     merchant_id_raw = payload.get("merchant_id")
+    if merchant_id_raw is None:
+        merchant_id_raw = payload.get("merchantId")
+    if merchant_id_raw is None and merchant_obj:
+        merchant_id_raw = merchant_obj.get("id")
+    if merchant_id_raw is None and listing_obj:
+        merchant_id_raw = listing_obj.get("merchant_id") or listing_obj.get("merchantId") or listing_obj.get("user_id")
     merchant_id = None
     if merchant_id_raw is None or str(merchant_id_raw).strip() == "":
         merchant_id = listing_merchant_id
@@ -515,13 +546,21 @@ def create_order():
         try:
             merchant_id = int(merchant_id_raw)
         except Exception:
-            return jsonify({"ok": False, "message": "merchant_id invalid"}), 400
+            return jsonify({"ok": False, "message": "merchant_id invalid", **_debug_payload({
+                "merchant_id_raw": merchant_id_raw,
+            })}), 400
 
     if listing_merchant_id is not None and merchant_id is not None and int(merchant_id) != int(listing_merchant_id):
-        return jsonify({"ok": False, "message": "merchant_id must match listing owner"}), 400
+        return jsonify({"ok": False, "message": "merchant_id must match listing owner", **_debug_payload({
+            "merchant_id_raw": merchant_id_raw,
+            "listing_merchant_id": listing_merchant_id,
+        })}), 400
 
     if merchant_id is None:
-        return jsonify({"ok": False, "message": "merchant_id unavailable for listing"}), 400
+        return jsonify({"ok": False, "message": "merchant_id unavailable for listing", **_debug_payload({
+            "merchant_id_raw": merchant_id_raw,
+            "listing_merchant_id": listing_merchant_id,
+        })}), 400
 
     try:
         amount = float(payload.get("amount") or 0.0)
@@ -637,7 +676,11 @@ def create_order():
         debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
         if debug_requested and _is_admin(u):
             detail = f"{type(e).__name__}: {e}"
-            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
+            return jsonify({"ok": False, "error": "db_error", "detail": detail, **_debug_payload({
+                "listing_id_raw": listing_id,
+                "merchant_id_raw": merchant_id_raw,
+                "buyer_id_raw": buyer_id_raw,
+            })}), 500
         return jsonify({"ok": False, "error": "db_error"}), 500
 
 
