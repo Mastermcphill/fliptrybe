@@ -58,7 +58,9 @@ if (-not $login.Json -or -not $login.Json.token) {
 }
 $headers = @{ Authorization = "Bearer $($login.Json.token)" }
 
-$notFound = Invoke-Api -Url "$base/api/orders/999999/delivery" -Headers $headers
+$headersDebug = $headers.Clone()
+$headersDebug["X-Debug"] = "1"
+$notFound = Invoke-Api -Url "$base/api/orders/999999/delivery" -Headers $headersDebug
 Write-Host "GET /api/orders/999999/delivery => $($notFound.StatusCode)"
 if ($notFound.Body) { Write-Host $notFound.Body }
 if ($notFound.StatusCode -ne 404 -or ($notFound.Json.error -ne "order_not_found")) {

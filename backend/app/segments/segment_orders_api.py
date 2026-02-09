@@ -803,8 +803,14 @@ def order_delivery(order_id: int):
             current_app.logger.exception("orders.delivery failed order_id=%s user_id=%s", int(order_id), int(getattr(u, "id", 0) or 0))
         except Exception:
             pass
-        if (os.getenv("DEBUG_DELIVERY") or "").strip() == "1":
-            detail = f"{type(e).__name__}: {e}"
+        detail = None
+        try:
+            debug_header = (request.headers.get("X-Debug") or "").strip() == "1"
+            if _is_admin(u) and debug_header:
+                detail = f"{type(e).__name__}: {e}"
+        except Exception:
+            detail = None
+        if detail:
             return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
         return jsonify({"ok": False, "error": "db_error"}), 500
     if not o:
