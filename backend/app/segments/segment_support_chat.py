@@ -15,12 +15,7 @@ support_admin_bp = Blueprint("support_admin_bp", __name__, url_prefix="/api/admi
 
 def _bearer_token() -> str | None:
     header = request.headers.get("Authorization", "")
-    token = get_bearer_token(header)
-    if token:
-        return token
-    if header.startswith("Token "):
-        return header.replace("Token ", "", 1).strip() or None
-    return None
+    return get_bearer_token(header)
 
 
 def _current_user() -> User | None:

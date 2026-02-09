@@ -203,6 +203,8 @@ def create_app():
 
     @app.get("/api/debug/client-echo")
     def debug_client_echo():
+        if not _probes_enabled():
+            return jsonify({"message": "Not found"}), 404
         return jsonify({
             "ok": True,
             "received_x_fliptrybe_client": request.headers.get("X-Fliptrybe-Client"),
@@ -260,8 +262,13 @@ def create_app():
         except Exception:
             return False
 
+    def _probes_enabled() -> bool:
+        return (os.getenv("DEBUG_PROBES") or "").strip() == "1"
+
     @app.get("/api/debug/whoami")
     def debug_whoami():
+        if not _probes_enabled():
+            return jsonify({"message": "Not found"}), 404
         user, info = _debug_user_from_request()
         if not info.get("token_ok"):
             return jsonify({"ok": False, **info}), 401
@@ -269,6 +276,8 @@ def create_app():
 
     @app.get("/api/debug/routes")
     def debug_routes():
+        if not _probes_enabled():
+            return jsonify({"message": "Not found"}), 404
         user, info = _debug_user_from_request()
         if not info.get("token_ok"):
             return jsonify({"ok": False, "message": "Unauthorized"}), 401

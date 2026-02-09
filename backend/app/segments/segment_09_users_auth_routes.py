@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
 from app.models import User, RoleChangeRequest, EmailVerificationToken, PasswordResetToken
-from app.utils.jwt_utils import create_token, decode_token
+from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 from app.utils.notify import queue_email
 
@@ -262,9 +262,7 @@ def _create_role_request(*, user: User, requested_role: str, meta: dict | None =
 
 def _bearer_token() -> str | None:
     header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
-        return None
-    return header.replace("Bearer ", "").strip()
+    return get_bearer_token(header)
 
 
 @auth_bp.post("/register")
