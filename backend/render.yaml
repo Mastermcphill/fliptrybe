@@ -4,7 +4,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: bash -c "FLASK_APP=main.py python -m flask db upgrade && gunicorn wsgi:app --bind 0.0.0.0:$PORT"
+    startCommand: bash -c "chmod +x ops/start.sh && ./ops/start.sh"
     envVars:
       - key: FLIPTRYBE_ENV
         value: prod
