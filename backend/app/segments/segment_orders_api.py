@@ -789,9 +789,13 @@ def order_delivery(order_id: int):
         return jsonify({"ok": False, "error": "unauthorized"}), 401
 
     try:
-        o = Order.query.get(order_id)
-    except Exception:
+        o = db.session.get(Order, int(order_id))
+    except Exception as e:
         db.session.rollback()
+        try:
+            current_app.logger.exception("order_delivery_lookup_failed order_id=%s user_id=%s", int(order_id), int(getattr(u, "id", 0) or 0))
+        except Exception:
+            pass
         return jsonify({"ok": False, "error": "db_error"}), 500
     if not o:
         return jsonify({"ok": False, "error": "order_not_found"}), 404
@@ -828,7 +832,7 @@ def order_delivery(order_id: int):
     except Exception:
         db.session.rollback()
         try:
-            current_app.logger.exception("order_delivery_failed order_id=%s role=%s", int(o.id), role)
+            current_app.logger.exception("order_delivery_failed order_id=%s user_id=%s role=%s", int(o.id), int(getattr(u, "id", 0) or 0), role)
         except Exception:
             pass
         return jsonify({"ok": True, "order_id": int(o.id), "progress": {}, "codes": {}, "role": role}), 200
