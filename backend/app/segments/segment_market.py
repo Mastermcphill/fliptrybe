@@ -488,7 +488,7 @@ def update_listing(listing_id: int):
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
     if not _is_admin(u) and not _is_email_verified(u):
-        return jsonify({"message": "Email verification required"}), 403
+        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
 
     payload = request.get_json(silent=True) or {}
     # Listing cap enforcement on activation
@@ -567,7 +567,7 @@ def delete_listing(listing_id: int):
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
     if not _is_admin(u) and not _is_email_verified(u):
-        return jsonify({"message": "Email verification required"}), 403
+        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
 
     try:
         db.session.delete(item)

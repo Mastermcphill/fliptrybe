@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
-class ListingDetailPlaceholderScreen extends StatelessWidget {
+import '../services/listing_service.dart';
+import '../services/shortlet_service.dart';
+import '../widgets/safe_image.dart';
+
+class ListingDetailPlaceholderScreen extends StatefulWidget {
   final int? id;
   final String? title;
   final dynamic price;
@@ -18,25 +22,101 @@ class ListingDetailPlaceholderScreen extends StatelessWidget {
     this.category,
   });
 
+  @override
+  State<ListingDetailPlaceholderScreen> createState() => _ListingDetailPlaceholderScreenState();
+}
+
+class _ListingDetailPlaceholderScreenState extends State<ListingDetailPlaceholderScreen> {
+  final _listingSvc = ListingService();
+  final _shortletSvc = ShortletService();
+
+  bool _loading = false;
+  String? _error;
+  Map<String, dynamic>? _detail;
+
   String _formatPrice(dynamic raw) {
     if (raw == null) return '';
     final s = raw.toString();
     return s.isEmpty ? '' : '₦$s';
   }
 
+  int? _asInt(dynamic v) {
+    if (v is int) return v;
+    return int.tryParse(v?.toString() ?? '');
+  }
+
+  String _asString(dynamic v) {
+    return (v ?? '').toString();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _detail = {
+      'id': widget.id,
+      'title': widget.title,
+      'price': widget.price,
+      'image': widget.imageUrl,
+      'location': widget.location,
+      'category': widget.category,
+    };
+    _loadDetail();
+  }
+
+  Future<void> _loadDetail() async {
+    final id = widget.id;
+    if (id == null) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final isShortlet = (widget.category ?? '').toLowerCase().contains('shortlet');
+      final data = isShortlet ? await _shortletSvc.getShortlet(id) : await _listingSvc.getListing(id);
+      if (data.isNotEmpty) {
+        setState(() {
+          _detail = data;
+        });
+      }
+    } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayTitle = (title == null || title!.trim().isEmpty) ? 'Listing Details' : title!.trim();
-    final priceText = _formatPrice(price);
-    final locationText = location?.trim() ?? '';
-    final categoryText = category?.trim() ?? '';
-    final hasImage = imageUrl != null && imageUrl!.trim().isNotEmpty;
+    final m = _detail ?? {};
+    final displayTitle = (_asString(m['title']).trim().isEmpty) ? 'Listing Details' : _asString(m['title']).trim();
+    final priceText = _formatPrice(m['price'] ?? m['nightly_price']);
+    final locationText = _asString(m['location']).trim().isNotEmpty
+        ? _asString(m['location']).trim()
+        : [m['locality'], m['city'], m['state']].map(_asString).where((x) => x.trim().isNotEmpty).join(', ');
+    final categoryText = _asString(m['category']).trim();
+    final image = _asString(m['image']);
+    final imagePath = _asString(m['image_path']);
+    final imageUrl = image.isNotEmpty ? image : imagePath;
+    final hasImage = imageUrl.trim().isNotEmpty;
+    final desc = _asString(m['description']).trim();
+    final seller = _asString(m['seller_name']).trim().isNotEmpty
+        ? _asString(m['seller_name']).trim()
+        : _asString(m['owner_name']).trim().isNotEmpty
+            ? _asString(m['owner_name']).trim()
+            : _asString(m['merchant_name']).trim();
+    final id = _asInt(m['id'] ?? widget.id);
 
     return Scaffold(
       appBar: AppBar(title: Text(displayTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_loading) const LinearProgressIndicator(),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Load failed: $_error', style: const TextStyle(color: Colors.redAccent)),
+            ),
           Container(
             height: 200,
             decoration: BoxDecoration(
@@ -46,12 +126,10 @@ class ListingDetailPlaceholderScreen extends StatelessWidget {
             child: hasImage
                 ? ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.network(
-                      imageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(Icons.image_not_supported_outlined, size: 48),
-                      ),
+                    child: SafeImage(
+                      url: imageUrl,
+                      height: 200,
+                      width: double.infinity,
                     ),
                   )
                 : const Center(
@@ -84,6 +162,14 @@ class ListingDetailPlaceholderScreen extends StatelessWidget {
               categoryText,
               style: const TextStyle(color: Color(0xFF64748B)),
             ),
+          if (seller.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Seller: $seller', style: const TextStyle(color: Color(0xFF475569))),
+          ],
+          if (desc.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(desc),
+          ],
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(14),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/support_service.dart';
 import '../services/api_service.dart';
 import '../widgets/chat_not_allowed_dialog.dart';
+import 'support_chat_screen.dart';
 
 class SupportTicketsScreen extends StatefulWidget {
   const SupportTicketsScreen({super.key});
@@ -228,6 +229,14 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+                        },
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        label: const Text('Chat with Admin'),
                       ),
                     ],
                   ),

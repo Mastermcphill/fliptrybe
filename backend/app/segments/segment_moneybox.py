@@ -316,7 +316,7 @@ def withdraw():
     if not _allowed_role(u):
         return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
     if not _is_email_verified(u):
-        return jsonify({"message": "Email verification required"}), 403
+        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
 
     acct = get_or_create_account(int(u.id))
 

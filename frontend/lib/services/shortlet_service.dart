@@ -158,4 +158,17 @@ class ShortletService {
     }
   }
 
+  Future<Map<String, dynamic>> getShortlet(int shortletId) async {
+    try {
+      final res = await _client.dio.get(ApiConfig.api('/shortlets/$shortletId'));
+      final status = res.statusCode ?? 0;
+      if (status < 200 || status >= 300) return <String, dynamic>{};
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
 }

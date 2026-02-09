@@ -62,7 +62,7 @@ class MerchantService {
 
   Future<Map<String, dynamic>> unfollowMerchant(int userId) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/merchants/$userId/unfollow'));
+      final res = await _client.dio.delete(ApiConfig.api('/merchants/$userId/follow'));
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return <String, dynamic>{'ok': false};

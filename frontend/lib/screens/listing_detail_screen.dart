@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/safe_image.dart';
+import '../services/listing_service.dart';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
 import 'order_detail_screen.dart';
@@ -14,6 +15,7 @@ class ListingDetailScreen extends StatefulWidget {
 }
 
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
+  final _listings = ListingService();
   final _pickupCtrl = TextEditingController(text: 'Ikeja, Lagos');
   final _dropoffCtrl = TextEditingController(text: 'Lekki, Lagos');
   final _deliveryFeeCtrl = TextEditingController(text: '1500');
@@ -23,6 +25,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   bool _busy = false;
   int? _viewerId;
+  Map<String, dynamic> _detail = {};
+  bool _detailLoading = false;
+  String? _detailError;
 
   @override
   void dispose() {
@@ -35,7 +40,29 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _detail = Map<String, dynamic>.from(widget.listing);
+    _loadDetail();
     _loadViewer();
+  }
+
+  Future<void> _loadDetail() async {
+    final idVal = widget.listing['id'];
+    final id = idVal is int ? idVal : int.tryParse(idVal?.toString() ?? '');
+    if (id == null || id <= 0) return;
+    setState(() {
+      _detailLoading = true;
+      _detailError = null;
+    });
+    try {
+      final data = await _listings.getListing(id);
+      if (data.isNotEmpty) {
+        setState(() => _detail = data);
+      }
+    } catch (e) {
+      setState(() => _detailError = e.toString());
+    } finally {
+      if (mounted) setState(() => _detailLoading = false);
+    }
   }
 
   Future<void> _loadViewer() async {
@@ -114,15 +141,15 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = (widget.listing['title'] ?? '').toString();
-    final desc = (widget.listing['description'] ?? '').toString();
-    final price = _asDouble(widget.listing['price']);
-    final img = (widget.listing['image'] ?? widget.listing['image_path'] ?? '').toString();
-    final isDemo = widget.listing['is_demo'] == true;
-    final listingId = _asInt(widget.listing['id']);
-    final merchantId = _asInt(widget.listing['user_id']) ??
-        _asInt(widget.listing['merchant_id']) ??
-        _asInt(widget.listing['owner_id']);
+    final title = (_detail['title'] ?? '').toString();
+    final desc = (_detail['description'] ?? '').toString();
+    final price = _asDouble(_detail['price']);
+    final img = (_detail['image'] ?? _detail['image_path'] ?? '').toString();
+    final isDemo = _detail['is_demo'] == true;
+    final listingId = _asInt(_detail['id']);
+    final merchantId = _asInt(_detail['user_id']) ??
+        _asInt(_detail['merchant_id']) ??
+        _asInt(_detail['owner_id']);
     final isOwnListing = _viewerId != null && merchantId != null && merchantId == _viewerId;
     final canBuy = !isDemo && !isOwnListing && listingId != null && listingId > 0 && merchantId != null && merchantId > 0;
 
@@ -138,6 +165,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_detailLoading) const LinearProgressIndicator(),
+          if (_detailError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Load failed: $_detailError', style: const TextStyle(color: Colors.redAccent)),
+            ),
           SafeImage(
             url: img,
             height: 220,

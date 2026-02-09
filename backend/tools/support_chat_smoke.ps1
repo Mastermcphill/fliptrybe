@@ -35,8 +35,20 @@ function Invoke-Api {
   }
 }
 
+function Fail($msg) {
+  Write-Host "FAIL:" $msg
+  exit 1
+}
+
+function OkStatus($code) {
+  return ($code -ge 200 -and $code -lt 300)
+}
+
+Write-Host "base:" $Base
+$version = Invoke-Api -Path "/api/version"
+Write-Host "version:" $version.StatusCode
+if ($version.Body) { Write-Host "version body:" $version.Body }
 Write-Host "health:" (Invoke-Api -Path "/api/health").StatusCode
-Write-Host "version:" (Invoke-Api -Path "/api/version").StatusCode
 
 if (-not $AdminEmail -or -not $AdminPassword) {
   Write-Host "Missing ADMIN_EMAIL/ADMIN_PASSWORD; skipping admin checks"
@@ -45,15 +57,21 @@ if (-not $AdminEmail -or -not $AdminPassword) {
 
 $adminLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email=$AdminEmail; password=$AdminPassword }
 Write-Host "admin login:" $adminLogin.StatusCode
+$safeAdmin = if ($AdminEmail) { $AdminEmail } else { "<missing>" }
+Write-Host "admin email:" $safeAdmin
 $adminToken = $adminLogin.Json.token
 if (-not $adminToken) {
-  Write-Host "admin token missing; cannot continue"
-  exit 1
+  Fail "admin token missing; cannot continue"
 }
 $adminHeaders = @{ Authorization = "Bearer $adminToken" }
 
-Write-Host "admin /me:" (Invoke-Api -Path "/api/auth/me" -Headers $adminHeaders).StatusCode
-Write-Host "admin threads:" (Invoke-Api -Path "/api/admin/support/threads" -Headers $adminHeaders).StatusCode
+$adminMe = Invoke-Api -Path "/api/auth/me" -Headers $adminHeaders
+Write-Host "admin /me:" $adminMe.StatusCode
+if (-not (OkStatus $adminMe.StatusCode)) { Fail "admin /me failed" }
+
+$adminThreads0 = Invoke-Api -Path "/api/admin/support/threads" -Headers $adminHeaders
+Write-Host "admin threads:" $adminThreads0.StatusCode
+if (-not (OkStatus $adminThreads0.StatusCode)) { Fail "admin threads failed" }
 
 if (-not $BuyerEmail -or -not $BuyerPassword) {
   Write-Host "Missing BUYER_EMAIL/BUYER_PASSWORD; skipping buyer checks"
@@ -62,13 +80,44 @@ if (-not $BuyerEmail -or -not $BuyerPassword) {
 
 $buyerLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email=$BuyerEmail; password=$BuyerPassword }
 Write-Host "buyer login:" $buyerLogin.StatusCode
+$safeBuyer = if ($BuyerEmail) { $BuyerEmail } else { "<missing>" }
+Write-Host "buyer email:" $safeBuyer
 $buyerToken = $buyerLogin.Json.token
 if (-not $buyerToken) {
-  Write-Host "buyer token missing; cannot continue"
-  exit 1
+  Fail "buyer token missing; cannot continue"
 }
 $buyerHeaders = @{ Authorization = "Bearer $buyerToken" }
 
-Write-Host "buyer /me:" (Invoke-Api -Path "/api/auth/me" -Headers $buyerHeaders).StatusCode
-Write-Host "buyer post:" (Invoke-Api -Method "POST" -Path "/api/support/messages" -Headers $buyerHeaders -BodyObj @{ body="Hello Admin. Test thread from user." }).StatusCode
-Write-Host "buyer messages:" (Invoke-Api -Path "/api/support/messages" -Headers $buyerHeaders).StatusCode
+$buyerMe = Invoke-Api -Path "/api/auth/me" -Headers $buyerHeaders
+Write-Host "buyer /me:" $buyerMe.StatusCode
+if (-not (OkStatus $buyerMe.StatusCode)) { Fail "buyer /me failed" }
+
+$buyerPost = Invoke-Api -Method "POST" -Path "/api/support/messages" -Headers $buyerHeaders -BodyObj @{ body="Hello Admin. Test thread from user." }
+Write-Host "buyer post:" $buyerPost.StatusCode
+if (-not (OkStatus $buyerPost.StatusCode)) { Fail "buyer post failed" }
+
+$buyerMsgs = Invoke-Api -Path "/api/support/messages" -Headers $buyerHeaders
+Write-Host "buyer messages:" $buyerMsgs.StatusCode
+if (-not (OkStatus $buyerMsgs.StatusCode)) { Fail "buyer messages failed" }
+
+$adminThreads = Invoke-Api -Path "/api/admin/support/threads" -Headers $adminHeaders
+Write-Host "admin threads after buyer:" $adminThreads.StatusCode
+if (-not (OkStatus $adminThreads.StatusCode)) { Fail "admin threads after buyer failed" }
+
+$buyerId = $buyerMe.Json.id
+$threadUserId = $null
+if ($adminThreads.Json -and $adminThreads.Json.threads) {
+  $threadUserId = ($adminThreads.Json.threads | Where-Object { $_.user_id -eq $buyerId } | Select-Object -First 1).user_id
+}
+if (-not $threadUserId) { $threadUserId = $buyerId }
+if (-not $threadUserId) { Fail "buyer_user_id not found" }
+
+$adminReply = Invoke-Api -Method "POST" -Path "/api/admin/support/messages/$threadUserId" -Headers $adminHeaders -BodyObj @{ body="Reply from Admin" }
+Write-Host "admin reply:" $adminReply.StatusCode
+if (-not (OkStatus $adminReply.StatusCode)) { Fail "admin reply failed" }
+
+$buyerMsgs2 = Invoke-Api -Path "/api/support/messages" -Headers $buyerHeaders
+Write-Host "buyer messages after reply:" $buyerMsgs2.StatusCode
+if (-not (OkStatus $buyerMsgs2.StatusCode)) { Fail "buyer messages after reply failed" }
+
+Write-Host "OK: support chat smoke passed"

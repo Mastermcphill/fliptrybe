@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'create_listing_screen.dart';
-import 'listing_detail_placeholder_screen.dart';
+import 'listing_detail_screen.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -236,13 +236,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ListingDetailPlaceholderScreen(
-                                id: id is int ? id : int.tryParse(id?.toString() ?? ''),
-                                title: title,
-                                price: price,
-                                location: item['category']?.toString(),
-                                category: 'Marketplace',
-                              ),
+                              builder: (_) => ListingDetailScreen(listing: Map<String, dynamic>.from(item)),
                             ),
                           );
                         },

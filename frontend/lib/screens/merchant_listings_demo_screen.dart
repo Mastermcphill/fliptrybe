@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/listing_service.dart';
-import 'listing_detail_placeholder_screen.dart';
+import 'listing_detail_screen.dart';
 
 class MerchantListingsDemoScreen extends StatefulWidget {
   const MerchantListingsDemoScreen({super.key});
@@ -68,12 +68,7 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ListingDetailPlaceholderScreen(
-                          id: id is int ? id : int.tryParse(id?.toString() ?? ''),
-                          title: title,
-                          price: price,
-                          category: 'My Listings',
-                        ),
+                        builder: (_) => ListingDetailScreen(listing: Map<String, dynamic>.from(m)),
                       ),
                     );
                   },

@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import 'receipts_by_order_screen.dart';
 import 'receipts_screen.dart';
 import 'support_tickets_screen.dart';
+import 'support_chat_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final int orderId;
@@ -373,7 +374,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const SupportTicketsScreen()),
+                          MaterialPageRoute(builder: (_) => const SupportChatScreen()),
                         );
                       },
                       icon: const Icon(Icons.support_agent),

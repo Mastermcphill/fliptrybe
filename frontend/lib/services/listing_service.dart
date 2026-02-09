@@ -85,4 +85,15 @@ class ListingService {
       };
     }
   }
+
+  Future<Map<String, dynamic>> getListing(int listingId) async {
+    try {
+      final res = await _client.dio.get(ApiConfig.api('/listings/$listingId'));
+      final status = res.statusCode ?? 0;
+      if (status < 200 || status >= 300) return <String, dynamic>{};
+      return _asMap(res.data);
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
 }

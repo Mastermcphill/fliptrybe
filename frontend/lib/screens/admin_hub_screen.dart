@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/token_storage.dart';
 import 'admin_payout_console_screen.dart';
 import 'admin_commission_rules_screen.dart';
@@ -15,6 +16,7 @@ import 'landing_screen.dart';
 import 'leaderboards_screen.dart';
 import 'login_screen.dart';
 import 'role_signup_screen.dart';
+import 'admin_support_threads_screen.dart';
 
 class AdminHubScreen extends StatefulWidget {
   const AdminHubScreen({super.key});
@@ -25,6 +27,35 @@ class AdminHubScreen extends StatefulWidget {
 
 class _AdminHubScreenState extends State<AdminHubScreen> {
   bool _signingOut = false;
+  bool _checking = true;
+  String? _guardError;
+  final _auth = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureAdmin();
+  }
+
+  Future<void> _ensureAdmin() async {
+    try {
+      final me = await _auth.me();
+      final role = (me?['role'] ?? '').toString().toLowerCase();
+      if (role != 'admin') {
+        setState(() {
+          _guardError = 'Admin access required.';
+          _checking = false;
+        });
+        return;
+      }
+      setState(() => _checking = false);
+    } catch (e) {
+      setState(() {
+        _guardError = 'Unable to verify admin access.';
+        _checking = false;
+      });
+    }
+  }
 
   Future<bool> _confirmSignOut() async {
     final res = await showDialog<bool>(
@@ -89,6 +120,15 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_checking) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_guardError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Admin Hub')),
+        body: Center(child: Text(_guardError!)),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Admin Hub'),
@@ -118,6 +158,12 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             title: const Text('Audit Logs'),
             subtitle: const Text('Everything the system is doing'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAuditScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.support_agent_outlined),
+            title: const Text('Support Chat'),
+            subtitle: const Text('View and reply to support threads'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSupportThreadsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),

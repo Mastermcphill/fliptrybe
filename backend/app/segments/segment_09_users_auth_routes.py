@@ -45,7 +45,12 @@ def _hash_token(value: str) -> str:
 
 
 def _verification_base_url() -> str:
-    base = (os.getenv("PUBLIC_BASE_URL") or os.getenv("BASE_URL") or "").strip()
+    base = (
+        os.getenv("PUBLIC_BASE_URL")
+        or os.getenv("RENDER_EXTERNAL_URL")
+        or os.getenv("BASE_URL")
+        or ""
+    ).strip()
     if base:
         return base.rstrip("/")
     try:
@@ -64,12 +69,15 @@ def _send_verification_email(user: User, token: str) -> None:
     smtp_user = (os.getenv("SMTP_USER") or "").strip()
     smtp_pass = (os.getenv("SMTP_PASS") or "").strip()
     smtp_from = (os.getenv("SMTP_FROM") or smtp_user or "no-reply@fliptrybe.com").strip()
+    smtp_reply_to = (os.getenv("SMTP_REPLY_TO") or "").strip()
 
     if smtp_host:
         msg = EmailMessage()
         msg["Subject"] = "Verify your FlipTrybe email"
         msg["From"] = smtp_from
         msg["To"] = email
+        if smtp_reply_to:
+            msg["Reply-To"] = smtp_reply_to
         msg.set_content(f"Verify your email by clicking:\n{link}\n\nIf you did not request this, ignore this email.")
         try:
             with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
