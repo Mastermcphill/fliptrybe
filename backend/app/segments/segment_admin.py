@@ -44,6 +44,14 @@ def _is_admin(u: User | None) -> bool:
     except Exception:
         return False
 
+def _debug_detail(e, u):
+    try:
+        if request.headers.get("X-Debug", "").strip() == "1" and _is_admin(u):
+            return f"{type(e).__name__}: {e}"
+    except Exception:
+        pass
+    return None
+
 
 @admin_bp.get("/summary")
 def admin_summary():
@@ -116,13 +124,16 @@ def seed_listing():
         try:
             db.session.add(merchant)
             db.session.commit()
-        except Exception:
+        except Exception as e:
             db.session.rollback()
             try:
                 current_app.logger.exception("seed_listing_create_merchant_failed")
             except Exception:
                 pass
-            return jsonify({"ok": False, "message": "Failed to create merchant"}), 500
+        detail = _debug_detail(e, u)
+        if detail:
+            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
+        return jsonify({"ok": False, "error": "db_error"}), 500
 
     listing = Listing(
         user_id=int(merchant.id),
@@ -142,10 +153,13 @@ def seed_listing():
         db.session.add(listing)
         db.session.commit()
         return jsonify({"ok": True, "merchant_id": int(merchant.id), "listing_id": int(listing.id)}), 201
-    except Exception:
+    except Exception as e:
         db.session.rollback()
         try:
             current_app.logger.exception("seed_listing_create_listing_failed")
         except Exception:
             pass
-        return jsonify({"ok": False, "message": "Failed to create listing"}), 500
+        detail = _debug_detail(e, u)
+        if detail:
+            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
+        return jsonify({"ok": False, "error": "db_error"}), 500
