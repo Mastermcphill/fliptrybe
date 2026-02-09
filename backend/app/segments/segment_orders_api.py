@@ -7,6 +7,7 @@ import secrets
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
+from sqlalchemy import text
 
 from app.extensions import db
 from app.models import (
@@ -794,13 +795,17 @@ def order_delivery(order_id: int):
         return jsonify({"ok": False, "error": "order_not_found"}), 404
 
     try:
+        db.session.execute(text("SELECT 1"))
         o = db.session.get(Order, oid)
     except Exception as e:
         db.session.rollback()
         try:
-            current_app.logger.exception("order_delivery_lookup_failed order_id=%s user_id=%s", int(order_id), int(getattr(u, "id", 0) or 0))
+            current_app.logger.exception("orders.delivery failed order_id=%s user_id=%s", int(order_id), int(getattr(u, "id", 0) or 0))
         except Exception:
             pass
+        if (os.getenv("DEBUG_DELIVERY") or "").strip() == "1":
+            detail = f"{type(e).__name__}: {e}"
+            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
         return jsonify({"ok": False, "error": "db_error"}), 500
     if not o:
         return jsonify({"ok": False, "error": "order_not_found"}), 404
