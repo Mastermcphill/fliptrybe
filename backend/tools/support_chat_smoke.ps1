@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Continue"
-
 param(
   [string]$Base = "https://tri-o-fliptrybe.onrender.com",
   [string]$AdminEmail = $env:ADMIN_EMAIL,
@@ -7,6 +5,8 @@ param(
   [string]$BuyerEmail = $env:BUYER_EMAIL,
   [string]$BuyerPassword = $env:BUYER_PASSWORD
 )
+
+$ErrorActionPreference = "Continue"
 
 function Invoke-Api {
   param([string]$Method="GET",[string]$Path,[hashtable]$Headers=@{},$BodyObj=$null)
@@ -84,7 +84,31 @@ $safeBuyer = if ($BuyerEmail) { $BuyerEmail } else { "<missing>" }
 Write-Host "buyer email:" $safeBuyer
 $buyerToken = $buyerLogin.Json.token
 if (-not $buyerToken) {
-  Fail "buyer token missing; cannot continue"
+  if ($buyerLogin.StatusCode -eq 401) {
+    $rand = Get-Random
+    $genEmail = "buyer_smoke_$rand@t.com"
+    $genPassword = "TestPass123!"
+    $genPhone = "+23480$rand"
+    $regRes = Invoke-Api -Method "POST" -Path "/api/auth/register/buyer" -BodyObj @{
+      name = "Smoke Buyer $rand"
+      email = $genEmail
+      password = $genPassword
+      phone = $genPhone
+    }
+    Write-Host "buyer register:" $regRes.StatusCode
+    if (-not (OkStatus $regRes.StatusCode)) {
+      Write-Host $regRes.Body
+      Fail "buyer register failed"
+    }
+    $buyerLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email=$genEmail; password=$genPassword }
+    Write-Host "buyer login (new):" $buyerLogin.StatusCode
+    $buyerToken = $buyerLogin.Json.token
+    $BuyerEmail = $genEmail
+    $BuyerPassword = $genPassword
+  }
+  if (-not $buyerToken) {
+    Fail "buyer token missing; cannot continue"
+  }
 }
 $buyerHeaders = @{ Authorization = "Bearer $buyerToken" }
 
@@ -120,4 +144,5 @@ $buyerMsgs2 = Invoke-Api -Path "/api/support/messages" -Headers $buyerHeaders
 Write-Host "buyer messages after reply:" $buyerMsgs2.StatusCode
 if (-not (OkStatus $buyerMsgs2.StatusCode)) { Fail "buyer messages after reply failed" }
 
+Write-Host "buyer generated email:" $BuyerEmail
 Write-Host "OK: support chat smoke passed"
