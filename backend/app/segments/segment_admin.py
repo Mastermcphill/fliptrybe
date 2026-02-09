@@ -1,5 +1,6 @@
 import uuid
 import inspect
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, current_app
 from app.extensions import db
 from app.models.user import User
@@ -152,6 +153,10 @@ def seed_listing():
         is_active=True,
         seed_key=uuid.uuid4().hex,
     )
+    try:
+        listing.date_posted = datetime.now(timezone.utc)
+    except Exception:
+        pass
     try:
         db.session.add(listing)
         db.session.commit()

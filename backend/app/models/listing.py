@@ -1,4 +1,5 @@
 from datetime import datetime
+from sqlalchemy import text
 
 from app.extensions import db
 
@@ -40,6 +41,7 @@ class Listing(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    date_posted = db.Column(db.DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
     @property
     def owner_id(self):
@@ -96,5 +98,6 @@ class Listing(db.Model):
             "image_path": stored,      # keep raw stored value for compatibility
             "image_filename": getattr(self, "image_filename", "") or "",
             "is_active": bool(getattr(self, "is_active", True)),
+            "date_posted": self.date_posted.isoformat() if getattr(self, "date_posted", None) else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
