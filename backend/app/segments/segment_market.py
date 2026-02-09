@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 from sqlalchemy import text, or_
-from flask import Blueprint, jsonify, request, send_from_directory
+from flask import Blueprint, jsonify, request, send_from_directory, current_app
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
