@@ -141,6 +141,7 @@ def seed_listing():
         description="Auto-seeded listing for order creation smoke tests.",
         state="Lagos",
         city="Ikeja",
+        category="declutter",
         price=10000.0,
         base_price=10000.0,
         platform_fee=300.0,
@@ -150,13 +151,16 @@ def seed_listing():
         seed_key=uuid.uuid4().hex,
     )
     try:
-        if hasattr(listing, "category"):
-            listing.category = "declutter"
-    except Exception:
-        pass
-    try:
         db.session.add(listing)
         db.session.commit()
+        if request.headers.get("X-Debug", "").strip() == "1" and _is_admin(u):
+            return jsonify({
+                "ok": True,
+                "merchant_id": int(merchant.id),
+                "listing_id": int(listing.id),
+                "category": getattr(listing, "category", None),
+                "price": getattr(listing, "price", None),
+            }), 201
         return jsonify({"ok": True, "merchant_id": int(merchant.id), "listing_id": int(listing.id)}), 201
     except Exception as e:
         db.session.rollback()
