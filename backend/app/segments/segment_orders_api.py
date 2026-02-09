@@ -916,14 +916,14 @@ def admin_orders():
                 "merchant_id": int(o.merchant_id) if o.merchant_id is not None else None,
                 "created_at": o.created_at.isoformat() if o.created_at else None,
             })
-        return jsonify({"ok": True, "items": items}), 200
+        return jsonify({"ok": True, "items": items, "seed_endpoint_present": True}), 200
     except Exception:
         db.session.rollback()
         try:
             current_app.logger.exception("admin_orders_list_failed")
         except Exception:
             pass
-        return jsonify({"ok": True, "items": []}), 200
+        return jsonify({"ok": True, "items": [], "seed_endpoint_present": True}), 200
 
 
 @orders_bp.get("/admin/users")
