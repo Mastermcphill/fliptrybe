@@ -1,4 +1,5 @@
 import uuid
+import inspect
 from flask import Blueprint, jsonify, request, current_app
 from app.extensions import db
 from app.models.user import User
@@ -162,6 +163,8 @@ def seed_listing():
                 "category": getattr(listing, "category", None),
                 "price": getattr(listing, "price", None),
                 "listing": listing.to_dict(),
+                "listing_module": getattr(Listing, "__module__", None),
+                "listing_file": inspect.getfile(Listing),
             }), 201
         return jsonify({"ok": True, "merchant_id": int(merchant.id), "listing_id": int(listing.id)}), 201
     except Exception as e:
