@@ -38,6 +38,7 @@ from app.segments.segment_leaderboards import leaderboards_bp
 from app.segments.segment_notification_dispatcher import dispatcher_bp
 from app.segments.segment_support import support_bp
 from app.segments.segment_support_chat import support_bp as support_chat_bp, support_admin_bp as support_chat_admin_bp
+from app.segments.segment_inspector_requests import inspector_req_bp, inspector_req_admin_bp
 from app.segments.segment_demo import demo_bp
 from app.segments.segment_orders_api import orders_bp
 from app.segments.segment_inspections_api import inspections_bp
@@ -130,6 +131,8 @@ def create_app():
     app.register_blueprint(support_bp)
     app.register_blueprint(support_chat_bp)
     app.register_blueprint(support_chat_admin_bp)
+    app.register_blueprint(inspector_req_bp)
+    app.register_blueprint(inspector_req_admin_bp)
     app.register_blueprint(kyc_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(inspections_bp)

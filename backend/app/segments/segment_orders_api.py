@@ -6,7 +6,7 @@ import random
 import secrets
 from datetime import datetime, timedelta
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 
 from app.extensions import db
 from app.models import (
@@ -780,6 +780,54 @@ def get_order(order_id: int):
         return jsonify({"message": "Forbidden"}), 403
 
     return jsonify(o.to_dict()), 200
+
+
+@orders_bp.get("/orders/<int:order_id>/delivery")
+def order_delivery(order_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+
+    o = Order.query.get(order_id)
+    if not o:
+        return jsonify({"message": "Not found"}), 404
+
+    if not (_is_admin(u) or int(u.id) in (int(o.buyer_id), int(o.merchant_id)) or (o.driver_id and int(o.driver_id) == int(u.id))):
+        return jsonify({"message": "Forbidden"}), 403
+
+    role = (getattr(u, "role", None) or "buyer").strip().lower()
+    is_admin = role == "admin" or int(getattr(u, "id", 0) or 0) == 1
+    is_buyer = int(u.id) == int(o.buyer_id)
+    is_merchant = int(u.id) == int(o.merchant_id)
+    is_driver = bool(o.driver_id and int(o.driver_id) == int(u.id))
+
+    try:
+        pickup_code = o.pickup_code if (is_merchant or is_admin) else None
+        dropoff_code = o.dropoff_code if (is_driver or is_admin or is_buyer) else None
+        pickup_attempts = int(o.pickup_code_attempts or 0)
+        dropoff_attempts = int(o.dropoff_code_attempts or 0)
+        max_attempts = 4
+        delivery = {
+            "order_id": int(o.id),
+            "status": o.status,
+            "pickup_confirmed_at": o.pickup_confirmed_at.isoformat() if o.pickup_confirmed_at else None,
+            "dropoff_confirmed_at": o.dropoff_confirmed_at.isoformat() if o.dropoff_confirmed_at else None,
+            "pickup_code": pickup_code or "",
+            "dropoff_code": dropoff_code or "",
+            "pickup_code_attempts": pickup_attempts,
+            "dropoff_code_attempts": dropoff_attempts,
+            "pickup_attempts_left": max(0, max_attempts - pickup_attempts),
+            "dropoff_attempts_left": max(0, max_attempts - dropoff_attempts),
+            "role": role,
+        }
+        return jsonify({"ok": True, "delivery": delivery}), 200
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception("order_delivery_failed order_id=%s role=%s", int(o.id), role)
+        except Exception:
+            pass
+        return jsonify({"ok": True, "delivery": {}}), 200
 
 
 @orders_bp.get("/orders/<int:order_id>/timeline")

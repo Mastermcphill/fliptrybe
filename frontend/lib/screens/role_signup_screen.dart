@@ -62,7 +62,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         _toast("A valid email is required");
         return;
       }
-      if (password.length < 4) {
+      if (_role != "inspector" && password.length < 4) {
         _toast("Password must be at least 4 characters");
         return;
       }
@@ -120,16 +120,12 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           _toast("Tell us why you want to be an inspector");
           return;
         }
-        path = "/auth/register/inspector";
+        path = "/public/inspector-requests";
         payload = {
           "name": name,
           "email": email,
-          "password": password,
           "phone": phone,
-          "state": _state.text.trim(),
-          "city": _city.text.trim(),
-          "region": _region.text.trim(),
-          "reason": _inspectorReason.text.trim(),
+          "notes": _inspectorReason.text.trim(),
         };
       }
 
@@ -139,6 +135,24 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       }
 
       final res = await ApiClient.instance.postJson(ApiConfig.api(path), payload);
+
+      if (_role == "inspector") {
+        if (res is Map && res["ok"] == true) {
+          _toast("Inspector request submitted");
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: _role)),
+          );
+          return;
+        }
+        if (res is Map && res["message"] != null) {
+          _toast(res["message"].toString());
+          return;
+        }
+        _toast("Request failed");
+        return;
+      }
 
       if (res is Map && res["token"] != null) {
         final token = res["token"].toString();
@@ -355,10 +369,10 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
 
               _field(_name, "Full name"),
               _field(_email, "Email", keyboard: TextInputType.emailAddress),
-              _field(_password, "Password"),
+              if (_role != "inspector") _field(_password, "Password"),
               _field(_phone, "Phone", keyboard: TextInputType.phone),
 
-              if (_role != "buyer") ...[
+              if (_role == "merchant" || _role == "driver") ...[
                 const SizedBox(height: 6),
                 _field(_state, "State"),
                 _field(_city, "City"),

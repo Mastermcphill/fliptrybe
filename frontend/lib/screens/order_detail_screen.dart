@@ -42,6 +42,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String? _error;
 
   Map<String, dynamic>? _order;
+  Map<String, dynamic>? _delivery;
   List<dynamic> _events = const [];
 
   String _role = 'buyer';
@@ -72,6 +73,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     try {
       final detail = await _svc.getOrder(widget.orderId);
       final tl = await _svc.timeline(widget.orderId);
+      final delivery = await _svc.getDelivery(widget.orderId);
       final drivers = await _driversSvc.listDrivers(
         state: _driverFilterState.text,
         city: _driverFilterCity.text,
@@ -80,6 +82,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
       setState(() {
         _order = detail;
+        _delivery = (delivery['delivery'] is Map) ? Map<String, dynamic>.from(delivery['delivery'] as Map) : null;
         _events = tl;
         _drivers = drivers;
         _loading = false;
@@ -90,6 +93,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _refreshDelivery() async {
+    final delivery = await _svc.getDelivery(widget.orderId);
+    if (!mounted) return;
+    setState(() {
+      _delivery = (delivery['delivery'] is Map) ? Map<String, dynamic>.from(delivery['delivery'] as Map) : _delivery;
+    });
   }
 
   Future<void> _merchantAccept() async {
@@ -227,6 +238,16 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  Widget _progressStep(String label, bool done) {
+    return Row(
+      children: [
+        Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, size: 18, color: done ? Colors.green : Colors.grey),
+        const SizedBox(width: 8),
+        Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+      ],
+    );
+  }
+
   Widget _eventTile(Map<String, dynamic> m) {
     final at = (m['created_at'] ?? '').toString();
     final label = (m['event'] ?? '').toString();
@@ -241,16 +262,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final status = (_order?['status'] ?? '').toString();
+    final delivery = _delivery ?? const <String, dynamic>{};
+    final status = (delivery['status'] ?? _order?['status'] ?? '').toString();
     final role = _role.toLowerCase();
     final isAdmin = role == 'admin';
     final isMerchant = role == 'merchant';
     final isDriver = role == 'driver';
     final isBuyer = role == 'buyer';
-    final pickupCode = (_order?['pickup_code'] ?? '').toString();
-    final deliveryCode = (_order?['dropoff_code'] ?? _order?['delivery_code'] ?? '').toString();
-    final pickupAttemptsLeft = (_order?['pickup_attempts_left'] ?? '').toString();
-    final deliveryAttemptsLeft = (_order?['delivery_attempts_left'] ?? '').toString();
+    final statusLower = status.toLowerCase();
+    final isDone = statusLower == 'delivered' || statusLower == 'completed' || statusLower == 'cancelled';
+    final pickupCode = (delivery['pickup_code'] ?? _order?['pickup_code'] ?? '').toString();
+    final deliveryCode = (delivery['dropoff_code'] ?? _order?['dropoff_code'] ?? _order?['delivery_code'] ?? '').toString();
+    final pickupAttemptsLeft = (delivery['pickup_attempts_left'] ?? _order?['pickup_attempts_left'] ?? '').toString();
+    final deliveryAttemptsLeft = (delivery['dropoff_attempts_left'] ?? _order?['delivery_attempts_left'] ?? '').toString();
+    final canScanQr = (isAdmin || isMerchant || isDriver) && !isDone;
+    final canIssuePickupQr = (isDriver || isAdmin) && !isDone;
+    final canIssueDeliveryQr = (isBuyer || isAdmin) && !isDone;
+    final canShowPickupCode = (isMerchant || isAdmin) && pickupCode.isNotEmpty;
+    final canShowDeliveryCode = (isDriver || isAdmin || isBuyer) && deliveryCode.isNotEmpty;
+    final canConfirmPickup = (isMerchant || isAdmin) && !['picked_up', 'delivered', 'completed', 'cancelled'].contains(statusLower);
+    final canConfirmDelivery = (isDriver || isAdmin) && statusLower == 'picked_up';
 
     return Scaffold(
       appBar: AppBar(
@@ -297,40 +328,47 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             icon: const Icon(Icons.storefront),
                             label: const Text("Merchant Accept"),
                           ),
-                        if (isDriver || isAdmin)
+                        if (canIssuePickupQr)
                           OutlinedButton.icon(
                             onPressed: _issuePickupQr,
                             icon: const Icon(Icons.qr_code_2),
                             label: const Text("Issue Pickup QR"),
                           ),
-                        if (isBuyer || isAdmin)
+                        if (canIssueDeliveryQr)
                           OutlinedButton.icon(
                             onPressed: _issueDeliveryQr,
                             icon: const Icon(Icons.qr_code_2),
                             label: const Text("Issue Delivery QR"),
                           ),
-                        SizedBox(
-                          width: 220,
-                          child: TextField(
-                            controller: _qrTokenCtrl,
-                            decoration: InputDecoration(
-                              labelText: 'QR token',
-                              helperText: _lastIssuedToken != null ? "Issued step: ${_lastIssuedStep ?? ''}" : null,
-                              border: const OutlineInputBorder(),
+                        if (canScanQr)
+                          SizedBox(
+                            width: 220,
+                            child: TextField(
+                              controller: _qrTokenCtrl,
+                              decoration: InputDecoration(
+                                labelText: 'QR token',
+                                helperText: _lastIssuedToken != null ? "Issued step: ${_lastIssuedStep ?? ''}" : null,
+                                border: const OutlineInputBorder(),
+                              ),
                             ),
                           ),
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: _scanQr,
-                          icon: const Icon(Icons.qr_code_scanner),
-                          label: const Text("Scan QR"),
-                        ),
-                        if ((isMerchant || isAdmin) && pickupCode.isNotEmpty)
+                        if (canScanQr)
+                          OutlinedButton.icon(
+                            onPressed: _scanQr,
+                            icon: const Icon(Icons.qr_code_scanner),
+                            label: const Text("Scan QR"),
+                          ),
+                        if (canShowPickupCode)
                           OutlinedButton(
                             onPressed: null,
                             child: Text("Dispatch code: $pickupCode"),
                           ),
-                        if (isMerchant || isAdmin)
+                        if (canShowDeliveryCode)
+                          OutlinedButton(
+                            onPressed: null,
+                            child: Text("Delivery code: $deliveryCode"),
+                          ),
+                        if (canConfirmPickup)
                           SizedBox(
                             width: 220,
                             child: TextField(
@@ -342,13 +380,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             ),
                           ),
-                        if (isMerchant || isAdmin)
+                        if (canConfirmPickup)
                           ElevatedButton.icon(
                             onPressed: _sellerConfirmPickup,
                             icon: const Icon(Icons.local_shipping_outlined),
                             label: const Text("Seller Confirm Pickup"),
                           ),
-                        if (isDriver || isAdmin)
+                        if (canConfirmDelivery)
                           SizedBox(
                             width: 220,
                             child: TextField(
@@ -360,15 +398,55 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               ),
                             ),
                           ),
-                        if (isDriver || isAdmin)
+                        if (canConfirmDelivery)
                           ElevatedButton.icon(
                             onPressed: _driverConfirmDelivery,
                             icon: const Icon(Icons.check_circle_outline),
                             label: const Text("Driver Confirm Delivery"),
                           ),
+                        if (isMerchant && pickupCode.isEmpty)
+                          const Text(
+                            "Pickup code will arrive via SMS after QR issue. Enter it here to confirm pickup.",
+                            style: TextStyle(color: Colors.black87),
+                          ),
+                        if (isDriver && deliveryCode.isEmpty)
+                          const Text(
+                            "Ask the buyer for the delivery code after dropoff to confirm delivery.",
+                            style: TextStyle(color: Colors.black87),
+                          ),
+                        if (isBuyer)
+                          Text(
+                            deliveryCode.isNotEmpty
+                                ? "Share this delivery code with the driver to confirm delivery."
+                                : "Delivery code will arrive via SMS after pickup. Share it with the driver to confirm delivery.",
+                            style: const TextStyle(color: Colors.black87),
+                          ),
                       ],
                     ),
 
+                    const SizedBox(height: 12),
+                    const Text("Delivery Progress", style: TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    _progressStep("Merchant accepted", ["merchant_accepted", "driver_assigned", "picked_up", "delivered", "completed"].contains(statusLower)),
+                    const SizedBox(height: 4),
+                    _progressStep("Pickup confirmed", (delivery['pickup_confirmed_at'] ?? '').toString().isNotEmpty),
+                    const SizedBox(height: 4),
+                    _progressStep("Delivery confirmed", (delivery['dropoff_confirmed_at'] ?? '').toString().isNotEmpty || ["delivered", "completed"].contains(statusLower)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _refreshDelivery,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text("Refresh delivery status"),
+                        ),
+                        const SizedBox(width: 10),
+                        if ((pickupCode.isEmpty && deliveryCode.isEmpty))
+                          const Flexible(
+                            child: Text("Codes not ready yet. Tap refresh or contact Admin for help.", style: TextStyle(color: Colors.black87)),
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () {

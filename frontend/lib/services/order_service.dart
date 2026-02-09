@@ -73,6 +73,16 @@ class OrderService {
     }
   }
 
+  Future<Map<String, dynamic>> getDelivery(int orderId) async {
+    try {
+      final res = await _client.dio.get(ApiConfig.api('/orders/$orderId/delivery'));
+      if (res.data is Map) return Map<String, dynamic>.from(res.data as Map);
+      return <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
   Future<bool> merchantAccept(int orderId) async {
     try {
       final res = await _client.dio.post(ApiConfig.api('/orders/$orderId/merchant/accept'));

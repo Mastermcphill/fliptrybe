@@ -19,6 +19,15 @@
 9) Driver scans delivery QR (POST /api/orders/<id>/qr/scan) -> qr_challenges updated
 10) Driver confirms delivery with code (POST /api/driver/orders/<id>/confirm-delivery) -> escrow_unlocks verified, driver payout release triggered.
 
+Note: Buyer has no separate confirm endpoint in backend. Buyer issues delivery QR and sees status updates.
+
+## UI data source (delivery state + codes)
+- GET /api/orders/<id>/delivery (buyer/merchant/driver/admin)
+  - Returns delivery progress + role-scoped codes:
+    - pickup_code only for merchant/admin
+    - dropoff_code for driver/admin and buyer (to share with driver)
+  - Also returns pickup/dropoff confirmed timestamps and attempts counters.
+
 ## Endpoints + roles
 - /api/orders (buyer)
 - /api/orders/<id>/merchant/accept (merchant)
@@ -28,6 +37,7 @@
 - /api/seller/orders/<id>/confirm-pickup (merchant)
 - /api/orders/<id>/driver/status (driver)
 - /api/driver/orders/<id>/confirm-delivery (driver)
+- /api/orders/<id>/delivery (buyer/merchant/driver/admin)
 
 ## DB fields
 - orders.pickup_code, orders.dropoff_code (raw codes)

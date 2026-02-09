@@ -52,3 +52,4 @@ from .webhook_event import WebhookEvent  # noqa: F401
 from .inspection_reputation import InspectorProfile, InspectionReview, InspectionAudit  # noqa: F401
 from .inspector_bond import InspectorBond, BondEvent  # noqa: F401
 from .merchant_follow import MerchantFollow  # noqa: F401
+from .inspector_request import InspectorRequest  # noqa: F401

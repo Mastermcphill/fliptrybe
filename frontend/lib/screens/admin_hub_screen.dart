@@ -12,6 +12,7 @@ import 'admin_dispute_screen.dart';
 import 'admin_kyc_review_screen.dart';
 import 'admin_bonding_screen.dart';
 import 'admin_role_approvals_screen.dart';
+import 'admin_inspector_requests_screen.dart';
 import 'landing_screen.dart';
 import 'leaderboards_screen.dart';
 import 'login_screen.dart';
@@ -182,6 +183,12 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             title: const Text('Role Approvals'),
             subtitle: const Text('Approve merchants, drivers, inspectors'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminRoleApprovalsScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.assignment_ind_outlined),
+            title: const Text('Inspector Requests'),
+            subtitle: const Text('Review inspector access requests'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminInspectorRequestsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.badge_outlined),
