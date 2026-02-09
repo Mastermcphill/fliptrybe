@@ -786,14 +786,18 @@ def get_order(order_id: int):
 def order_delivery(order_id: int):
     u = _current_user()
     if not u:
-        return jsonify({"message": "Unauthorized"}), 401
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
 
-    o = Order.query.get(order_id)
+    try:
+        o = Order.query.get(order_id)
+    except Exception:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "db_error"}), 500
     if not o:
-        return jsonify({"message": "Not found"}), 404
+        return jsonify({"ok": False, "error": "order_not_found"}), 404
 
     if not (_is_admin(u) or int(u.id) in (int(o.buyer_id), int(o.merchant_id)) or (o.driver_id and int(o.driver_id) == int(u.id))):
-        return jsonify({"message": "Forbidden"}), 403
+        return jsonify({"ok": False, "error": "forbidden"}), 403
 
     role = (getattr(u, "role", None) or "buyer").strip().lower()
     is_admin = role == "admin" or int(getattr(u, "id", 0) or 0) == 1
@@ -807,27 +811,27 @@ def order_delivery(order_id: int):
         pickup_attempts = int(o.pickup_code_attempts or 0)
         dropoff_attempts = int(o.dropoff_code_attempts or 0)
         max_attempts = 4
-        delivery = {
-            "order_id": int(o.id),
-            "status": o.status,
+        progress = {
+            "status": (o.status or ""),
             "pickup_confirmed_at": o.pickup_confirmed_at.isoformat() if o.pickup_confirmed_at else None,
             "dropoff_confirmed_at": o.dropoff_confirmed_at.isoformat() if o.dropoff_confirmed_at else None,
-            "pickup_code": pickup_code or "",
-            "dropoff_code": dropoff_code or "",
+        }
+        codes = {
+            "pickup_code": pickup_code or None,
+            "dropoff_code": dropoff_code or None,
             "pickup_code_attempts": pickup_attempts,
             "dropoff_code_attempts": dropoff_attempts,
             "pickup_attempts_left": max(0, max_attempts - pickup_attempts),
             "dropoff_attempts_left": max(0, max_attempts - dropoff_attempts),
-            "role": role,
         }
-        return jsonify({"ok": True, "delivery": delivery}), 200
+        return jsonify({"ok": True, "order_id": int(o.id), "progress": progress, "codes": codes, "role": role}), 200
     except Exception:
         db.session.rollback()
         try:
             current_app.logger.exception("order_delivery_failed order_id=%s role=%s", int(o.id), role)
         except Exception:
             pass
-        return jsonify({"ok": True, "delivery": {}}), 200
+        return jsonify({"ok": True, "order_id": int(o.id), "progress": {}, "codes": {}, "role": role}), 200
 
 
 @orders_bp.get("/orders/<int:order_id>/timeline")
