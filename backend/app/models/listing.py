@@ -36,6 +36,7 @@ class Listing(db.Model):
     #   /api/uploads/<filename>
     # Still supports legacy absolute URLs already saved.
     image_path = db.Column(db.String(512), nullable=True)
+    image_filename = db.Column(db.String(255), nullable=False, default="")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -93,6 +94,7 @@ class Listing(db.Model):
             "final_price": float(final_price),
             "image": image,            # frontend expects this
             "image_path": stored,      # keep raw stored value for compatibility
+            "image_filename": getattr(self, "image_filename", "") or "",
             "is_active": bool(getattr(self, "is_active", True)),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

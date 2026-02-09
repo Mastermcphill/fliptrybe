@@ -147,6 +147,7 @@ def seed_listing():
         platform_fee=300.0,
         final_price=10300.0,
         image_path="",
+        image_filename="seed.jpg",
         is_active=True,
         seed_key=uuid.uuid4().hex,
     )
