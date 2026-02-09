@@ -22,7 +22,7 @@ class Listing(db.Model):
     locality = db.Column(db.String(64), nullable=True)
 
     # Listing category (e.g., declutter)
-    category = db.Column(db.String(64), nullable=True)
+    category = db.Column(db.String(64), nullable=False, default="declutter")
 
     # Keep float for now (matches your current usage)
     price = db.Column(db.Float, nullable=False, default=0.0)
