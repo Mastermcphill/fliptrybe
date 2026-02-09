@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import text
+import sqlalchemy as sa
 
 from app.extensions import db
 
@@ -23,7 +23,7 @@ class Listing(db.Model):
     locality = db.Column(db.String(64), nullable=True)
 
     # Listing category (e.g., declutter)
-    category = db.Column(db.String(64), nullable=False, default="declutter")
+    category = db.Column(db.String(64), nullable=False, default="declutter", server_default="declutter")
 
     # Keep float for now (matches your current usage)
     price = db.Column(db.Float, nullable=False, default=0.0)
@@ -40,8 +40,8 @@ class Listing(db.Model):
     image_filename = db.Column(db.String(255), nullable=False, default="", server_default="")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    date_posted = db.Column(db.DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=sa.text("now()"))
+    date_posted = db.Column(db.DateTime(timezone=True), nullable=False, server_default=sa.text("now()"))
 
     @property
     def owner_id(self):

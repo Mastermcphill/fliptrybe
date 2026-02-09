@@ -1,5 +1,6 @@
 import uuid
 import inspect
+import re
 from datetime import datetime, timezone
 from sqlalchemy import String, Text, Integer, Float, Numeric, Boolean, DateTime, Enum
 from flask import Blueprint, jsonify, request, current_app
@@ -56,6 +57,25 @@ def _debug_detail(e, u):
     return None
 
 
+def _debug_error_payload(e, u):
+    detail = _debug_detail(e, u)
+    if not detail:
+        return None
+    out = {
+        "detail": detail,
+        "exception_type": type(e).__name__,
+    }
+    try:
+        msg = str(e) or ""
+        # Helps pinpoint NOT NULL/UndefinedColumn quickly in debug responses.
+        m = re.search(r'column "?([a-zA-Z0-9_]+)"?', msg)
+        if m:
+            out["column"] = m.group(1)
+    except Exception:
+        pass
+    return out
+
+
 @admin_bp.get("/summary")
 def admin_summary():
     return jsonify({
@@ -96,6 +116,15 @@ def seed_listing():
 
     if listing:
         merchant_id = getattr(listing, "user_id", None)
+        if request.headers.get("X-Debug", "").strip() == "1" and _is_admin(u):
+            return jsonify({
+                "ok": True,
+                "merchant_id": merchant_id,
+                "listing_id": listing.id,
+                "listing": listing.to_dict(),
+                "listing_module": getattr(Listing, "__module__", None),
+                "listing_file": inspect.getfile(Listing),
+            }), 200
         return jsonify({"ok": True, "merchant_id": merchant_id, "listing_id": listing.id}), 200
 
     try:
@@ -133,10 +162,10 @@ def seed_listing():
                 current_app.logger.exception("seed_listing_create_merchant_failed")
             except Exception:
                 pass
-        detail = _debug_detail(e, u)
-        if detail:
-            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
-        return jsonify({"ok": False, "error": "db_error"}), 500
+            debug_payload = _debug_error_payload(e, u)
+            if debug_payload:
+                return jsonify({"ok": False, "error": "db_error", **debug_payload}), 500
+            return jsonify({"ok": False, "error": "db_error"}), 500
 
     listing = Listing(
         user_id=int(merchant.id),
@@ -144,6 +173,7 @@ def seed_listing():
         description="Auto-seeded listing for order creation smoke tests.",
         state="Lagos",
         city="Ikeja",
+        locality="",
         category="declutter",
         price=10000.0,
         base_price=10000.0,
@@ -152,12 +182,10 @@ def seed_listing():
         image_path="",
         image_filename="seed.jpg",
         is_active=True,
+        created_at=datetime.utcnow(),
+        date_posted=datetime.utcnow(),
         seed_key=uuid.uuid4().hex,
     )
-    try:
-        listing.date_posted = datetime.now(timezone.utc)
-    except Exception:
-        pass
     # Seed safety: fill any NOT NULL columns that are still None.
     try:
         for col in Listing.__table__.columns:
@@ -209,7 +237,7 @@ def seed_listing():
             current_app.logger.exception("seed_listing_create_listing_failed")
         except Exception:
             pass
-        detail = _debug_detail(e, u)
-        if detail:
-            return jsonify({"ok": False, "error": "db_error", "detail": detail}), 500
+        debug_payload = _debug_error_payload(e, u)
+        if debug_payload:
+            return jsonify({"ok": False, "error": "db_error", **debug_payload}), 500
         return jsonify({"ok": False, "error": "db_error"}), 500
