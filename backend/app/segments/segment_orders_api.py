@@ -470,10 +470,12 @@ def create_order():
     debug_enabled = debug_requested and _is_admin(u)
 
     payload = request.get_json(silent=True) or {}
+    payload_source = "json" if payload else "empty"
     if not payload:
         form_data = request.form.to_dict(flat=True) if request.form else {}
         args_data = request.args.to_dict(flat=True) if request.args else {}
         payload = {**args_data, **form_data}
+        payload_source = "form_args" if payload else "empty"
 
     def _debug_payload(extra: dict | None = None) -> dict:
         if not debug_enabled:
@@ -481,10 +483,31 @@ def create_order():
         out = {
             "debug": {
                 "keys": sorted([str(k) for k in payload.keys()]),
+                "payload_source": payload_source,
             }
         }
         if extra:
             out["debug"].update(extra)
+        return out
+
+    def _safe_snippet(value, limit: int = 500):
+        try:
+            if value is None:
+                return ""
+            text_value = str(value)
+            return text_value[:limit]
+        except Exception:
+            return ""
+
+    def _debug_exception_payload(e: Exception) -> dict:
+        detail = f"{type(e).__name__}: {e}"
+        out = {"detail": detail}
+        sql = _safe_snippet(getattr(e, "statement", ""))
+        if sql:
+            out["sql"] = sql
+        params = _safe_snippet(getattr(e, "params", None))
+        if params:
+            out["params"] = params
         return out
 
     buyer_id_raw = payload.get("buyer_id")
@@ -673,10 +696,8 @@ def create_order():
             )
         except Exception:
             pass
-        debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
-        if debug_requested and _is_admin(u):
-            detail = f"{type(e).__name__}: {e}"
-            return jsonify({"ok": False, "error": "db_error", "detail": detail, **_debug_payload({
+        if debug_enabled:
+            return jsonify({"ok": False, "error": "db_error", **_debug_exception_payload(e), **_debug_payload({
                 "listing_id_raw": listing_id,
                 "merchant_id_raw": merchant_id_raw,
                 "buyer_id_raw": buyer_id_raw,
