@@ -700,6 +700,13 @@ def create_order():
     inspection_fee = float(inspection_fee_dec)
     total_price = float(total_price_dec)
 
+    if buyer_id is None or listing_id_int is None or merchant_id is None:
+        return jsonify({"ok": False, "message": "buyer_id, listing_id, and merchant_id are required", **_debug_payload({
+            "buyer_id_raw": buyer_id_raw,
+            "listing_id_raw": listing_id,
+            "merchant_id_raw": merchant_id_raw,
+        })}), 400
+
     handshake_id = (payload.get("handshake_id") or "").strip()
     if not handshake_id:
         handshake_id = str(uuid.uuid4())
