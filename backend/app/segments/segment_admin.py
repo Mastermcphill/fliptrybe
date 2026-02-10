@@ -108,8 +108,33 @@ def seed_listing():
     if not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
 
+    payload = request.get_json(silent=True) or {}
+    target_merchant_raw = payload.get("merchant_id")
+    if target_merchant_raw is None:
+        target_merchant_raw = payload.get("user_id")
+
+    target_merchant_id = None
+    if target_merchant_raw is not None:
+        try:
+            target_merchant_id = int(target_merchant_raw)
+        except Exception:
+            return jsonify({"ok": False, "error": "invalid_merchant_id"}), 400
+
+    target_merchant = None
+    if target_merchant_id is not None:
+        try:
+            target_merchant = db.session.get(User, int(target_merchant_id))
+        except Exception:
+            db.session.rollback()
+            target_merchant = None
+        if not target_merchant:
+            return jsonify({"ok": False, "error": "merchant_not_found"}), 404
+
     try:
-        listing = Listing.query.order_by(Listing.id.asc()).first()
+        if target_merchant_id is not None:
+            listing = Listing.query.filter_by(user_id=int(target_merchant_id)).order_by(Listing.id.asc()).first()
+        else:
+            listing = Listing.query.order_by(Listing.id.asc()).first()
     except Exception:
         db.session.rollback()
         listing = None
@@ -127,11 +152,13 @@ def seed_listing():
             }), 200
         return jsonify({"ok": True, "merchant_id": merchant_id, "listing_id": listing.id}), 200
 
-    try:
-        merchant = User.query.filter_by(role="merchant").order_by(User.id.asc()).first()
-    except Exception:
-        db.session.rollback()
-        merchant = None
+    merchant = target_merchant
+    if not merchant:
+        try:
+            merchant = User.query.filter_by(role="merchant").order_by(User.id.asc()).first()
+        except Exception:
+            db.session.rollback()
+            merchant = None
 
     if not merchant:
         email = "merchant@fliptrybe.com"

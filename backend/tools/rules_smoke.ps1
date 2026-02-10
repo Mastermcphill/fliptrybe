@@ -103,7 +103,7 @@ function Resolve-MerchantOwnedListingId {
     }
   }
 
-  $seed = Invoke-Api -Method "POST" -Path "/api/admin/demo/seed-listing" -Headers $AdminHeaders
+  $seed = Invoke-Api -Method "POST" -Path "/api/admin/demo/seed-listing" -Headers $AdminHeaders -BodyObj @{ merchant_id = [int]$MerchantId }
   Write-Host "seed listing:" $seed.StatusCode
   if ($seed.Body) { Write-Host "seed listing body:" $seed.Body }
 
