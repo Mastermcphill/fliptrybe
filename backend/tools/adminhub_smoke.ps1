@@ -2,7 +2,8 @@ param(
   [string]$Base = "https://tri-o-fliptrybe.onrender.com",
   [string]$AdminEmail = "vidzimedialtd@gmail.com",
   [string]$AdminPassword = "NewPass1234!",
-  [switch]$SeedNationwide
+  [switch]$SeedNationwide,
+  [switch]$SeedLeaderboards
 )
 
 $ErrorActionPreference = "Continue"
@@ -132,6 +133,14 @@ if ($SeedNationwide.IsPresent) {
     "X-Debug" = "1"
   }
   Call-And-Check -Method "POST" -Path "/api/admin/demo/seed-nationwide" -Headers $seedHeaders -BodyObj @{}
+}
+
+if ($SeedLeaderboards.IsPresent) {
+  $seedHeaders = @{
+    Authorization = "Bearer $($login.Json.token)"
+    "X-Debug" = "1"
+  }
+  Call-And-Check -Method "POST" -Path "/api/admin/demo/seed-leaderboards" -Headers $seedHeaders -BodyObj @{}
 }
 
 # AdminHub-backed endpoints (based on active frontend wiring)
