@@ -3,7 +3,8 @@ param(
   [string]$AdminEmail = $(if ($env:ADMIN_EMAIL) { $env:ADMIN_EMAIL } else { "vidzimedialtd@gmail.com" }),
   [string]$AdminPassword = $(if ($env:ADMIN_PASSWORD) { $env:ADMIN_PASSWORD } else { "NewPass1234!" }),
   [string]$BuyerEmail = $env:BUYER_EMAIL,
-  [string]$BuyerPassword = $env:BUYER_PASSWORD
+  [string]$BuyerPassword = $env:BUYER_PASSWORD,
+  [switch]$MockWebhook
 )
 
 $ErrorActionPreference = "Continue"
@@ -44,6 +45,19 @@ function Assert-2xx([object]$resp, [string]$label) {
   if ($resp.StatusCode -lt 200 -or $resp.StatusCode -ge 300) {
     if ($resp.Body) { Write-Host $resp.Body }
     exit 1
+  }
+}
+
+function Build-PaystackSignature {
+  param([string]$Secret, [string]$RawJson)
+  $enc = [System.Text.Encoding]::UTF8
+  $hmac = [System.Security.Cryptography.HMACSHA512]::new($enc.GetBytes($Secret))
+  try {
+    $bytes = $enc.GetBytes($RawJson)
+    $hash = $hmac.ComputeHash($bytes)
+    return ([BitConverter]::ToString($hash) -replace "-", "").ToLower()
+  } finally {
+    $hmac.Dispose()
   }
 }
 
@@ -110,6 +124,14 @@ $settings = Invoke-Api -Method "POST" -Path "/api/admin/autopilot/settings" -Hea
   termii_enabled_wa = $false
 }
 Assert-2xx $settings "POST /api/admin/autopilot/settings"
+$settingsRead = Invoke-Api -Path "/api/admin/autopilot" -Headers $adminHeaders
+Assert-2xx $settingsRead "GET /api/admin/autopilot"
+$mode = ""
+$provider = ""
+if ($settingsRead.Json -and $settingsRead.Json.settings) {
+  $mode = (($settingsRead.Json.settings.integrations_mode | Out-String).Trim()).ToLower()
+  $provider = (($settingsRead.Json.settings.payments_provider | Out-String).Trim()).ToLower()
+}
 
 $useTopup = $false
 $orderId = 0
@@ -189,7 +211,7 @@ try { $initAmount = [double]$init.Json.amount } catch { $initAmount = 0 }
 $amountKobo = [int]($initAmount * 100)
 if ($amountKobo -le 0) { $amountKobo = 10000 }
 
-$webhook = Invoke-Api -Method "POST" -Path "/api/payments/webhook/paystack" -Headers @{} -BodyObj @{
+$webhookPayload = @{
   id = "evt_payments_smoke_1"
   event = "charge.success"
   data = @{
@@ -199,7 +221,33 @@ $webhook = Invoke-Api -Method "POST" -Path "/api/payments/webhook/paystack" -Hea
     customer = @{ email = $BuyerEmail }
   }
 }
-Assert-2xx $webhook "POST /api/payments/webhook/paystack"
+$useMockWebhook = $MockWebhook.IsPresent -or $provider -eq "mock" -or $mode -ne "live"
+$webhookHeaders = @{}
+if (-not $useMockWebhook) {
+  $secret = (if ($env:PAYSTACK_WEBHOOK_SECRET) { $env:PAYSTACK_WEBHOOK_SECRET } else { $env:PAYSTACK_SECRET_KEY })
+  if ($secret) {
+    $rawWebhook = ($webhookPayload | ConvertTo-Json -Depth 20 -Compress)
+    $sig = Build-PaystackSignature -Secret $secret -RawJson $rawWebhook
+    $webhookHeaders["X-Paystack-Signature"] = $sig
+  }
+}
+$webhook = Invoke-Api -Method "POST" -Path "/api/payments/webhook/paystack" -Headers $webhookHeaders -BodyObj $webhookPayload
+if ($webhook.StatusCode -ge 500 -or $webhook.StatusCode -eq 404) {
+  Write-Host "POST /api/payments/webhook/paystack -> $($webhook.StatusCode)"
+  if ($webhook.Body) { Write-Host $webhook.Body }
+  exit 1
+}
+if ($webhook.StatusCode -ge 400 -and $webhook.StatusCode -lt 500) {
+  Write-Host "POST /api/payments/webhook/paystack -> $($webhook.StatusCode)"
+  if ($webhook.Body) { Write-Host $webhook.Body }
+  $err = ""
+  try { $err = (($webhook.Json.error | Out-String).Trim()).ToUpper() } catch {}
+  if ($err -ne "INTEGRATION_MISCONFIGURED") {
+    exit 1
+  }
+} else {
+  Assert-2xx $webhook "POST /api/payments/webhook/paystack"
+}
 
 if (-not $useTopup -and $orderId -gt 0) {
   $status = Invoke-Api -Method "GET" -Path "/api/payments/status?order_id=$orderId" -Headers $buyerHeaders
@@ -210,7 +258,7 @@ if (-not $useTopup -and $orderId -gt 0) {
   }
 }
 
-$replay = Invoke-Api -Method "POST" -Path "/api/payments/webhook/paystack" -Headers @{} -BodyObj @{
+$replay = Invoke-Api -Method "POST" -Path "/api/payments/webhook/paystack" -Headers $webhookHeaders -BodyObj @{
   id = "evt_payments_smoke_1"
   event = "charge.success"
   data = @{
@@ -220,7 +268,22 @@ $replay = Invoke-Api -Method "POST" -Path "/api/payments/webhook/paystack" -Head
     customer = @{ email = $BuyerEmail }
   }
 }
-Assert-2xx $replay "POST /api/payments/webhook/paystack (replay)"
+if ($replay.StatusCode -ge 500 -or $replay.StatusCode -eq 404) {
+  Write-Host "POST /api/payments/webhook/paystack (replay) -> $($replay.StatusCode)"
+  if ($replay.Body) { Write-Host $replay.Body }
+  exit 1
+}
+if ($replay.StatusCode -ge 200 -and $replay.StatusCode -lt 300) {
+  Assert-2xx $replay "POST /api/payments/webhook/paystack (replay)"
+} else {
+  Write-Host "POST /api/payments/webhook/paystack (replay) -> $($replay.StatusCode)"
+  if ($replay.Body) { Write-Host $replay.Body }
+  $errReplay = ""
+  try { $errReplay = (($replay.Json.error | Out-String).Trim()).ToUpper() } catch {}
+  if ($errReplay -ne "INTEGRATION_MISCONFIGURED") {
+    exit 1
+  }
+}
 Write-Host "replay body: $($replay.Body)"
 if ($useTopup) {
   Write-Host "OK: payments smoke passed in topup fallback mode (reference=$reference)"

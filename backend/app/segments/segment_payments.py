@@ -199,73 +199,119 @@ def _check_webhook_amount(pi: PaymentIntent | None, data: dict) -> bool:
 
 
 def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None, source: str = "payments") -> tuple[dict, int]:
-    settings = get_settings()
-    mode = (getattr(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
-    strict = mode == "live" or (os.getenv("PAYSTACK_WEBHOOK_STRICT", "0").strip() == "1")
-
-    verified = verify_signature(raw, signature) if signature else False
-    if strict and not verified:
-        return {"ok": False, "error": "INVALID_SIGNATURE"}, 401
-
-    event = (payload.get("event") or "").strip()
-    data = payload.get("data") or {}
-    reference = (data.get("reference") or "").strip()
-
-    event_id = ""
     try:
-        event_id = (payload.get("id") or payload.get("event_id") or "").strip()
-    except Exception:
+        settings = get_settings()
+        mode = (getattr(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
+        provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+        enabled = bool(getattr(settings, "paystack_enabled", False))
+
+        if not isinstance(payload, dict):
+            return {"ok": False, "error": "INVALID_PAYLOAD", "message": "payload must be an object"}, 400
+
+        event_raw = payload.get("event")
+        data_raw = payload.get("data")
+        if not isinstance(event_raw, str) or not event_raw.strip():
+            return {"ok": False, "error": "INVALID_PAYLOAD", "message": "event is required"}, 400
+        if data_raw is None:
+            data = {}
+        elif isinstance(data_raw, dict):
+            data = data_raw
+        else:
+            return {"ok": False, "error": "INVALID_PAYLOAD", "message": "data must be an object"}, 400
+
+        event = event_raw.strip()
+        reference = str((data.get("reference") or "")).strip()
+
+        # Live Paystack must validate signature. Mock/disabled paths never require it.
+        verified = False
+        strict_signature = mode == "live" and provider == "paystack" and enabled
+        if strict_signature:
+            secret = (os.getenv("PAYSTACK_WEBHOOK_SECRET") or os.getenv("PAYSTACK_SECRET_KEY") or "").strip()
+            if not secret:
+                return {
+                    "ok": False,
+                    "error": "INTEGRATION_MISCONFIGURED",
+                    "message": "missing PAYSTACK_WEBHOOK_SECRET (or PAYSTACK_SECRET_KEY)",
+                }, 400
+            if not signature:
+                return {
+                    "ok": False,
+                    "error": "INTEGRATION_MISCONFIGURED",
+                    "message": "missing X-Paystack-Signature",
+                }, 400
+            verified = bool(verify_signature(raw or b"", signature))
+            if not verified:
+                return {"ok": False, "error": "INVALID_SIGNATURE"}, 400
+
         event_id = ""
-    if not event_id:
-        base = f"{event}:{reference}:{data.get('amount', '')}:{source}"
-        event_id = hashlib.sha256(base.encode("utf-8")).hexdigest()[:32]
+        try:
+            maybe_id = payload.get("id") or payload.get("event_id") or ""
+            event_id = str(maybe_id).strip()
+        except Exception:
+            event_id = ""
+        if not event_id:
+            base = f"{event}:{reference}:{data.get('amount', '')}:{source}"
+            event_id = hashlib.sha256(base.encode("utf-8")).hexdigest()[:32]
 
-    existing = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
-    if existing:
-        return {"ok": True, "replayed": True, "verified": verified}, 200
+        existing = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+        if existing:
+            return {"ok": True, "replayed": True, "verified": verified}, 200
 
-    try:
-        db.session.add(WebhookEvent(provider="paystack", event_id=event_id, reference=reference))
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+        try:
+            db.session.add(WebhookEvent(provider="paystack", event_id=event_id, reference=reference))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
-    _save_audit("paystack_webhook", {"verified": verified, "event": event, "reference": reference, "source": source})
+        _save_audit("paystack_webhook", {"verified": verified, "event": event, "reference": reference, "source": source})
 
-    if event != "charge.success" or not reference:
-        return {"ok": True, "verified": verified}, 200
+        if event != "charge.success":
+            return {"ok": True, "verified": verified}, 200
+        if not reference:
+            return {"ok": False, "error": "INVALID_PAYLOAD", "message": "data.reference is required"}, 400
 
-    pi = PaymentIntent.query.filter_by(reference=reference).first()
-    if not pi:
-        return {"ok": True, "verified": verified, "ignored": True}, 200
+        pi = PaymentIntent.query.filter_by(reference=reference).first()
+        if not pi:
+            return {"ok": True, "verified": verified, "ignored": True}, 200
 
-    if not _check_webhook_amount(pi, data):
-        return {"ok": False, "error": "AMOUNT_MISMATCH", "reference": reference}, 200
+        if not _check_webhook_amount(pi, data):
+            return {"ok": False, "error": "AMOUNT_MISMATCH", "reference": reference}, 200
 
-    if (pi.purpose or "").strip().lower() == "order":
-        order_id = _extract_order_id(pi.meta)
-        if not order_id:
-            return {"ok": False, "error": "ORDER_ID_MISSING", "reference": reference}, 200
-        order = db.session.get(Order, int(order_id))
-        if not order:
-            return {"ok": False, "error": "ORDER_NOT_FOUND", "reference": reference}, 200
-        if _order_is_paid(order):
+        if (pi.purpose or "").strip().lower() == "order":
+            order_id = _extract_order_id(pi.meta)
+            if not order_id:
+                return {"ok": False, "error": "ORDER_ID_MISSING", "reference": reference}, 200
+            order = db.session.get(Order, int(order_id))
+            if not order:
+                return {"ok": False, "error": "ORDER_NOT_FOUND", "reference": reference}, 200
+            if _order_is_paid(order):
+                pi.status = "paid"
+                if not pi.paid_at:
+                    pi.paid_at = datetime.utcnow()
+                    db.session.add(pi)
+                    db.session.commit()
+                return {"ok": True, "verified": verified, "already_paid": True}, 200
+
             pi.status = "paid"
-            if not pi.paid_at:
-                pi.paid_at = datetime.utcnow()
-                db.session.add(pi)
-                db.session.commit()
-            return {"ok": True, "verified": verified, "already_paid": True}, 200
+            pi.paid_at = datetime.utcnow()
+            db.session.add(pi)
+            db.session.commit()
+            _mark_order_paid(order, reference=reference)
+            return {"ok": True, "verified": verified, "purpose": "order"}, 200
 
-        pi.status = "paid"
-        pi.paid_at = datetime.utcnow()
-        db.session.add(pi)
-        db.session.commit()
-        _mark_order_paid(order, reference=reference)
-        return {"ok": True, "verified": verified, "purpose": "order"}, 200
-
-    _credit_wallet_from_reference(reference)
-    return {"ok": True, "verified": verified, "purpose": "topup"}, 200
+        _credit_wallet_from_reference(reference)
+        return {"ok": True, "verified": verified, "purpose": "topup"}, 200
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.exception("paystack_webhook_processing_failed source=%s", source)
+        return {
+            "ok": False,
+            "error": "WEBHOOK_PROCESSING_FAILED",
+            "message": f"{type(e).__name__}",
+        }, 200
 
 
 @payments_bp.post("/initialize")
@@ -426,9 +472,16 @@ def payment_status():
 
 @payments_bp.post("/webhook/paystack")
 def paystack_webhook():
-    raw = request.get_data() or b""
-    sig = request.headers.get("X-Paystack-Signature")
-    payload = request.get_json(silent=True) or {}
-    body, status = process_paystack_webhook(payload=payload, raw=raw, signature=sig, source="api/payments/webhook/paystack")
-    return jsonify(body), int(status)
-
+    try:
+        raw = request.get_data() or b""
+        sig = request.headers.get("X-Paystack-Signature")
+        payload = request.get_json(silent=True) or {}
+        body, status = process_paystack_webhook(payload=payload, raw=raw, signature=sig, source="api/payments/webhook/paystack")
+        return jsonify(body), int(status)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        current_app.logger.exception("paystack_webhook_route_failed")
+        return jsonify({"ok": False, "error": "WEBHOOK_HANDLER_FAILED"}), 200

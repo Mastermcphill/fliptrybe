@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 
 from app.extensions import db
 from app.models import Wallet, Transaction
@@ -68,24 +68,31 @@ def _legacy_credit_wallet_from_metadata(payload: dict) -> bool:
 
 @webhooks_bp.post("/paystack")
 def paystack_webhook():
-    raw = request.get_data() or b"{}"
-    sig = request.headers.get("X-Paystack-Signature")
-    payload = request.get_json(silent=True) or {}
+    try:
+        raw = request.get_data() or b"{}"
+        sig = request.headers.get("X-Paystack-Signature")
+        payload = request.get_json(silent=True) or {}
 
-    body, status = process_paystack_webhook(payload=payload, raw=raw, signature=sig, source="api/webhooks/paystack")
+        body, status = process_paystack_webhook(payload=payload, raw=raw, signature=sig, source="api/webhooks/paystack")
 
-    # Backward compatibility: old webhook payloads may not include a PaymentIntent reference.
-    if int(status) == 200 and bool(body.get("ignored")) and (payload.get("data") or {}).get("metadata"):
+        # Backward compatibility: old webhook payloads may not include a PaymentIntent reference.
+        if int(status) == 200 and bool(body.get("ignored")) and isinstance(payload, dict) and (payload.get("data") or {}).get("metadata"):
+            try:
+                if _legacy_credit_wallet_from_metadata(payload):
+                    body = {"ok": True, "legacy": True}
+            except Exception:
+                db.session.rollback()
+
+        return jsonify(body), int(status)
+    except Exception:
         try:
-            if _legacy_credit_wallet_from_metadata(payload):
-                body = {"ok": True, "legacy": True}
-        except Exception:
             db.session.rollback()
-
-    return jsonify(body), int(status)
+        except Exception:
+            pass
+        current_app.logger.exception("legacy_paystack_webhook_route_failed")
+        return jsonify({"ok": False, "error": "WEBHOOK_HANDLER_FAILED"}), 200
 
 
 @webhooks_bp.post("/stripe")
 def stripe_webhook():
     return jsonify({"ok": True, "ignored": True, "provider": "stripe"}), 200
-
