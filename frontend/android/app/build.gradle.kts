@@ -15,6 +15,21 @@ if (hasKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+fun prop(name: String): String? {
+    val value = keystoreProperties[name] as? String
+    return value?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+val storeFileValue = prop("storeFile")
+val storePasswordValue = prop("storePassword")
+val keyAliasValue = prop("keyAlias")
+val keyPasswordValue = prop("keyPassword")
+val hasCompleteKeystore = hasKeystore &&
+    storeFileValue != null &&
+    storePasswordValue != null &&
+    keyAliasValue != null &&
+    keyPasswordValue != null
+
 android {
     namespace = "com.example.fliptrybe"
     compileSdk = flutter.compileSdkVersion
@@ -42,18 +57,18 @@ android {
 
     signingConfigs {
         create("release") {
-            if (hasKeystore) {
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
+            if (hasCompleteKeystore) {
+                storeFile = storeFileValue?.let { file(it) }
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (hasKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            signingConfig = if (hasCompleteKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
             isMinifyEnabled = false
             isShrinkResources = false
         }
