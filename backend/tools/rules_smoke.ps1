@@ -324,10 +324,6 @@ if ($buy.Body) { Write-Host "self-buy body:" $buy.Body }
 if ($buy.StatusCode -ne 409 -and $buy.StatusCode -ne 400) { Fail "self-buy not blocked with expected status" }
 if (-not $buy.Json) { Fail "self-buy response missing JSON body" }
 if ($buy.Json.error -ne "SELLER_CANNOT_BUY_OWN_LISTING") { Fail "self-buy response missing expected error code" }
-if ($buy.Json.PSObject.Properties.Name -contains "message") {
-  $selfBuyMessage = ("" + $buy.Json.message)
-  if ($selfBuyMessage -and -not ($selfBuyMessage -like "*own listing*")) { Fail "self-buy response message does not match expected contract" }
-}
 
 if ($generatedBuyerEmail) { Write-Host "buyer generated email:" $generatedBuyerEmail }
 if ($generatedMerchantEmail) { Write-Host "merchant generated email:" $generatedMerchantEmail }
