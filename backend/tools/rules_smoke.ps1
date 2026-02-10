@@ -39,6 +39,8 @@ function Invoke-Api {
 
 function Fail($msg) { Write-Host "FAIL:" $msg; exit 1 }
 function OkStatus($code) { return ($code -ge 200 -and $code -lt 300) }
+function New-RandomEmail($prefix) { return ("{0}_{1}@t.com" -f $prefix, (Get-Random)) }
+function New-RandomPhone() { return ("+23480{0}" -f (Get-Random -Minimum 100000000 -Maximum 999999999)) }
 
 Write-Host "base:" $Base
 $version = Invoke-Api -Method "GET" -Path "/api/version"
@@ -46,8 +48,11 @@ Write-Host "version:" $version.StatusCode
 if ($version.Body) { Write-Host "version body:" $version.Body }
 
 if (-not $AdminEmail -or -not $AdminPassword) { Fail "Missing ADMIN_EMAIL/ADMIN_PASSWORD" }
-if (-not $BuyerEmail -or -not $BuyerPassword) { Fail "Missing BUYER_EMAIL/BUYER_PASSWORD" }
-if (-not $MerchantEmail -or -not $MerchantPassword) { Fail "Missing MERCHANT_EMAIL/ MERCHANT_PASSWORD" }
+if (-not $BuyerPassword) { $BuyerPassword = "TestPass123!" }
+if (-not $BuyerEmail) { $BuyerEmail = New-RandomEmail "buyer_rules" }
+if (-not $MerchantEmail -or -not $MerchantPassword) { Fail "Missing MERCHANT_EMAIL/MERCHANT_PASSWORD" }
+
+$generatedBuyerEmail = $null
 
 Write-Host "admin email:" $AdminEmail
 Write-Host "buyer email:" $BuyerEmail
@@ -62,6 +67,22 @@ $adminHeaders = @{ Authorization = "Bearer $adminToken" }
 
 $buyerLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email=$BuyerEmail; password=$BuyerPassword }
 Write-Host "buyer login:" $buyerLogin.StatusCode
+if ($buyerLogin.StatusCode -eq 401) {
+  $generatedBuyerEmail = New-RandomEmail "buyer_rules"
+  $buyerPhone = New-RandomPhone
+  $BuyerEmail = $generatedBuyerEmail
+  Write-Host "buyer auto-register email:" $BuyerEmail
+  $buyerReg = Invoke-Api -Method "POST" -Path "/api/auth/register/buyer" -BodyObj @{
+    name = "Rules Buyer"
+    email = $BuyerEmail
+    password = $BuyerPassword
+    phone = $buyerPhone
+  }
+  Write-Host "buyer register:" $buyerReg.StatusCode
+  if (-not (OkStatus $buyerReg.StatusCode)) { Fail "buyer register failed" }
+  $buyerLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email=$BuyerEmail; password=$BuyerPassword }
+  Write-Host "buyer login (new):" $buyerLogin.StatusCode
+}
 if (-not (OkStatus $buyerLogin.StatusCode)) { Fail "buyer login failed" }
 $buyerToken = $buyerLogin.Json.token
 if (-not $buyerToken) { Fail "buyer token missing" }
@@ -136,4 +157,5 @@ if (-not $buy.Json) { Fail "self-buy response missing JSON body" }
 if ($buy.Json.error -ne "SELLER_CANNOT_BUY_OWN_LISTING") { Fail "self-buy response missing expected error code" }
 if (-not ($buy.Json.message -like "*own listing*")) { Fail "self-buy response missing expected message" }
 
+if ($generatedBuyerEmail) { Write-Host "buyer generated email:" $generatedBuyerEmail }
 Write-Host "OK: rules smoke passed"
