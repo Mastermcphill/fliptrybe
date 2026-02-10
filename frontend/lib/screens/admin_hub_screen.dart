@@ -8,9 +8,7 @@ import 'admin_commission_rules_screen.dart';
 import 'admin_notify_queue_screen.dart';
 import 'admin_autopilot_screen.dart';
 import 'admin_audit_screen.dart';
-import 'admin_dispute_screen.dart';
 import 'admin_kyc_review_screen.dart';
-import 'admin_bonding_screen.dart';
 import 'admin_role_approvals_screen.dart';
 import 'admin_inspector_requests_screen.dart';
 import 'landing_screen.dart';
@@ -175,8 +173,8 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
           ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Notify Queue'),
-            subtitle: const Text('In next release'),
-            onTap: null,
+            subtitle: const Text('Retry and manage outbound notification queue'),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotifyQueueScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.verified_user_outlined),
@@ -208,17 +206,15 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             subtitle: const Text('Set commission by kind/state/category'),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminCommissionRulesScreen())),
           ),
-          ListTile(
-            leading: const Icon(Icons.gavel_outlined),
-            title: const Text('Dispute Resolution'),
-            subtitle: const Text('Adjudicate fraud claims'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDisputeScreen())),
+          const ListTile(
+            leading: Icon(Icons.gavel_outlined),
+            title: Text('Dispute Resolution'),
+            subtitle: Text('Not available yet'),
           ),
-          ListTile(
-            leading: const Icon(Icons.shield_outlined),
-            title: const Text('Inspector Bonds'),
-            subtitle: const Text('Manage underfunded agents'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminBondingScreen())),
+          const ListTile(
+            leading: Icon(Icons.shield_outlined),
+            title: Text('Inspector Bonds'),
+            subtitle: Text('Not available yet'),
           ),
         ],
       ),

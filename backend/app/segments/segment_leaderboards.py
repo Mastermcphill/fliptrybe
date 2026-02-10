@@ -27,6 +27,39 @@ def _sort(items):
     return items
 
 
+@leaderboards_bp.get("")
+def ranked():
+    raw_limit = (request.args.get("limit") or "").strip()
+    try:
+        limit = int(raw_limit) if raw_limit else 20
+    except Exception:
+        limit = 20
+    if limit < 1:
+        limit = 20
+    if limit > 100:
+        limit = 100
+
+    state = (request.args.get("state") or "").strip()
+    try:
+        q = MerchantProfile.query.filter_by(is_suspended=False)
+        if state and state.lower() != "all nigeria":
+            q = q.filter(MerchantProfile.state.ilike(state))
+        items = q.all()
+        _sort(items)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to load leaderboards", "error": str(e)}), 500
+
+    out = []
+    rank = 1
+    for m in items[:limit]:
+        row = m.to_dict()
+        row["rank"] = rank
+        out.append(row)
+        rank += 1
+    return jsonify({"ok": True, "items": out}), 200
+
+
 @leaderboards_bp.get("/featured")
 def featured():
     items = MerchantProfile.query.filter_by(is_featured=True, is_suspended=False).all()

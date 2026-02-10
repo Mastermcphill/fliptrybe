@@ -46,12 +46,21 @@ def _current_user():
         uid = int(sub)
     except Exception:
         return None
-    return User.query.get(uid)
+    try:
+        return User.query.get(uid)
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
 
 
 def _is_admin(u: User | None) -> bool:
     if not u:
         return False
+    if (getattr(u, "role", "") or "").strip().lower() == "admin":
+        return True
     try:
         return int(u.id or 0) == 1
     except Exception:
@@ -145,3 +154,40 @@ def admin_set():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed to update", "error": str(e)}), 500
+
+
+@kyc_bp.get("/admin/pending")
+def admin_pending():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    try:
+        rows = (
+            db.session.query(KycRequest, User)
+            .outerjoin(User, User.id == KycRequest.user_id)
+            .filter(KycRequest.status == "pending")
+            .order_by(KycRequest.updated_at.desc())
+            .limit(300)
+            .all()
+        )
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to fetch pending KYC", "error": str(e)}), 500
+
+    items = []
+    for req, user in rows:
+        items.append(
+            {
+                "id": int(req.id),
+                "user_id": int(req.user_id),
+                "name": (req.full_name or (getattr(user, "name", "") if user else "") or "").strip(),
+                "email": (getattr(user, "email", "") if user else "") or "",
+                "id_type": req.id_type or "",
+                "id_number": req.id_number or "",
+                "status": req.status or "pending",
+                "note": req.note or "",
+                "updated_at": req.updated_at.isoformat() if req.updated_at else None,
+            }
+        )
+    return jsonify({"ok": True, "items": items}), 200
