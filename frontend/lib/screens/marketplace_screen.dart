@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'marketplace_filters_screen.dart';
+import '../constants/ng_states.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -14,6 +15,7 @@ class MarketplaceScreen extends StatefulWidget {
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final _searchCtrl = TextEditingController();
   String _category = 'All';
+  String _stateFilter = allNigeriaLabel;
   double? _minPrice;
   double? _maxPrice;
 
@@ -36,6 +38,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Phones',
       'description': 'Clean device, factory reset, battery health 92%.',
       'is_demo': true,
+      'state': 'Lagos',
     },
     {
       'id': 1002,
@@ -45,6 +48,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Phones',
       'description': 'Great condition, minor scratches on frame.',
       'is_demo': true,
+      'state': 'Lagos',
     },
     {
       'id': 1003,
@@ -54,6 +58,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Furniture',
       'description': '3-seater + 2 chairs. Pickup only.',
       'is_demo': true,
+      'state': 'Rivers',
     },
     {
       'id': 1004,
@@ -63,6 +68,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Furniture',
       'description': 'Solid wood with 6 chairs.',
       'is_demo': true,
+      'state': 'Oyo',
     },
     {
       'id': 1005,
@@ -72,6 +78,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Fashion',
       'description': 'Size 42, worn twice.',
       'is_demo': true,
+      'state': 'Federal Capital Territory',
     },
     {
       'id': 1006,
@@ -81,6 +88,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Fashion',
       'description': 'Comes with dust bag and receipt.',
       'is_demo': true,
+      'state': 'Lagos',
     },
     {
       'id': 1007,
@@ -90,6 +98,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Electronics',
       'description': '4K UHD with HDR. Remote included.',
       'is_demo': true,
+      'state': 'Ogun',
     },
     {
       'id': 1008,
@@ -99,6 +108,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Electronics',
       'description': '1 controller + 2 games.',
       'is_demo': true,
+      'state': 'Lagos',
     },
     {
       'id': 1009,
@@ -108,6 +118,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Home',
       'description': 'Both in working condition.',
       'is_demo': true,
+      'state': 'Anambra',
     },
     {
       'id': 1010,
@@ -117,6 +128,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       'category': 'Sports',
       'description': '26-inch wheels, recently serviced.',
       'is_demo': true,
+      'state': 'Kaduna',
     },
   ];
 
@@ -126,12 +138,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final title = item['title']?.toString().toLowerCase() ?? '';
       final condition = item['condition']?.toString().toLowerCase() ?? '';
       final category = item['category']?.toString() ?? '';
+      final state = item['state']?.toString() ?? '';
       final price = (item['price'] is num) ? (item['price'] as num).toDouble() : double.tryParse(item['price']?.toString() ?? '');
       final matchesCategory = _category == 'All' || _category == category;
+      final matchesState = _stateFilter == allNigeriaLabel || _stateFilter == state;
       final matchesQuery = q.isEmpty || title.contains(q) || condition.contains(q);
       final matchesMin = _minPrice == null || (price != null && price >= _minPrice!);
       final matchesMax = _maxPrice == null || (price != null && price <= _maxPrice!);
-      return matchesCategory && matchesQuery && matchesMin && matchesMax;
+      return matchesCategory && matchesState && matchesQuery && matchesMin && matchesMax;
     }).toList();
   }
 
@@ -142,6 +156,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         builder: (_) => MarketplaceFiltersScreen(
           categories: _categories,
           selectedCategory: _category,
+          initialState: _stateFilter,
           initialQuery: _searchCtrl.text.trim(),
           initialMinPrice: _minPrice,
           initialMaxPrice: _maxPrice,
@@ -151,6 +166,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     if (!mounted || res == null) return;
     setState(() {
       _category = (res['category'] ?? _category).toString();
+      _stateFilter = (res['state'] ?? _stateFilter).toString();
       _searchCtrl.text = (res['query'] ?? '').toString();
       _minPrice = res['minPrice'] is num ? (res['minPrice'] as num).toDouble() : null;
       _maxPrice = res['maxPrice'] is num ? (res['maxPrice'] as num).toDouble() : null;
@@ -251,7 +267,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     final title = item['title']?.toString() ?? '';
                     final price = item['price'] ?? 0;
                     final condition = item['condition']?.toString() ?? '';
-                    final id = item['id'];
+                    final state = item['state']?.toString() ?? '';
 
                     return Material(
                       color: Colors.transparent,
@@ -300,6 +316,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 condition,
                                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                               ),
+                              if (state.isNotEmpty)
+                                Text(
+                                  displayState(state),
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                ),
                             ],
                           ),
                         ),

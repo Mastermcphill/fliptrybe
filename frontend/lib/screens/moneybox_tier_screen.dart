@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
 import '../widgets/email_verification_dialog.dart';
+import 'kyc_demo_screen.dart';
 
 class MoneyBoxTierScreen extends StatefulWidget {
   const MoneyBoxTierScreen({super.key});
@@ -37,6 +38,20 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
           context,
           message: showMsg,
           onRetry: () => _open(tier),
+        );
+        return;
+      }
+      if (ApiService.isTierOrKycRestriction(res) || ApiService.isTierOrKycRestriction(showMsg)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(showMsg),
+            action: SnackBarAction(
+              label: 'Verify ID',
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+              },
+            ),
+          ),
         );
         return;
       }

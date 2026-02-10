@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/shortlet_service.dart';
 import 'shortlet_detail_screen.dart';
+import '../constants/ng_states.dart';
 
 class ShortletScreen extends StatefulWidget {
   const ShortletScreen({super.key});
@@ -12,9 +13,11 @@ class ShortletScreen extends StatefulWidget {
 class _ShortletScreenState extends State<ShortletScreen> {
   final _svc = ShortletService();
   final _searchCtrl = TextEditingController();
+  String _selectedState = allNigeriaLabel;
 
   Future<List<dynamic>> _load() {
-    return _svc.listShortlets(state: 'Lagos');
+    final state = _selectedState == allNigeriaLabel ? '' : _selectedState;
+    return _svc.listShortlets(state: state);
   }
 
   @override
@@ -50,6 +53,21 @@ class _ShortletScreenState extends State<ShortletScreen> {
                   icon: const Icon(Icons.tune),
                 )
               ],
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              value: _selectedState,
+              items: <String>[allNigeriaLabel, ...nigeriaStates]
+                  .map((s) => DropdownMenuItem(value: s, child: Text(displayState(s))))
+                  .toList(),
+              decoration: const InputDecoration(
+                labelText: 'State',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _selectedState = value);
+              },
             ),
             const SizedBox(height: 16),
             Expanded(

@@ -6,6 +6,7 @@ import '../services/listing_service.dart';
 import '../services/feed_service.dart';
 import '../services/api_service.dart';
 import '../widgets/email_verification_dialog.dart';
+import '../constants/ng_states.dart';
 
 class CreateListingScreen extends StatefulWidget {
   const CreateListingScreen({super.key});
@@ -179,8 +180,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fallbackStates = const ["Lagos", "FCT", "Rivers", "Oyo", "Ogun"];
-    final stateItems = (_states.isEmpty ? fallbackStates : _states);
+    final stateItems = (_states.isEmpty ? nigeriaStates : _states);
 
     final cities = _citiesByState[_state] ?? const <String>[];
     final majorCities = _majorCities[_state] ?? const <String>[];
@@ -235,7 +235,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
               value: _state,
-              items: stateItems.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+              items: stateItems
+                  .map((s) => DropdownMenuItem(value: s, child: Text(displayState(s))))
+                  .toList(),
               onChanged: (v) => setState(() => _state = (v ?? _state)),
               decoration: InputDecoration(
                 filled: true,

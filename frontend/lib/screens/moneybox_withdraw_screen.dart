@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
 import '../widgets/email_verification_dialog.dart';
+import 'kyc_demo_screen.dart';
 
 class MoneyBoxWithdrawScreen extends StatefulWidget {
   final Map<String, dynamic> status;
@@ -53,6 +54,20 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
           context,
           message: showMsg,
           onRetry: _withdrawAll,
+        );
+        return;
+      }
+      if (ApiService.isTierOrKycRestriction(res) || ApiService.isTierOrKycRestriction(showMsg)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(showMsg),
+            action: SnackBarAction(
+              label: 'Verify ID',
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+              },
+            ),
+          ),
         );
         return;
       }

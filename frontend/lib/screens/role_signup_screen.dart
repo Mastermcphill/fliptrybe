@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
 import '../services/token_storage.dart';
+import '../constants/ng_states.dart';
 import 'pending_approval_screen.dart';
 
 class RoleSignupScreen extends StatefulWidget {
@@ -351,6 +352,32 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     );
   }
 
+  Widget _stateDropdown() {
+    final current = _state.text.trim().isEmpty ? 'Lagos' : _state.text.trim();
+    if (current != _state.text.trim()) {
+      _state.text = current;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: nigeriaStates.contains(current) ? current : 'Lagos',
+        decoration: const InputDecoration(
+          border: OutlineInputBorder(),
+          labelText: 'State',
+        ),
+        items: nigeriaStates
+            .map((s) => DropdownMenuItem<String>(value: s, child: Text(displayState(s))))
+            .toList(),
+        onChanged: _loading
+            ? null
+            : (v) {
+                if (v == null) return;
+                setState(() => _state.text = v);
+              },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -435,7 +462,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
 
               if (_role == "merchant" || _role == "driver") ...[
                 const SizedBox(height: 6),
-                _field(_state, "State"),
+                _stateDropdown(),
                 _field(_city, "City"),
               ],
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/ng_states.dart';
 
 class MarketplaceFiltersScreen extends StatefulWidget {
   final List<String> categories;
@@ -6,12 +7,14 @@ class MarketplaceFiltersScreen extends StatefulWidget {
   final String initialQuery;
   final double? initialMinPrice;
   final double? initialMaxPrice;
+  final String initialState;
 
   const MarketplaceFiltersScreen({
     super.key,
     required this.categories,
     required this.selectedCategory,
     required this.initialQuery,
+    this.initialState = allNigeriaLabel,
     this.initialMinPrice,
     this.initialMaxPrice,
   });
@@ -25,6 +28,7 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
   late final TextEditingController _minCtrl;
   late final TextEditingController _maxCtrl;
   late String _category;
+  late String _state;
 
   @override
   void initState() {
@@ -37,6 +41,7 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
       text: widget.initialMaxPrice == null ? '' : widget.initialMaxPrice!.toStringAsFixed(0),
     );
     _category = widget.selectedCategory;
+    _state = widget.initialState;
   }
 
   @override
@@ -65,6 +70,7 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
     Navigator.pop(context, {
       'query': _queryCtrl.text.trim(),
       'category': _category,
+      'state': _state,
       'minPrice': minPrice,
       'maxPrice': maxPrice,
     });
@@ -76,6 +82,7 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
       _minCtrl.clear();
       _maxCtrl.clear();
       _category = 'All';
+      _state = allNigeriaLabel;
     });
   }
 
@@ -106,6 +113,24 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
             onChanged: (v) {
               if (v == null) return;
               setState(() => _category = v);
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _state,
+            items: <String>[allNigeriaLabel, ...nigeriaStates]
+                .map((s) => DropdownMenuItem<String>(
+                      value: s,
+                      child: Text(displayState(s)),
+                    ))
+                .toList(),
+            decoration: const InputDecoration(
+              labelText: 'State',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) {
+              if (v == null) return;
+              setState(() => _state = v);
             },
           ),
           const SizedBox(height: 12),

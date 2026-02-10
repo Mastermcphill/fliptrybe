@@ -8,6 +8,7 @@ import 'driver_jobs_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'merchant_dashboard_screen.dart';
+import '../constants/ng_states.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -25,6 +26,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _confirmCtrl = TextEditingController();
 
   String _role = 'user';
+  String _selectedState = 'Lagos';
   bool _loading = false;
 
   final _roles = const [
@@ -94,8 +96,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'password': password,
           'business_name': '$name Store',
           'phone': phone,
-          'state': 'Lagos',
-          'city': 'Lagos',
+          'state': _selectedState,
+          'city': _selectedState == 'Federal Capital Territory' ? 'Abuja' : _selectedState,
           'category': 'general',
           'reason': reason,
         };
@@ -106,8 +108,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'email': email,
           'password': password,
           'phone': phone,
-          'state': 'Lagos',
-          'city': 'Lagos',
+          'state': _selectedState,
+          'city': _selectedState == 'Federal Capital Territory' ? 'Abuja' : _selectedState,
           'vehicle_type': 'bike',
           'plate_number': 'DEMO-001',
         };
@@ -229,6 +231,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
                 enabled: !_loading,
                 maxLines: 2,
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_role == 'merchant' || _role == 'driver') ...[
+              DropdownButtonFormField<String>(
+                value: _selectedState,
+                decoration: const InputDecoration(
+                  labelText: 'State',
+                  border: OutlineInputBorder(),
+                ),
+                items: nigeriaStates
+                    .map(
+                      (s) => DropdownMenuItem<String>(
+                        value: s,
+                        child: Text(displayState(s)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _loading ? null : (v) => setState(() => _selectedState = v ?? 'Lagos'),
               ),
               const SizedBox(height: 12),
             ],

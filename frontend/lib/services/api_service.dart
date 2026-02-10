@@ -95,6 +95,20 @@ class ApiService {
     return false;
   }
 
+  static bool isTierOrKycRestriction(dynamic data) {
+    if (data is Map) {
+      final err = (data['error'] ?? '').toString().toLowerCase();
+      if (err.contains('kyc') || err.contains('tier') || err.contains('not_eligible')) return true;
+      final msg = (data['message'] ?? '').toString().toLowerCase();
+      if (msg.contains('kyc') || msg.contains('tier') || msg.contains('not eligible')) return true;
+    }
+    if (data is String) {
+      final msg = data.toLowerCase();
+      if (msg.contains('kyc') || msg.contains('tier') || msg.contains('not eligible')) return true;
+    }
+    return false;
+  }
+
   // ---------------------------
   // AUTH
   // ---------------------------

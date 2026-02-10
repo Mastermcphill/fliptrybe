@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
 import '../widgets/email_verification_dialog.dart';
+import 'kyc_demo_screen.dart';
 
 class MoneyBoxAutosaveScreen extends StatefulWidget {
   const MoneyBoxAutosaveScreen({super.key});
@@ -31,6 +32,20 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
           context,
           message: showMsg,
           onRetry: _save,
+        );
+        return;
+      }
+      if (ApiService.isTierOrKycRestriction(res) || ApiService.isTierOrKycRestriction(showMsg)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(showMsg),
+            action: SnackBarAction(
+              label: 'Verify ID',
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+              },
+            ),
+          ),
         );
         return;
       }
