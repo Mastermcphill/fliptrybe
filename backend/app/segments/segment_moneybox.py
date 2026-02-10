@@ -92,6 +92,22 @@ def _is_email_verified(u: User | None) -> bool:
     return bool(getattr(u, "is_verified", False))
 
 
+def _status_reasons(u: User | None) -> list[str]:
+    reasons: list[str] = []
+    if not u:
+        return reasons
+    if not _is_email_verified(u):
+        reasons.append("EMAIL_NOT_VERIFIED")
+    try:
+        if int(getattr(u, "kyc_tier", 0) or 0) < 1:
+            reasons.append("KYC_REQUIRED")
+    except Exception:
+        reasons.append("KYC_REQUIRED")
+    if not _allowed_role(u):
+        reasons.append("ROLE_NOT_ELIGIBLE")
+    return reasons
+
+
 def _account_response(acct: MoneyBoxAccount) -> dict:
     data = acct.to_dict()
     return {"ok": True, "account": data}
@@ -103,13 +119,14 @@ def status():
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
     if not _allowed_role(u):
+        reasons = _status_reasons(u)
         try:
             pending = RoleChangeRequest.query.filter_by(user_id=int(u.id), status="PENDING").first()
             if pending and pending.requested_role in ("merchant", "driver", "inspector"):
-                return jsonify({"status": "pending_approval"}), 200
+                return jsonify({"status": "pending_approval", "reasons": reasons + ["ROLE_REQUEST_PENDING"]}), 200
         except Exception:
             pass
-        return jsonify({"status": "not_eligible"}), 200
+        return jsonify({"status": "not_eligible", "reasons": reasons}), 200
 
     acct = get_or_create_account(int(u.id))
     data = acct.to_dict()

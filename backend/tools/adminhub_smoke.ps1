@@ -1,11 +1,14 @@
 param(
   [string]$Base = "https://tri-o-fliptrybe.onrender.com",
-  [string]$AdminEmail = $env:ADMIN_EMAIL,
-  [string]$AdminPassword = $env:ADMIN_PASSWORD,
-  [switch]$SeedLeaderboards
+  [string]$AdminEmail = "vidzimedialtd@gmail.com",
+  [string]$AdminPassword = "NewPass1234!",
+  [switch]$SeedNationwide
 )
 
 $ErrorActionPreference = "Continue"
+
+$script:Passed = 0
+$script:Failed = 0
 
 function Invoke-Api {
   param(
@@ -24,7 +27,13 @@ function Invoke-Api {
     }
     $json = $null
     try { $json = $resp.Content | ConvertFrom-Json } catch {}
-    [pscustomobject]@{ Url = $url; StatusCode = [int]$resp.StatusCode; Body = $resp.Content; Json = $json }
+    return [pscustomobject]@{
+      Method = $Method
+      Url = $url
+      StatusCode = [int]$resp.StatusCode
+      Body = $resp.Content
+      Json = $json
+    }
   } catch {
     $status = -1
     $body = ""
@@ -39,94 +48,111 @@ function Invoke-Api {
     }
     $json = $null
     try { $json = $body | ConvertFrom-Json } catch {}
-    [pscustomobject]@{ Url = $url; StatusCode = $status; Body = $body; Json = $json }
-  }
-}
-
-function Fail([string]$Message) {
-  Write-Host "FAIL: $Message"
-  exit 1
-}
-
-function Assert-Good([object]$Resp, [string]$Name) {
-  Write-Host "$Name => $($Resp.StatusCode)"
-  if ($Resp.StatusCode -eq 404 -or $Resp.StatusCode -ge 500 -or $Resp.StatusCode -lt 0) {
-    if ($Resp.Body) { Write-Host $Resp.Body }
-    Fail "$Name unhealthy"
-  }
-}
-
-function Print-Summary([object]$Resp, [string]$Name) {
-  if ($null -eq $Resp.Json) {
-    return
-  }
-  if ($Resp.Json -is [System.Collections.IEnumerable] -and -not ($Resp.Json -is [string])) {
-    $arr = @($Resp.Json)
-    Write-Host "$Name items: $($arr.Count)"
-    if ($arr.Count -gt 0) {
-      Write-Host "$Name first: $($arr[0] | ConvertTo-Json -Compress -Depth 6)"
-    }
-    return
-  }
-  if ($Resp.Json -is [hashtable] -or $Resp.Json -is [pscustomobject]) {
-    $obj = $Resp.Json
-    if ($obj.PSObject.Properties.Name -contains "items") {
-      $items = @($obj.items)
-      Write-Host "$Name items: $($items.Count)"
-      if ($items.Count -gt 0) {
-        Write-Host "$Name first: $($items[0] | ConvertTo-Json -Compress -Depth 6)"
-      }
-    } else {
-      Write-Host "$Name body: $($obj | ConvertTo-Json -Compress -Depth 6)"
+    return [pscustomobject]@{
+      Method = $Method
+      Url = $url
+      StatusCode = $status
+      Body = $body
+      Json = $json
     }
   }
 }
 
-Write-Host "base: $Base"
-if (-not $AdminEmail -or -not $AdminPassword) {
-  Fail "Missing ADMIN_EMAIL or ADMIN_PASSWORD."
+function Get-ShortMessage([object]$resp) {
+  if ($resp.Json) {
+    if ($resp.Json.PSObject.Properties.Name -contains "ok") {
+      return "ok=$($resp.Json.ok)"
+    }
+    if ($resp.Json.PSObject.Properties.Name -contains "message") {
+      return ("message=" + ($resp.Json.message | Out-String).Trim())
+    }
+    if ($resp.Json.PSObject.Properties.Name -contains "items") {
+      try {
+        $count = @($resp.Json.items).Count
+        return "items=$count"
+      } catch {}
+    }
+  }
+  return ""
 }
 
-$version = Invoke-Api -Path "/api/version"
-Assert-Good $version "GET /api/version"
-if ($version.Body) { Write-Host "version body: $($version.Body)" }
+function Write-Result([object]$resp) {
+  $short = Get-ShortMessage $resp
+  if ($short) {
+    Write-Host "$($resp.Method) $($resp.Url) -> $($resp.StatusCode) ($short)"
+  } else {
+    Write-Host "$($resp.Method) $($resp.Url) -> $($resp.StatusCode)"
+  }
+}
 
-$health = Invoke-Api -Path "/api/health"
-Assert-Good $health "GET /api/health"
+function Check-Result([object]$resp) {
+  if ($resp.StatusCode -eq 404 -or $resp.StatusCode -ge 500 -or $resp.StatusCode -lt 0) {
+    $script:Failed++
+    return $false
+  }
+  $script:Passed++
+  return $true
+}
+
+function Call-And-Check {
+  param(
+    [string]$Method = "GET",
+    [string]$Path,
+    [hashtable]$Headers = @{},
+    $BodyObj = $null
+  )
+  $resp = Invoke-Api -Method $Method -Path $Path -Headers $Headers -BodyObj $BodyObj
+  Write-Result $resp
+  if (-not (Check-Result $resp)) {
+    if ($resp.Body) { Write-Host $resp.Body }
+    exit 1
+  }
+  return $resp
+}
+
+Write-Host "AdminHub smoke start: base=$Base"
+
+$version = Call-And-Check -Method "GET" -Path "/api/version"
+$health = Call-And-Check -Method "GET" -Path "/api/health"
 
 $login = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email = $AdminEmail; password = $AdminPassword }
-Write-Host "POST /api/auth/login => $($login.StatusCode)"
+Write-Result $login
 if ($login.StatusCode -lt 200 -or $login.StatusCode -ge 300 -or -not $login.Json -or -not $login.Json.token) {
   if ($login.Body) { Write-Host $login.Body }
-  Fail "Admin login failed"
+  Write-Host "Summary: passed=$script:Passed failed=$($script:Failed + 1)"
+  exit 1
 }
+$script:Passed++
+
 $headers = @{ Authorization = "Bearer $($login.Json.token)" }
 
-if ($SeedLeaderboards.IsPresent) {
-  $seed = Invoke-Api -Method "POST" -Path "/api/admin/demo/seed-leaderboards" -Headers $headers -BodyObj @{}
-  Assert-Good $seed "POST /api/admin/demo/seed-leaderboards"
-  Print-Summary $seed "seed-leaderboards"
+if ($SeedNationwide.IsPresent) {
+  $seedHeaders = @{
+    Authorization = "Bearer $($login.Json.token)"
+    "X-Debug" = "1"
+  }
+  Call-And-Check -Method "POST" -Path "/api/admin/demo/seed-nationwide" -Headers $seedHeaders -BodyObj @{}
 }
 
-$checks = @(
-  @{ Name = "GET /api/admin/audit"; Path = "/api/admin/audit" },
-  @{ Name = "GET /api/admin/autopilot"; Path = "/api/admin/autopilot" },
-  @{ Name = "GET /api/admin/notify-queue"; Path = "/api/admin/notify-queue" },
-  @{ Name = "GET /api/admin/role-requests?status=PENDING"; Path = "/api/admin/role-requests?status=PENDING" },
-  @{ Name = "GET /api/admin/inspector-requests?status=pending"; Path = "/api/admin/inspector-requests?status=pending" },
-  @{ Name = "GET /api/kyc/admin/pending"; Path = "/api/kyc/admin/pending" },
-  @{ Name = "GET /api/admin/commission"; Path = "/api/admin/commission" },
-  @{ Name = "GET /api/wallet/admin/payouts?status=pending"; Path = "/api/wallet/admin/payouts?status=pending" },
-  @{ Name = "GET /api/admin/support/threads"; Path = "/api/admin/support/threads" },
-  @{ Name = "GET /api/leaderboards"; Path = "/api/leaderboards?limit=20" },
-  @{ Name = "GET /api/leaderboards?state=Lagos"; Path = "/api/leaderboards?state=Lagos&limit=20" }
-)
+# AdminHub-backed endpoints (based on active frontend wiring)
+Call-And-Check -Method "GET" -Path "/api/wallet/admin/payouts?status=pending" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/audit" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/support/threads" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/autopilot" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/notify-queue" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/role-requests?status=PENDING" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/inspector-requests?status=pending" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/kyc/admin/pending" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/commission" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/leaderboards?limit=20" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/leaderboards?state=Lagos&limit=20" -Headers $headers
 
-foreach ($c in $checks) {
-  $resp = Invoke-Api -Path $c.Path -Headers $headers
-  Assert-Good $resp $c.Name
-  Print-Summary $resp $c.Name
-}
+# Leaderboard quick meaning check
+$lbNation = Invoke-Api -Method "GET" -Path "/api/leaderboards?limit=20" -Headers $headers
+$lbLagos = Invoke-Api -Method "GET" -Path "/api/leaderboards?state=Lagos&limit=20" -Headers $headers
+Write-Host "Leaderboard summary: nationwide_items=$(@($lbNation.Json.items).Count) lagos_items=$(@($lbLagos.Json.items).Count)"
 
+Write-Host "Summary: passed=$script:Passed failed=$script:Failed"
+if ($script:Failed -gt 0) { exit 1 }
 Write-Host "OK: adminhub smoke passed"
 exit 0
