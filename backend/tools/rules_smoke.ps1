@@ -117,11 +117,12 @@ $listingId = $null
 if (OkStatus $createListing.StatusCode) {
   $listingId = $createListing.Json.listing.id
 } elseif ($createListing.StatusCode -eq 403) {
-  Write-Host "listing create blocked (likely verification gate); reusing existing merchant listing."
-  $merchantListings = Invoke-Api -Method "GET" -Path "/api/merchant/listings" -Headers $merchantHeaders
-  Write-Host "merchant listings:" $merchantListings.StatusCode
-  if (OkStatus $merchantListings.StatusCode -and $merchantListings.Json -and $merchantListings.Json.items -and $merchantListings.Json.items.Count -gt 0) {
-    $listingId = $merchantListings.Json.items[0].id
+  Write-Host "listing create blocked (likely verification gate); reusing existing admin-visible listing."
+  $adminListings = Invoke-Api -Method "GET" -Path "/api/admin/listings" -Headers $adminHeaders
+  Write-Host "admin listings:" $adminListings.StatusCode
+  if (OkStatus $adminListings.StatusCode -and $adminListings.Json -and $adminListings.Json.items -and $adminListings.Json.items.Count -gt 0) {
+    $mine = $adminListings.Json.items | Where-Object { $_.merchant_id -eq $merchantId } | Select-Object -First 1
+    if ($mine) { $listingId = $mine.id }
   }
 } else {
   Fail "listing create failed unexpectedly"
