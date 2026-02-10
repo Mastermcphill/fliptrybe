@@ -14,6 +14,8 @@ class Order(db.Model):
     listing_id = db.Column(db.Integer, db.ForeignKey("listings.id"), nullable=True, index=True)
 
     amount = db.Column(db.Float, nullable=False, default=0.0)
+    # Some production schemas still require total_price; keep it aligned with amount.
+    total_price = db.Column(db.Float, nullable=False, default=0.0, server_default="0")
     delivery_fee = db.Column(db.Float, nullable=False, default=0.0)
     inspection_fee = db.Column(db.Float, nullable=False, default=0.0)
 
@@ -105,6 +107,7 @@ class Order(db.Model):
             "merchant_id": int(self.merchant_id),
             "listing_id": int(self.listing_id) if self.listing_id is not None else None,
             "amount": float(self.amount or 0.0),
+            "total_price": float(self.total_price or 0.0),
             "delivery_fee": float(self.delivery_fee or 0.0),
             "inspection_fee": float(self.inspection_fee or 0.0),
             "pickup": self.pickup or "",

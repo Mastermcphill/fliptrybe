@@ -591,6 +591,10 @@ def create_order():
         amount = float(payload.get("amount") or 0.0)
     except Exception:
         amount = 0.0
+    try:
+        total_price = float(payload.get("total_price") or payload.get("totalPrice") or amount or 0.0)
+    except Exception:
+        total_price = float(amount or 0.0)
 
     try:
         delivery_fee = float(payload.get("delivery_fee") or 0.0)
@@ -654,6 +658,7 @@ def create_order():
             amount = float(final_price)
         else:
             amount = float(base_price)
+        total_price = float(amount)
 
     handshake_id = (payload.get("handshake_id") or "").strip()
     if not handshake_id:
@@ -664,6 +669,7 @@ def create_order():
         merchant_id=merchant_id,
         listing_id=listing_id_int,
         amount=amount,
+        total_price=total_price,
         delivery_fee=delivery_fee,
         inspection_fee=inspection_fee,
         pickup=pickup,
