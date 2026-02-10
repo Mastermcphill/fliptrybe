@@ -49,7 +49,8 @@ class _ShortletScreenState extends State<ShortletScreen> {
                 ),
                 const SizedBox(width: 10),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: null,
+                  tooltip: 'Not available yet',
                   icon: const Icon(Icons.tune),
                 )
               ],

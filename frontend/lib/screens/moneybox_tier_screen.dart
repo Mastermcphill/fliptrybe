@@ -15,6 +15,9 @@ class MoneyBoxTierScreen extends StatefulWidget {
 class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
   final _svc = MoneyBoxService();
   bool _loading = false;
+  late Future<Map<String, dynamic>> _statusFuture;
+  int _currentTier = 1;
+  String _moneyboxStatus = 'none';
 
   final _tiers = const [
     {'tier': 1, 'label': 'Tier 1', 'duration': 'Up to 30 days', 'bonus': '0% bonus'},
@@ -22,6 +25,26 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
     {'tier': 3, 'label': 'Tier 3', 'duration': '7 months', 'bonus': '8% bonus'},
     {'tier': 4, 'label': 'Tier 4', 'duration': '11 months', 'bonus': '15% bonus'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _statusFuture = _loadStatus();
+  }
+
+  Future<Map<String, dynamic>> _loadStatus() async {
+    final data = await _svc.status();
+    _currentTier = int.tryParse((data['tier'] ?? '1').toString()) ?? 1;
+    _moneyboxStatus = (data['status'] ?? 'none').toString().toLowerCase();
+    return data;
+  }
+
+  bool _isTierLocked(int tier) {
+    if (_moneyboxStatus == 'none' || _moneyboxStatus == 'closed') {
+      return tier != 1;
+    }
+    return tier > (_currentTier + 1);
+  }
 
   Future<void> _open(int tier) async {
     if (_loading) return;
@@ -67,20 +90,47 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Choose Tier')),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _tiers.length,
-        itemBuilder: (_, i) {
-          final t = _tiers[i];
-          return Card(
-            child: ListTile(
-              title: Text('${t['label']} • ${t['duration']}'),
-              subtitle: Text((t['bonus'] ?? '').toString()),
-              trailing: _loading
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.arrow_forward),
-              onTap: _loading ? null : () => _open(t['tier'] as int),
-            ),
+      body: FutureBuilder<Map<String, dynamic>>(
+        future: _statusFuture,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _tiers.length + 1,
+            itemBuilder: (_, i) {
+              if (i == 0) {
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ListTile(
+                    title: Text('Current tier: $_currentTier'),
+                    subtitle: Text('MoneyBox status: ${_moneyboxStatus.toUpperCase()}'),
+                  ),
+                );
+              }
+
+              final t = _tiers[i - 1];
+              final tierValue = t['tier'] as int;
+              final locked = _isTierLocked(tierValue);
+              final isCurrent = tierValue == _currentTier;
+              final lockText = isCurrent
+                  ? 'Current tier'
+                  : locked
+                      ? 'Locked until you move up'
+                      : 'Available';
+
+              return Card(
+                child: ListTile(
+                  title: Text('${t['label']} - ${t['duration']}'),
+                  subtitle: Text('${t['bonus']} | $lockText'),
+                  trailing: _loading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Icon(locked ? Icons.lock_outline : Icons.arrow_forward),
+                  onTap: (_loading || locked || isCurrent) ? null : () => _open(tierValue),
+                ),
+              );
+            },
           );
         },
       ),
