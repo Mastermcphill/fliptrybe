@@ -3,6 +3,8 @@ import '../widgets/safe_image.dart';
 import '../services/listing_service.dart';
 import '../services/order_service.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
+import '../widgets/email_verification_dialog.dart';
 import 'order_detail_screen.dart';
 
 class ListingDetailScreen extends StatefulWidget {
@@ -89,22 +91,17 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   }
 
   Future<void> _buyNowAndRequestDelivery() async {
-    final isDemo = widget.listing['is_demo'] == true;
-    if (isDemo) {
-      _toast('This demo item is not purchasable yet.');
-      return;
-    }
-    final merchantId = _asInt(widget.listing['user_id']) ??
-        _asInt(widget.listing['merchant_id']) ??
-        _asInt(widget.listing['owner_id']);
+    final merchantId = _asInt(_detail['user_id']) ??
+        _asInt(_detail['merchant_id']) ??
+        _asInt(_detail['owner_id']);
     if (_viewerId != null && merchantId != null && merchantId == _viewerId) {
       _toast("You can't buy your own listing.");
       return;
     }
     setState(() => _busy = true);
     try {
-      final listingId = _asInt(widget.listing['id']);
-      final amount = _asDouble(widget.listing['price']);
+      final listingId = _asInt(_detail['id']);
+      final amount = _asDouble(_detail['price']);
       final deliveryFee = _asDouble(_deliveryFeeCtrl.text);
 
       if (listingId == null || listingId <= 0) {
@@ -115,7 +112,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         throw Exception('Listing has no merchant (user_id missing)');
       }
 
-      final order = await _orders.createOrder(
+      final result = await _orders.createOrderDetailed(
         listingId: listingId,
         merchantId: merchantId,
         amount: amount,
@@ -125,7 +122,27 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         paymentReference: 'demo',
       );
 
-      if (order == null) throw Exception('Order not created');
+      if (result['ok'] != true) {
+        final msg = (result['message'] ?? result['error'] ?? 'Order not created').toString();
+        if (ApiService.isEmailNotVerified(result) || ApiService.isEmailNotVerified(msg)) {
+          if (!mounted) return;
+          await showEmailVerificationRequiredDialog(
+            context,
+            message: msg,
+            onRetry: _buyNowAndRequestDelivery,
+          );
+          return;
+        }
+        if (ApiService.isSellerCannotBuyOwnListing(result) || ApiService.isSellerCannotBuyOwnListing(msg)) {
+          _toast("You can't place an order on your own listing.");
+          return;
+        }
+        _toast(msg);
+        return;
+      }
+
+      final orderRaw = result['order'] is Map ? Map<String, dynamic>.from(result['order'] as Map) : result;
+      final order = Map<String, dynamic>.from(orderRaw);
       final orderId = _asInt(order['id']);
       if (orderId == null) throw Exception('Order not created');
 
@@ -151,7 +168,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         _asInt(_detail['merchant_id']) ??
         _asInt(_detail['owner_id']);
     final isOwnListing = _viewerId != null && merchantId != null && merchantId == _viewerId;
-    final canBuy = !isDemo && !isOwnListing && listingId != null && listingId > 0 && merchantId != null && merchantId > 0;
+    final canBuy = !isOwnListing && listingId != null && listingId > 0 && merchantId != null && merchantId > 0;
 
     if (title.trim().isEmpty && price <= 0) {
       return Scaffold(
@@ -183,6 +200,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           Text('NGN $price', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           if (desc.isNotEmpty) Text(desc),
+          if (isDemo) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Demo listing label only. Purchase is allowed if backend rules pass.',
+              style: TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+          ],
           const Divider(height: 28),
           const Text('Delivery details', style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),

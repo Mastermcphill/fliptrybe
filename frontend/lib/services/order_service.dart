@@ -1,8 +1,67 @@
 import 'api_client.dart';
 import 'api_config.dart';
+import 'package:dio/dio.dart';
 
 class OrderService {
   final ApiClient _client = ApiClient.instance;
+
+  Map<String, dynamic> _asMap(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return data.map((k, v) => MapEntry('$k', v));
+    return <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> createOrderDetailed({
+    int? listingId,
+    int? merchantId,
+    required double amount,
+    double deliveryFee = 0,
+    String pickup = '',
+    String dropoff = '',
+    String paymentReference = '',
+  }) async {
+    final payload = <String, dynamic>{
+      'amount': amount,
+      'delivery_fee': deliveryFee,
+      'pickup': pickup,
+      'dropoff': dropoff,
+      'payment_reference': paymentReference,
+      if (listingId != null) 'listing_id': listingId,
+      if (merchantId != null) 'merchant_id': merchantId,
+    };
+
+    try {
+      final res = await _client.dio.post(ApiConfig.api('/orders'), data: payload);
+      final data = _asMap(res.data);
+      final status = res.statusCode ?? 0;
+      data['status'] = status;
+      data['ok'] = status >= 200 && status < 300 && data['ok'] != false;
+      if (data['order'] is Map) {
+        data['order'] = Map<String, dynamic>.from(data['order'] as Map);
+      }
+      return data;
+    } on DioException catch (e) {
+      final data = _asMap(e.response?.data);
+      final status = e.response?.statusCode ?? 0;
+      data['status'] = status;
+      data['ok'] = false;
+      if ((data['error'] ?? '').toString().trim().isEmpty) {
+        data['error'] = 'order_create_failed';
+      }
+      if ((data['message'] ?? '').toString().trim().isEmpty) {
+        data['message'] = e.message ?? 'Order creation failed';
+      }
+      return data;
+    } catch (e) {
+      return {
+        'ok': false,
+        'status': 0,
+        'error': 'order_create_failed',
+        'message': 'Order creation failed',
+        'detail': e.toString(),
+      };
+    }
+  }
 
   Future<Map<String, dynamic>?> createOrder({
     int? listingId,
@@ -13,24 +72,18 @@ class OrderService {
     String dropoff = '',
     String paymentReference = '',
   }) async {
-    final payload = <String, dynamic>{
-      'merchant_id': merchantId,
-      'amount': amount,
-      'delivery_fee': deliveryFee,
-      'pickup': pickup,
-      'dropoff': dropoff,
-      'payment_reference': paymentReference,
-      if (listingId != null) 'listing_id': listingId,
-    };
-
-    try {
-      final res = await _client.dio.post(ApiConfig.api('/orders'), data: payload);
-      final data = res.data;
-      if (data is Map && data['order'] is Map) return Map<String, dynamic>.from(data['order'] as Map);
-      return null;
-    } catch (_) {
-      return null;
-    }
+    final data = await createOrderDetailed(
+      listingId: listingId,
+      merchantId: merchantId,
+      amount: amount,
+      deliveryFee: deliveryFee,
+      pickup: pickup,
+      dropoff: dropoff,
+      paymentReference: paymentReference,
+    );
+    if (data['ok'] != true) return null;
+    if (data['order'] is Map) return Map<String, dynamic>.from(data['order'] as Map);
+    return null;
   }
 
   Future<List<dynamic>> myOrders({int? userId}) async {

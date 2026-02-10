@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
+import 'marketplace_filters_screen.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -13,6 +14,8 @@ class MarketplaceScreen extends StatefulWidget {
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final _searchCtrl = TextEditingController();
   String _category = 'All';
+  double? _minPrice;
+  double? _maxPrice;
 
   final List<String> _categories = const [
     'All',
@@ -123,10 +126,35 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final title = item['title']?.toString().toLowerCase() ?? '';
       final condition = item['condition']?.toString().toLowerCase() ?? '';
       final category = item['category']?.toString() ?? '';
+      final price = (item['price'] is num) ? (item['price'] as num).toDouble() : double.tryParse(item['price']?.toString() ?? '');
       final matchesCategory = _category == 'All' || _category == category;
       final matchesQuery = q.isEmpty || title.contains(q) || condition.contains(q);
-      return matchesCategory && matchesQuery;
+      final matchesMin = _minPrice == null || (price != null && price >= _minPrice!);
+      final matchesMax = _maxPrice == null || (price != null && price <= _maxPrice!);
+      return matchesCategory && matchesQuery && matchesMin && matchesMax;
     }).toList();
+  }
+
+  Future<void> _openFilters() async {
+    final res = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MarketplaceFiltersScreen(
+          categories: _categories,
+          selectedCategory: _category,
+          initialQuery: _searchCtrl.text.trim(),
+          initialMinPrice: _minPrice,
+          initialMaxPrice: _maxPrice,
+        ),
+      ),
+    );
+    if (!mounted || res == null) return;
+    setState(() {
+      _category = (res['category'] ?? _category).toString();
+      _searchCtrl.text = (res['query'] ?? '').toString();
+      _minPrice = res['minPrice'] is num ? (res['minPrice'] as num).toDouble() : null;
+      _maxPrice = res['maxPrice'] is num ? (res['maxPrice'] as num).toDouble() : null;
+    });
   }
 
   Widget _buildImageCard() {
@@ -185,11 +213,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                   const SizedBox(width: 10),
                   IconButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Filters coming soon')),
-                      );
-                    },
+                    onPressed: _openFilters,
+                    tooltip: 'Filters',
                     icon: const Icon(Icons.tune),
                   )
                 ],
