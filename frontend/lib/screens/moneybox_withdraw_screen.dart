@@ -49,7 +49,11 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
       if (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(showMsg)) {
-        await showEmailVerificationRequiredDialog(context, message: showMsg);
+        await showEmailVerificationRequiredDialog(
+          context,
+          message: showMsg,
+          onRetry: _withdrawAll,
+        );
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(

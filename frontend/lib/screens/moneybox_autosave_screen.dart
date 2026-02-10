@@ -27,7 +27,11 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
       if (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(showMsg)) {
-        await showEmailVerificationRequiredDialog(context, message: showMsg);
+        await showEmailVerificationRequiredDialog(
+          context,
+          message: showMsg,
+          onRetry: _save,
+        );
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(

@@ -161,7 +161,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     final msg = (res['message'] ?? res['error'] ?? 'Failed to upload. Try again.').toString();
 
     if (!ok && ApiService.isEmailNotVerified(res)) {
-      await showEmailVerificationRequiredDialog(context, message: msg);
+      await showEmailVerificationRequiredDialog(
+        context,
+        message: msg,
+        onRetry: _submitListing,
+      );
       return;
     }
 

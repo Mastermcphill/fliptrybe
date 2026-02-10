@@ -61,8 +61,10 @@ class _WalletScreenState extends State<WalletScreen> {
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
           IconButton(
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantWithdrawScreen()));
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantWithdrawScreen()));
+              if (!mounted) return;
+              _load();
             },
             icon: const Icon(Icons.outbond_outlined),
             tooltip: 'Withdraw',
@@ -118,7 +120,7 @@ class _WalletScreenState extends State<WalletScreen> {
                   const Text("No transactions yet.")
                 else
                   ..._ledger.whereType<Map>().map((raw) {
-                    final m = Map<String, dynamic>.from(raw as Map);
+                    final m = Map<String, dynamic>.from(raw);
                     final dir = (m['direction'] ?? '').toString();
                     final amt = (m['amount'] ?? 0).toString();
                     final kind = (m['kind'] ?? '').toString();

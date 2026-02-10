@@ -6,6 +6,7 @@ import '../services/api_service.dart';
 Future<void> showEmailVerificationRequiredDialog(
   BuildContext context, {
   String? message,
+  Future<void> Function()? onRetry,
 }) async {
   final msg = (message == null || message.trim().isEmpty)
       ? 'Email verification required to continue.'
@@ -35,6 +36,15 @@ Future<void> showEmailVerificationRequiredDialog(
                   );
                 },
                 child: const Text('Verify Email'),
+              ),
+              TextButton(
+                onPressed: onRetry == null
+                    ? null
+                    : () async {
+                        Navigator.of(ctx).pop();
+                        await onRetry();
+                      },
+                child: const Text("I've verified, retry"),
               ),
               ElevatedButton(
                 onPressed: sending

@@ -45,6 +45,21 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  bool _responseIndicatesPending(Map<dynamic, dynamic> res) {
+    final request = res['request'];
+    if (request is Map) {
+      final status = (request['status'] ?? '').toString().trim().toLowerCase();
+      if (status == 'pending' || status == 'pending_approval') return true;
+    }
+    final status = (res['status'] ?? '').toString().trim().toLowerCase();
+    if (status == 'pending' || status == 'pending_approval') return true;
+    final message = (res['message'] ?? '').toString().toLowerCase();
+    if (message.contains('pending') || message.contains('admin-mediated') || message.contains('admin approval')) {
+      return true;
+    }
+    return false;
+  }
+
   Future<void> _signup() async {
     setState(() => _loading = true);
 
@@ -154,24 +169,36 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         return;
       }
 
-      if (res is Map && res["token"] != null) {
-        final token = res["token"].toString();
-        ApiService.setToken(token);
-        ApiClient.instance.setAuthToken(token);
-        await TokenStorage().saveToken(token);
-        final status = (res["status"] ?? "").toString().toLowerCase();
-        if (!mounted) return;
-        if (status == "pending" || status == "pending_approval") {
+      if (res is Map) {
+        final token = (res["token"] ?? "").toString();
+        final hasToken = token.isNotEmpty;
+        if (hasToken) {
+          ApiService.setToken(token);
+          ApiClient.instance.setAuthToken(token);
+          await TokenStorage().saveToken(token);
+        }
+
+        if (_responseIndicatesPending(res)) {
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: _role)),
           );
-        } else {
+          return;
+        }
+
+        if (hasToken) {
+          if (!mounted) return;
           _toast("Account created");
           Navigator.pop(context, true);
+          return;
         }
-      } else if (res is Map && res["message"] != null) {
-        _toast(res["message"].toString());
+
+        if (res["message"] != null) {
+          _toast(res["message"].toString());
+          return;
+        }
+        _toast("Signup failed");
       } else {
         _toast("Signup failed");
       }

@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import 'api_client.dart';
 import 'api_config.dart';
 
@@ -45,36 +47,47 @@ class ListingService {
     String? imagePath,
   }) async {
     try {
-      // Prefer multipart via ApiClient helper if file path is provided
+      final url = ApiConfig.api('/listings');
       if (imagePath != null && imagePath.trim().isNotEmpty) {
-        final res = await _client.postMultipart(
-          ApiConfig.api('/listings'),
-          fields: {
-            'title': title,
-            'description': description,
-            'price': price.toString(),
-          },
-          fileField: 'image',
-          filePath: imagePath,
-        );
-        final data = _asMap(res);
-        final status = data['status'] ?? 0;
-        data['ok'] = data['ok'] ?? true;
+        final normalized = imagePath.replaceAll('\\', '/');
+        final filename = normalized.split('/').last;
+        final form = FormData.fromMap({
+          'title': title,
+          'description': description,
+          'price': price.toString(),
+          'image': await MultipartFile.fromFile(imagePath, filename: filename),
+        });
+        final res = await _client.dio.post(url, data: form);
+        final data = _asMap(res.data);
+        final status = res.statusCode ?? 0;
+        data['status'] = status;
+        data['ok'] = status >= 200 && status < 300 && data['ok'] != false;
         if (data['listing'] is Map) {
           data['listing'] = Map<String, dynamic>.from(data['listing'] as Map);
         }
         return data;
       }
 
-      final res = await _client.dio.post(ApiConfig.api('/listings'), data: {
+      final res = await _client.dio.post(url, data: {
         'title': title,
         'description': description,
         'price': price,
       });
       final data = _asMap(res.data);
-      data['ok'] = data['ok'] ?? true;
+      final status = res.statusCode ?? 0;
+      data['status'] = status;
+      data['ok'] = status >= 200 && status < 300 && data['ok'] != false;
       if (data['listing'] is Map) {
         data['listing'] = Map<String, dynamic>.from(data['listing'] as Map);
+      }
+      return data;
+    } on DioException catch (e) {
+      final data = _asMap(e.response?.data);
+      final status = e.response?.statusCode ?? 0;
+      data['status'] = status;
+      data['ok'] = false;
+      if ((data['message'] ?? '').toString().trim().isEmpty) {
+        data['message'] = 'Failed to upload';
       }
       return data;
     } catch (e) {

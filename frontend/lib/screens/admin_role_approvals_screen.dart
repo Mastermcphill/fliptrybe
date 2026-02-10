@@ -12,36 +12,59 @@ class AdminRoleApprovalsScreen extends StatefulWidget {
 class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
   final _svc = AdminRoleService();
   late Future<List<dynamic>> _items;
+  String _status = 'PENDING';
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _items = _svc.pending();
+    _items = _svc.pending(status: _status);
   }
 
   void _reload() {
-    setState(() => _items = _svc.pending());
+    setState(() => _items = _svc.pending(status: _status));
   }
 
   Future<void> _approve(Map<String, dynamic> item) async {
     if (_busy) return;
+    final reqId = item['id'] is int ? item['id'] as int : int.tryParse((item['id'] ?? '').toString());
+    if (reqId == null) return;
     setState(() => _busy = true);
-    final ok = await _svc.approve(userId: item['id'] as int?, email: item['email']?.toString());
+    final res = await _svc.approve(requestId: reqId);
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Approved' : 'Approve failed')));
+    final ok = res['ok'] == true;
+    final msg = (res['message'] ?? (ok ? 'Approved' : 'Approve failed')).toString();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     if (ok) _reload();
   }
 
   Future<void> _reject(Map<String, dynamic> item) async {
     if (_busy) return;
+    final reqId = item['id'] is int ? item['id'] as int : int.tryParse((item['id'] ?? '').toString());
+    if (reqId == null) return;
     setState(() => _busy = true);
-    final ok = await _svc.reject(userId: item['id'] as int?, email: item['email']?.toString());
+    final res = await _svc.reject(requestId: reqId);
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Rejected' : 'Reject failed')));
+    final ok = res['ok'] == true;
+    final msg = (res['message'] ?? (ok ? 'Rejected' : 'Reject failed')).toString();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     if (ok) _reload();
+  }
+
+  Widget _statusChip(String value) {
+    return ChoiceChip(
+      label: Text(value[0] + value.substring(1).toLowerCase()),
+      selected: _status == value,
+      onSelected: (selected) {
+        if (!selected) return;
+        setState(() {
+          _status = value;
+          _items = _svc.pending(status: _status);
+        });
+      },
+    );
   }
 
   @override
@@ -51,49 +74,73 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
         title: const Text('Role Approvals'),
         actions: [IconButton(onPressed: _busy ? null : _reload, icon: const Icon(Icons.refresh))],
       ),
-      body: FutureBuilder<List<dynamic>>(
-        future: _items,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final items = snap.data ?? const [];
-          if (items.isEmpty) {
-            return const Center(child: Text('No pending approvals.'));
-          }
-          return ListView.builder(
-            itemCount: items.length,
-            itemBuilder: (_, i) {
-              final raw = items[i];
-              if (raw is! Map) return const SizedBox.shrink();
-              final item = Map<String, dynamic>.from(raw as Map);
-              final email = (item['email'] ?? '').toString();
-              final role = (item['role'] ?? '').toString();
-              final roleStatus = (item['role_status'] ?? '').toString();
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                _statusChip('PENDING'),
+                _statusChip('APPROVED'),
+                _statusChip('REJECTED'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<dynamic>>(
+              future: _items,
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final items = snap.data ?? const [];
+                if (items.isEmpty) {
+                  return Center(child: Text('No ${_status.toLowerCase()} approvals.'));
+                }
+                return ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (_, i) {
+                    final raw = items[i];
+                    if (raw is! Map) return const SizedBox.shrink();
+                    final item = Map<String, dynamic>.from(raw);
+                    final requestedRole = (item['requested_role'] ?? '').toString();
+                    final currentRole = (item['current_role'] ?? '').toString();
+                    final status = (item['status'] ?? '').toString();
+                    final reason = (item['reason'] ?? '').toString();
+                    final createdAt = (item['created_at'] ?? '').toString();
+                    final userId = (item['user_id'] ?? '').toString();
 
-              return Card(
-                margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                child: ListTile(
-                  title: Text(email.isEmpty ? 'User #${item['id']}' : email),
-                  subtitle: Text('Role: $role  ?  Status: $roleStatus'),
-                  trailing: Wrap(
-                    spacing: 8,
-                    children: [
-                      OutlinedButton(
-                        onPressed: _busy ? null : () => _reject(item),
-                        child: const Text('Reject'),
+                    return Card(
+                      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                      child: ListTile(
+                        title: Text('User #$userId • $requestedRole'),
+                        subtitle: Text(
+                          'Current: $currentRole\nStatus: $status\n$createdAt${reason.isNotEmpty ? '\nReason: $reason' : ''}',
+                        ),
+                        trailing: _status != 'PENDING'
+                            ? null
+                            : Wrap(
+                                spacing: 8,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _busy ? null : () => _reject(item),
+                                    child: const Text('Reject'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: _busy ? null : () => _approve(item),
+                                    child: const Text('Approve'),
+                                  ),
+                                ],
+                              ),
                       ),
-                      ElevatedButton(
-                        onPressed: _busy ? null : () => _approve(item),
-                        child: const Text('Approve'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

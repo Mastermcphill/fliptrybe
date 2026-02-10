@@ -5,9 +5,10 @@ class AdminRoleService {
   AdminRoleService({ApiClient? client}) : _client = client ?? ApiClient.instance;
   final ApiClient _client;
 
-  Future<List<dynamic>> pending({int limit = 50}) async {
+  Future<List<dynamic>> pending({String status = 'PENDING', int limit = 50}) async {
     try {
-      final res = await _client.dio.get(ApiConfig.api('/admin/roles/pending') + '?limit=$limit');
+      final uri = '${ApiConfig.api('/admin/role-requests')}?status=$status&limit=$limit';
+      final res = await _client.dio.get(uri);
       final data = res.data;
       if (data is Map && data['items'] is List) return data['items'] as List;
       return <dynamic>[];
@@ -16,29 +17,46 @@ class AdminRoleService {
     }
   }
 
-  Future<bool> approve({int? userId, String? email}) async {
+  Future<Map<String, dynamic>> approve({
+    required int requestId,
+    String adminNote = '',
+  }) async {
     try {
       final payload = <String, dynamic>{};
-      if (userId != null) payload['user_id'] = userId;
-      if (email != null && email.isNotEmpty) payload['email'] = email;
-      final res = await _client.dio.post(ApiConfig.api('/admin/roles/approve'), data: payload);
+      if (adminNote.trim().isNotEmpty) payload['admin_note'] = adminNote.trim();
+      final res = await _client.dio.post(ApiConfig.api('/admin/role-requests/$requestId/approve'), data: payload);
       final code = res.statusCode ?? 0;
-      return code >= 200 && code < 300;
+      final ok = code >= 200 && code < 300;
+      if (res.data is Map<String, dynamic>) {
+        final data = Map<String, dynamic>.from(res.data as Map<String, dynamic>);
+        data['ok'] = ok;
+        data['status'] = code;
+        return data;
+      }
+      return {'ok': ok, 'status': code, 'data': res.data};
     } catch (_) {
-      return false;
+      return {'ok': false, 'message': 'Approve failed'};
     }
   }
 
-  Future<bool> reject({int? userId, String? email, String reason = 'Rejected'}) async {
+  Future<Map<String, dynamic>> reject({
+    required int requestId,
+    String reason = 'Rejected by admin',
+  }) async {
     try {
-      final payload = <String, dynamic>{'reason': reason};
-      if (userId != null) payload['user_id'] = userId;
-      if (email != null && email.isNotEmpty) payload['email'] = email;
-      final res = await _client.dio.post(ApiConfig.api('/admin/roles/reject'), data: payload);
+      final payload = <String, dynamic>{'admin_note': reason};
+      final res = await _client.dio.post(ApiConfig.api('/admin/role-requests/$requestId/reject'), data: payload);
       final code = res.statusCode ?? 0;
-      return code >= 200 && code < 300;
+      final ok = code >= 200 && code < 300;
+      if (res.data is Map<String, dynamic>) {
+        final data = Map<String, dynamic>.from(res.data as Map<String, dynamic>);
+        data['ok'] = ok;
+        data['status'] = code;
+        return data;
+      }
+      return {'ok': ok, 'status': code, 'data': res.data};
     } catch (_) {
-      return false;
+      return {'ok': false, 'message': 'Reject failed'};
     }
   }
 }

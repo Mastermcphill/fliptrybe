@@ -46,7 +46,11 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
     final ok = res['ok'] == true;
     final msg = (res['message'] ?? res['error'] ?? (ok ? 'Payout request sent' : 'Failed')).toString();
     if (!ok && (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(msg))) {
-      await showEmailVerificationRequiredDialog(context, message: msg);
+      await showEmailVerificationRequiredDialog(
+        context,
+        message: msg,
+        onRetry: _submit,
+      );
       return;
     }
     _toast(msg);

@@ -72,7 +72,11 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     final ok = res['ok'] == true;
     final msg = (res['message'] ?? res['error'] ?? (ok ? 'Payout requested' : 'Request failed')).toString();
     if (!ok && (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(msg))) {
-      await showEmailVerificationRequiredDialog(context, message: msg);
+      await showEmailVerificationRequiredDialog(
+        context,
+        message: msg,
+        onRetry: _request,
+      );
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -135,7 +139,7 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                   const Text('No payout requests yet.')
                 else
                   ..._rows.whereType<Map>().map((raw) {
-                    final m = Map<String, dynamic>.from(raw as Map);
+                    final m = Map<String, dynamic>.from(raw);
                     return Card(
                       child: ListTile(
                         title: Text('NGN ${m['amount'] ?? 0} - ${m['status'] ?? ''}',

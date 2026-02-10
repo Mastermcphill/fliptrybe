@@ -33,7 +33,11 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
       if (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(showMsg)) {
-        await showEmailVerificationRequiredDialog(context, message: showMsg);
+        await showEmailVerificationRequiredDialog(
+          context,
+          message: showMsg,
+          onRetry: () => _open(tier),
+        );
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(

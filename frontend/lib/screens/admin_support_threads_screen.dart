@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/api_config.dart';
+import '../services/api_service.dart';
 import 'admin_support_thread_screen.dart';
 
 class AdminSupportThreadsScreen extends StatefulWidget {
@@ -12,6 +13,8 @@ class AdminSupportThreadsScreen extends StatefulWidget {
 }
 
 class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
+  bool _authChecking = true;
+  bool _isAdmin = false;
   bool _loading = false;
   String? _error;
   List<dynamic> _threads = const [];
@@ -19,10 +22,39 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _ensureAdmin();
+  }
+
+  Future<void> _ensureAdmin() async {
+    try {
+      final me = await ApiService.getProfile();
+      final role = (me['role'] ?? '').toString().trim().toLowerCase();
+      if (!mounted) return;
+      if (role == 'admin') {
+        setState(() {
+          _isAdmin = true;
+          _authChecking = false;
+        });
+        await _load();
+        return;
+      }
+      setState(() {
+        _authChecking = false;
+        _isAdmin = false;
+        _error = 'Admin access required.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _authChecking = false;
+        _isAdmin = false;
+        _error = 'Unable to verify admin access: $e';
+      });
+    }
   }
 
   Future<void> _load() async {
+    if (!_isAdmin) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -43,6 +75,17 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_authChecking) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (!_isAdmin) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Support Threads')),
+        body: Center(child: Text(_error ?? 'Admin access required.')),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Support Threads'),
@@ -62,7 +105,7 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
               itemBuilder: (context, i) {
                 final raw = _threads[i];
                 if (raw is! Map) return const SizedBox.shrink();
-                final m = Map<String, dynamic>.from(raw as Map);
+                final m = Map<String, dynamic>.from(raw);
                 final id = m['user_id'];
                 final name = (m['name'] ?? '').toString();
                 final email = (m['email'] ?? '').toString();

@@ -81,6 +81,20 @@ class ApiService {
     return false;
   }
 
+  static bool isSellerCannotBuyOwnListing(dynamic data) {
+    if (data is Map) {
+      final err = (data['error'] ?? '').toString().toLowerCase();
+      if (err == 'seller_cannot_buy_own_listing') return true;
+      final msg = (data['message'] ?? '').toString().toLowerCase();
+      if (msg.contains('own listing')) return true;
+    }
+    if (data is String) {
+      final msg = data.toLowerCase();
+      if (msg.contains('own listing')) return true;
+    }
+    return false;
+  }
+
   // ---------------------------
   // AUTH
   // ---------------------------

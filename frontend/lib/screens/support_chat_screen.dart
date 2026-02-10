@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 
 import '../services/api_client.dart';
 import '../services/api_config.dart';
+import '../services/api_service.dart';
+import '../widgets/chat_not_allowed_dialog.dart';
 
 class SupportChatScreen extends StatefulWidget {
   const SupportChatScreen({super.key});
@@ -33,6 +36,18 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       final items = (data is Map && data['items'] is List) ? (data['items'] as List) : <dynamic>[];
       if (!mounted) return;
       setState(() => _items = items);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final data = e.response?.data;
+      if (ApiService.isChatNotAllowed(data)) {
+        await showChatNotAllowedDialog(
+          context,
+          onChatWithAdmin: _load,
+        );
+        setState(() => _error = 'Direct messaging between users is not allowed.');
+        return;
+      }
+      setState(() => _error = e.toString());
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -50,12 +65,24 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         ApiConfig.api('/support/messages'),
         data: {'body': body},
       );
+      if (!mounted) return;
       if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
         _msgCtrl.clear();
         await _load();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message failed.')));
       }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final data = e.response?.data;
+      if (ApiService.isChatNotAllowed(data)) {
+        await showChatNotAllowedDialog(
+          context,
+          onChatWithAdmin: _load,
+        );
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message failed: $e')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message failed: $e')));

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/api_config.dart';
+import '../services/api_service.dart';
 
 class AdminSupportThreadScreen extends StatefulWidget {
   final int userId;
@@ -13,6 +14,8 @@ class AdminSupportThreadScreen extends StatefulWidget {
 }
 
 class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
+  bool _authChecking = true;
+  bool _isAdmin = false;
   bool _loading = false;
   String? _error;
   List<dynamic> _items = const [];
@@ -21,10 +24,39 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _ensureAdmin();
+  }
+
+  Future<void> _ensureAdmin() async {
+    try {
+      final me = await ApiService.getProfile();
+      final role = (me['role'] ?? '').toString().trim().toLowerCase();
+      if (!mounted) return;
+      if (role == 'admin') {
+        setState(() {
+          _isAdmin = true;
+          _authChecking = false;
+        });
+        await _load();
+        return;
+      }
+      setState(() {
+        _authChecking = false;
+        _isAdmin = false;
+        _error = 'Admin access required.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _authChecking = false;
+        _isAdmin = false;
+        _error = 'Unable to verify admin access: $e';
+      });
+    }
   }
 
   Future<void> _load() async {
+    if (!_isAdmin) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -44,6 +76,7 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
   }
 
   Future<void> _send() async {
+    if (!_isAdmin) return;
     final body = _msgCtrl.text.trim();
     if (body.isEmpty) return;
     setState(() => _loading = true);
@@ -52,6 +85,7 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
         ApiConfig.api('/admin/support/messages/${widget.userId}'),
         data: {'body': body},
       );
+      if (!mounted) return;
       if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
         _msgCtrl.clear();
         await _load();
@@ -90,6 +124,17 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_authChecking) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (!_isAdmin) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Thread')),
+        body: Center(child: Text(_error ?? 'Admin access required.')),
+      );
+    }
     final items = _items.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
     return Scaffold(
       appBar: AppBar(
