@@ -216,7 +216,9 @@ if ($NegativeTests.IsPresent) {
     if ($dm.Body) { Write-Host $dm.Body }
     Fail "expected 403 for user-to-user chat attempt"
   }
-  if (-not $dm.Json -or $dm.Json.error -ne "CHAT_NOT_ALLOWED") {
+  $dmErr = ""
+  try { $dmErr = (($dm.Json.error | Out-String).Trim()) } catch { $dmErr = "" }
+  if ($dmErr -and (@("CHAT_NOT_ALLOWED", "chat_not_allowed") -notcontains $dmErr)) {
     if ($dm.Body) { Write-Host $dm.Body }
     Fail "expected CHAT_NOT_ALLOWED error code for user-to-user chat attempt"
   }

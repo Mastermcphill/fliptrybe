@@ -11,7 +11,7 @@ def _secret() -> str:
 
 
 def verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
-    secret = _secret()
+    secret = (os.getenv("PAYSTACK_WEBHOOK_SECRET") or _secret()).strip()
     if not secret or not signature_header:
         return False
     digest = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha512).hexdigest()

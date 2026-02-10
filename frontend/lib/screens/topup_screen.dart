@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/topup_service.dart';
 
@@ -15,6 +16,7 @@ class _TopupScreenState extends State<TopupScreen> {
   bool _loading = false;
   String _ref = "";
   String _url = "";
+  bool _waiting = false;
 
   void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
@@ -30,6 +32,7 @@ class _TopupScreenState extends State<TopupScreen> {
       setState(() {
         _ref = (r['reference'] ?? '').toString();
         _url = (r['authorization_url'] ?? '').toString();
+        _waiting = _url.isNotEmpty;
       });
       _toast("Initialized. Ref: $_ref");
     } catch (e) {
@@ -71,6 +74,27 @@ class _TopupScreenState extends State<TopupScreen> {
             const SizedBox(height: 16),
             if (_ref.isNotEmpty) Text("Reference: $_ref"),
             if (_url.isNotEmpty) Text("Pay URL: $_url"),
+            if (_url.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final uri = Uri.tryParse(_url);
+                  if (uri == null) {
+                    _toast('Invalid payment URL');
+                    return;
+                  }
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  if (!mounted) return;
+                  setState(() => _waiting = true);
+                },
+                icon: const Icon(Icons.open_in_new),
+                label: const Text("Open payment page"),
+              ),
+            ],
+            if (_waiting) ...[
+              const SizedBox(height: 8),
+              const Text("Waiting for payment confirmation. Wallet will update after webhook confirmation."),
+            ],
             const SizedBox(height: 10),
             const Text("Note: Wallet is credited on webhook confirmation (Paystack) or in demo mode."),
           ],

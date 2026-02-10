@@ -3,10 +3,24 @@ import 'api_config.dart';
 
 class PaymentService {
   Future<Map<String, dynamic>> initialize(
-      {required double amount, String purpose = 'topup'}) async {
+      {required double amount, String purpose = 'topup', int? orderId}) async {
+    final payload = <String, dynamic>{
+      'amount': amount,
+      'purpose': purpose,
+    };
+    if (orderId != null) {
+      payload['order_id'] = orderId;
+    }
     final data = await ApiClient.instance.postJson(
       ApiConfig.api('/payments/initialize'),
-      {'amount': amount, 'purpose': purpose},
+      payload,
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> status({required int orderId}) async {
+    final data = await ApiClient.instance.getJson(
+      ApiConfig.api('/payments/status?order_id=$orderId'),
     );
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }

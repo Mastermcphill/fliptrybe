@@ -6,12 +6,38 @@ from app.extensions import db
 from app.models import AutopilotSettings, PayoutRequest, NotificationQueue, User, Order, DriverJobOffer, PayoutRecipient
 from app.utils.wallets import post_txn, release_reserved
 from app.utils.paystack_client import initiate_transfer
+from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
+from app.integrations.messaging.factory import build_messaging_provider
 
 
 def get_settings() -> AutopilotSettings:
     row = AutopilotSettings.query.first()
     if not row:
         row = AutopilotSettings(enabled=True)
+        row.payments_provider = "mock"
+        row.integrations_mode = "disabled"
+        row.paystack_enabled = False
+        row.termii_enabled_sms = False
+        row.termii_enabled_wa = False
+        db.session.add(row)
+        db.session.commit()
+    changed = False
+    if not getattr(row, "payments_provider", None):
+        row.payments_provider = "mock"
+        changed = True
+    if not getattr(row, "integrations_mode", None):
+        row.integrations_mode = "disabled"
+        changed = True
+    if getattr(row, "paystack_enabled", None) is None:
+        row.paystack_enabled = False
+        changed = True
+    if getattr(row, "termii_enabled_sms", None) is None:
+        row.termii_enabled_sms = False
+        changed = True
+    if getattr(row, "termii_enabled_wa", None) is None:
+        row.termii_enabled_wa = False
+        changed = True
+    if changed:
         db.session.add(row)
         db.session.commit()
     return row
@@ -109,7 +135,6 @@ def process_notification_queue(max_items: int = 80) -> dict:
     """
 
     from datetime import datetime
-    from app.utils.termii_client import send_termii_message
 
     sent = 0
     failed = 0
@@ -130,14 +155,47 @@ def process_notification_queue(max_items: int = 80) -> dict:
             ch = (r.channel or "").strip().lower()
             ok = True
             detail = ""
+            error_code = ""
 
             if ch in ("sms", "whatsapp"):
-                termii_channel = "whatsapp" if ch == "whatsapp" else "generic"
-                ok, detail = send_termii_message(channel=termii_channel, to=r.to, message=r.message)
+                settings = get_settings()
+                try:
+                    provider = build_messaging_provider(settings, channel=ch)
+                    if ch == "sms":
+                        result = provider.send_sms(to=r.to, message=r.message, reference=f"notif:{int(r.id)}")
+                    else:
+                        result = provider.send_whatsapp(to=r.to, message=r.message, reference=f"notif:{int(r.id)}")
+                    ok = bool(result.ok)
+                    error_code = (result.code or "").strip().upper()
+                    detail = (result.message or "").strip()
+                except IntegrationDisabledError as e:
+                    ok = False
+                    error_code = "INTEGRATION_DISABLED"
+                    detail = str(e)
+                    # keep queued and do not consume attempts
+                    r.status = "queued"
+                    r.last_error = f"{error_code}:{detail}"[:240]
+                    r.next_attempt_at = now + timedelta(minutes=5)
+                    db.session.add(r)
+                    db.session.commit()
+                    failed += 1
+                    continue
+                except IntegrationMisconfiguredError as e:
+                    ok = False
+                    error_code = "INTEGRATION_MISCONFIGURED"
+                    detail = str(e)
+                    r.status = "queued"
+                    r.last_error = f"{error_code}:{detail}"[:240]
+                    r.next_attempt_at = now + timedelta(minutes=5)
+                    db.session.add(r)
+                    db.session.commit()
+                    failed += 1
+                    continue
             elif ch == "in_app":
                 ok = True
             else:
                 ok = False
+                error_code = "UNSUPPORTED_CHANNEL"
                 detail = f"Unsupported channel: {ch}"
 
             if ok:
@@ -151,10 +209,15 @@ def process_notification_queue(max_items: int = 80) -> dict:
 
             # Failure path
             r.attempt_count = int(r.attempt_count or 0) + 1
-            r.last_error = (detail or "send_failed")[:240]
+            normalized = error_code or "SEND_FAILED"
+            r.last_error = f"{normalized}:{(detail or 'send_failed')}"[:240]
             max_attempts = int(r.max_attempts or 5)
-
-            if int(r.attempt_count) >= max_attempts:
+            immediate_dead = normalized in (
+                "TERMII_INVALID_RECIPIENT",
+                "TERMII_INVALID_SENDER",
+                "TERMII_AUTH_FAILED",
+            )
+            if immediate_dead or int(r.attempt_count) >= max_attempts:
                 r.status = "dead"
                 r.dead_lettered_at = now
                 r.next_attempt_at = None
@@ -172,7 +235,7 @@ def process_notification_queue(max_items: int = 80) -> dict:
             db.session.rollback()
             try:
                 r.attempt_count = int(r.attempt_count or 0) + 1
-                r.last_error = (str(e) or "exception")[:240]
+                r.last_error = ("TERMII_PROVIDER_DOWN:" + (str(e) or "exception"))[:240]
                 max_attempts = int(r.max_attempts or 5)
                 if int(r.attempt_count) >= max_attempts:
                     r.status = "dead"
