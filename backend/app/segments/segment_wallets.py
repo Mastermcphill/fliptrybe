@@ -148,7 +148,7 @@ def request_payout():
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
     if not _is_email_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
     payload = request.get_json(silent=True) or {}
     try:
         amount = float(payload.get("amount") or 0.0)

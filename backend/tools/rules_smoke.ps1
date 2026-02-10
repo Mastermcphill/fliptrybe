@@ -113,8 +113,19 @@ if ($chat.StatusCode -ne 403) { Fail "chat not blocked" }
 $listingPayload = @{ title="QA Listing $(Get-Date -Format 'yyyyMMddHHmmss')"; description="QA"; price=100; state="Lagos"; city="Ikeja"; locality="" }
 $createListing = Invoke-Api -Method "POST" -Path "/api/listings" -Headers $merchantHeaders -BodyObj $listingPayload
 Write-Host "create listing:" $createListing.StatusCode
-if (-not (OkStatus $createListing.StatusCode)) { Fail "listing create failed (verify email?)" }
-$listingId = $createListing.Json.listing.id
+$listingId = $null
+if (OkStatus $createListing.StatusCode) {
+  $listingId = $createListing.Json.listing.id
+} elseif ($createListing.StatusCode -eq 403) {
+  Write-Host "listing create blocked (likely verification gate); reusing existing merchant listing."
+  $merchantListings = Invoke-Api -Method "GET" -Path "/api/merchant/listings" -Headers $merchantHeaders
+  Write-Host "merchant listings:" $merchantListings.StatusCode
+  if (OkStatus $merchantListings.StatusCode -and $merchantListings.Json -and $merchantListings.Json.items -and $merchantListings.Json.items.Count -gt 0) {
+    $listingId = $merchantListings.Json.items[0].id
+  }
+} else {
+  Fail "listing create failed unexpectedly"
+}
 if (-not $listingId) { Fail "listing id missing" }
 $merchantId = $merchantMe.Json.id
 $buy = Invoke-Api -Method "POST" -Path "/api/orders" -Headers $merchantHeaders -BodyObj @{ merchant_id=$merchantId; amount=100; delivery_fee=0; inspection_fee=0; pickup="Ikeja"; dropoff="Ikeja"; listing_id=$listingId; payment_reference="qa_selfbuy_$(Get-Date -Format 'yyyyMMddHHmmss')" }

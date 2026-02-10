@@ -451,19 +451,19 @@ def set_role():
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
     try:
-        is_admin = int(u.id or 0) == 1 or (getattr(u, "role", "") or "").lower() == "admin"
+        is_admin = (getattr(u, "role", "") or "").lower() == "admin"
     except Exception:
         is_admin = False
 
     if not is_admin:
-        return jsonify({"message": "Forbidden"}), 403
+        return jsonify({"error": "ROLE_CHANGE_NOT_ALLOWED", "message": "Only admin can change roles"}), 403
     if env not in ("dev", "development", "local", "test") or not allow_override:
-        return jsonify({"message": "Role change not allowed"}), 403
+        return jsonify({"error": "ROLE_CHANGE_NOT_ALLOWED", "message": "Role change is disabled on this environment"}), 403
 
     data = request.get_json(silent=True) or {}
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
-        return jsonify({"message": "Admin role cannot be set via this endpoint"}), 403
+        return jsonify({"error": "ROLE_CHANGE_NOT_ALLOWED", "message": "Admin role cannot be set via this endpoint"}), 403
     if role not in ("buyer", "merchant", "driver"):
         return jsonify({"message": "role must be buyer|merchant|driver"}), 400
 

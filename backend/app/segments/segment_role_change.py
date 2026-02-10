@@ -56,13 +56,7 @@ def _role(u: User | None) -> str:
 def _is_admin(u: User | None) -> bool:
     if not u:
         return False
-    r = _role(u)
-    if r == "admin":
-        return True
-    try:
-        return int(u.id or 0) == 1
-    except Exception:
-        return False
+    return _role(u) == "admin"
 
 
 def _allowed_request(current_role: str, requested_role: str) -> bool:
@@ -135,7 +129,7 @@ def my_role_request():
 def list_role_requests():
     u = _current_user()
     if not _is_admin(u):
-        return jsonify({"message": "Forbidden"}), 403
+        return jsonify({"error": "ROLE_CHANGE_NOT_ALLOWED", "message": "Only admin can change roles"}), 403
 
     status = (request.args.get("status") or "").strip().upper()
     q = RoleChangeRequest.query
@@ -150,7 +144,7 @@ def list_role_requests():
 def approve_role_request(req_id: int):
     u = _current_user()
     if not _is_admin(u):
-        return jsonify({"message": "Forbidden"}), 403
+        return jsonify({"error": "ROLE_CHANGE_NOT_ALLOWED", "message": "Only admin can change roles"}), 403
 
     req = RoleChangeRequest.query.get(req_id)
     if not req:
@@ -210,7 +204,7 @@ def approve_role_request(req_id: int):
 def reject_role_request(req_id: int):
     u = _current_user()
     if not _is_admin(u):
-        return jsonify({"message": "Forbidden"}), 403
+        return jsonify({"error": "ROLE_CHANGE_NOT_ALLOWED", "message": "Only admin can change roles"}), 403
 
     req = RoleChangeRequest.query.get(req_id)
     if not req:

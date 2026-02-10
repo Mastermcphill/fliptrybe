@@ -500,7 +500,7 @@ def update_listing(listing_id: int):
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
     if not _is_admin(u) and not _is_email_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     payload = request.get_json(silent=True) or {}
     # Listing cap enforcement on activation
@@ -574,7 +574,7 @@ def delete_listing(listing_id: int):
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
     if not _is_admin(u) and not _is_email_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     try:
         db.session.delete(item)
@@ -678,7 +678,7 @@ def create_listing():
     except Exception:
         owner_user = None
     if not _is_email_verified(owner_user):
-        return jsonify({"message": "Verify your email to create listings"}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     account_role = _account_role(user_id)
     ok, info = enforce_listing_cap(int(user_id), account_role, "declutter")

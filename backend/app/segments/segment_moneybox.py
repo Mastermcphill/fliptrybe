@@ -144,7 +144,7 @@ def open_moneybox():
     if tier not in (1, 2, 3, 4):
         return jsonify({"message": "Invalid tier"}), 400
     if tier > 1 and not _is_email_verified(u):
-        return jsonify({"message": "Verify your email to unlock higher MoneyBox tiers"}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     acct = get_or_create_account(int(u.id))
     try:
@@ -212,7 +212,7 @@ def relock_moneybox():
     if tier not in (1, 2, 3, 4):
         return jsonify({"message": "Invalid tier"}), 400
     if tier > 1 and not _is_email_verified(u):
-        return jsonify({"message": "Verify your email to unlock higher MoneyBox tiers"}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     acct = get_or_create_account(int(u.id))
     try:
@@ -316,7 +316,7 @@ def withdraw():
     if not _allowed_role(u):
         return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
     if not _is_email_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     acct = get_or_create_account(int(u.id))
 

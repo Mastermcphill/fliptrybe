@@ -58,12 +58,7 @@ def _role(u: User | None) -> str:
 def _is_admin(u: User | None) -> bool:
     if not u:
         return False
-    if _role(u) == "admin":
-        return True
-    try:
-        return int(u.id or 0) == 1
-    except Exception:
-        return False
+    return _role(u) == "admin"
 
 
 @support_bp.get("/messages")
@@ -91,7 +86,25 @@ def send_to_admin():
 
     # Non-admins can only chat with admin.
     if target_raw is not None and not _is_admin(u):
-        return jsonify({"error": "chat_not_allowed", "message": "You can only chat with Admin."}), 403
+        try:
+            target_id = int(target_raw)
+        except Exception:
+            return jsonify({"message": "Invalid user_id"}), 400
+        try:
+            target = User.query.get(int(target_id))
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            target = None
+        if not target:
+            return jsonify({"message": "Not found"}), 404
+        if not _is_admin(target):
+            return jsonify({
+                "error": "CHAT_NOT_ALLOWED",
+                "message": "Direct messaging between users is not allowed",
+            }), 403
 
     if target_raw is not None and _is_admin(u):
         try:

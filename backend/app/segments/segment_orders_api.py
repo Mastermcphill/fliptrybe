@@ -101,11 +101,6 @@ def _role(u: User | None) -> str:
 def _is_admin(u: User | None) -> bool:
     if not u:
         return False
-    try:
-        if int(u.id or 0) == 1:
-            return True
-    except Exception:
-        pass
     return _role(u) == "admin"
 
 
@@ -643,10 +638,17 @@ def create_order():
             return jsonify({
                 "ok": False,
                 "error": "SELLER_CANNOT_BUY_OWN_LISTING",
-                "message": "You can't place an order on your own listing.",
+                "message": "You cannot place an order on a listing you own",
             }), 409
     except Exception:
         pass
+
+    if not _is_admin(u) and not _is_verified(u):
+        return jsonify({
+            "ok": False,
+            "error": "EMAIL_NOT_VERIFIED",
+            "message": "Your email must be verified to perform this action",
+        }), 403
 
 # If listing provided, prefer listing pricing rules over payload amount
     if listing:
@@ -1001,7 +1003,7 @@ def order_delivery(order_id: int):
         return jsonify({"ok": False, "error": "forbidden"}), 403
 
     role = (getattr(u, "role", None) or "buyer").strip().lower()
-    is_admin = role == "admin" or int(getattr(u, "id", 0) or 0) == 1
+    is_admin = role == "admin"
     is_buyer = int(u.id) == int(o.buyer_id)
     is_merchant = int(u.id) == int(o.merchant_id)
     is_driver = bool(o.driver_id and int(o.driver_id) == int(u.id))
@@ -1160,7 +1162,7 @@ def merchant_accept(order_id: int):
     if int(o.merchant_id) != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
     if not _is_admin(u) and not _is_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     if not _availability_is_confirmed(int(o.id)):
         return jsonify({"message": "Availability confirmation required"}), 409
@@ -1366,7 +1368,7 @@ def assign_driver(order_id: int):
     if int(o.merchant_id) != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
     if not _is_admin(u) and not _is_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     payload = request.get_json(silent=True) or {}
     try:
@@ -1625,7 +1627,7 @@ def seller_confirm_pickup(order_id: int):
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
     if not _is_admin(u) and not _is_verified(u):
-        return jsonify({"error": "email_not_verified", "message": "Email verification required to continue."}), 403
+        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     o = Order.query.get(order_id)
     if not o:
