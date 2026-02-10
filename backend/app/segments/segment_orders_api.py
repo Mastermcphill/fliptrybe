@@ -467,7 +467,8 @@ def create_order():
         return jsonify({"ok": False, "message": "Unauthorized"}), 401
 
     debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
-    debug_enabled = debug_requested and _is_admin(u)
+    debug_for_user = debug_requested and (u is not None)
+    debug_for_admin = debug_for_user and _is_admin(u)
 
     payload = request.get_json(silent=True) or {}
     payload_source = "json" if payload else "empty"
@@ -478,7 +479,7 @@ def create_order():
         payload_source = "form_args" if payload else "empty"
 
     def _debug_payload(extra: dict | None = None) -> dict:
-        if not debug_enabled:
+        if not debug_for_admin:
             return {}
         out = {
             "debug": {
@@ -500,14 +501,15 @@ def create_order():
             return ""
 
     def _debug_exception_payload(e: Exception) -> dict:
-        detail = f"{type(e).__name__}: {e}"
-        out = {"detail": detail}
-        sql = _safe_snippet(getattr(e, "statement", ""))
-        if sql:
-            out["sql"] = sql
-        params = _safe_snippet(getattr(e, "params", None))
-        if params:
-            out["params"] = params
+        detail = _safe_snippet(f"{type(e).__name__}: {e}", 800)
+        out = {"detail": detail, "payload_source": payload_source}
+        if debug_for_admin:
+            sql = _safe_snippet(getattr(e, "statement", ""))
+            if sql:
+                out["sql"] = sql
+            params = _safe_snippet(getattr(e, "params", None))
+            if params:
+                out["params"] = params
         return out
 
     buyer_id_raw = payload.get("buyer_id")
@@ -696,7 +698,7 @@ def create_order():
             )
         except Exception:
             pass
-        if debug_enabled:
+        if debug_for_user:
             return jsonify({"ok": False, "error": "db_error", **_debug_exception_payload(e), **_debug_payload({
                 "listing_id_raw": listing_id,
                 "merchant_id_raw": merchant_id_raw,
