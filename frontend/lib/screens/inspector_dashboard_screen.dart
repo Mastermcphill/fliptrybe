@@ -14,7 +14,8 @@ class InspectorDashboardScreen extends StatefulWidget {
   const InspectorDashboardScreen({super.key});
 
   @override
-  State<InspectorDashboardScreen> createState() => _InspectorDashboardScreenState();
+  State<InspectorDashboardScreen> createState() =>
+      _InspectorDashboardScreenState();
 }
 
 class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
@@ -22,17 +23,19 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
   final _auth = AuthService();
   late Future<List<dynamic>> _data;
   bool _signingOut = false;
+  String? _serviceInfo;
 
   @override
   void initState() {
     super.initState();
-    _data = _svc.assignments();
+    _data = _loadAssignments();
     _guardPending();
   }
 
   Future<void> _guardPending() async {
     final profile = await _auth.me();
-    final status = (profile?['role_status'] ?? 'approved').toString().toLowerCase();
+    final status =
+        (profile?['role_status'] ?? 'approved').toString().toLowerCase();
     final role = (profile?['role'] ?? 'inspector').toString();
     if (!mounted) return;
     if (status == 'pending') {
@@ -43,7 +46,14 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
   }
 
   void _reload() {
-    setState(() => _data = _svc.assignments());
+    setState(() => _data = _loadAssignments());
+  }
+
+  Future<List<dynamic>> _loadAssignments() async {
+    final items = await _svc.assignments();
+    if (!mounted) return items;
+    setState(() => _serviceInfo = _svc.lastInfo);
+    return items;
   }
 
   Future<bool> _confirmSignOut() async {
@@ -136,8 +146,12 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Submit')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Submit')),
         ],
       ),
     );
@@ -146,10 +160,15 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
     final assignmentId = item['id'];
     if (assignmentId is! int) return;
 
-    final success = await _svc.submitReport(assignmentId, verdict: verdict, report: reportCtrl.text.trim());
+    final success = await _svc.submitReport(assignmentId,
+        verdict: verdict, report: reportCtrl.text.trim());
     if (!mounted) return;
+    setState(() => _serviceInfo = _svc.lastInfo);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(success ? 'Report submitted' : 'Submit failed')),
+      SnackBar(
+          content: Text(success
+              ? 'Report submitted'
+              : (_svc.lastInfo ?? 'Submit failed'))),
     );
     _reload();
   }
@@ -188,15 +207,26 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const MoneyBoxDashboardScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const MoneyBoxDashboardScreen()),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Assigned Inspections', style: TextStyle(fontWeight: FontWeight.w800)),
+              if ((_serviceInfo ?? '').trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    _serviceInfo!,
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                ),
+              const Text('Assigned Inspections',
+                  style: TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               if (items.isEmpty)
-                const Center(child: Padding(
+                const Center(
+                    child: Padding(
                   padding: EdgeInsets.all(20),
                   child: Text('No assigned inspections yet.'),
                 ))
@@ -212,7 +242,11 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
                       title: Text('$title (Order #$orderId)'),
                       subtitle: Text('Status: $status • ₦$price'),
                       trailing: TextButton(
-                        onPressed: () => _submit(context, item),
+                        onPressed: ((_serviceInfo ?? '')
+                                .toLowerCase()
+                                .contains('not available'))
+                            ? null
+                            : () => _submit(context, item),
                         child: const Text('Submit'),
                       ),
                     ),

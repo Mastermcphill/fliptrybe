@@ -3,9 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/order_service.dart';
 import '../services/driver_directory_service.dart';
 import '../services/auth_service.dart';
-import 'receipts_by_order_screen.dart';
 import 'receipts_screen.dart';
-import 'support_tickets_screen.dart';
 import 'support_chat_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -82,7 +80,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
       setState(() {
         _order = detail;
-        _delivery = (delivery['delivery'] is Map) ? Map<String, dynamic>.from(delivery['delivery'] as Map) : null;
+        _delivery = (delivery['delivery'] is Map)
+            ? Map<String, dynamic>.from(delivery['delivery'] as Map)
+            : null;
         _events = tl;
         _drivers = drivers;
         _loading = false;
@@ -99,14 +99,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final delivery = await _svc.getDelivery(widget.orderId);
     if (!mounted) return;
     setState(() {
-      _delivery = (delivery['delivery'] is Map) ? Map<String, dynamic>.from(delivery['delivery'] as Map) : _delivery;
+      _delivery = (delivery['delivery'] is Map)
+          ? Map<String, dynamic>.from(delivery['delivery'] as Map)
+          : _delivery;
     });
   }
 
   Future<void> _merchantAccept() async {
     final ok = await _svc.merchantAccept(widget.orderId);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Merchant accepted ✅" : "Not allowed / failed")));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok ? "Merchant accepted ✅" : "Not allowed / failed")));
     if (ok) _load();
   }
 
@@ -114,12 +117,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final did = _selectedDriverId;
     if (did == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a driver first')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Select a driver first')));
       return;
     }
     final ok = await _svc.assignDriver(widget.orderId, did);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Driver assigned ✅' : 'Not allowed / failed')));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok ? 'Driver assigned ✅' : 'Not allowed / failed')));
     if (ok) _load();
   }
 
@@ -132,7 +137,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final res = await _svc.issueQr(widget.orderId, "pickup_seller");
     final ok = res["ok"] == true;
     final data = res["data"];
-    final token = (data is Map && data["token"] != null) ? data["token"].toString() : "";
+    final token =
+        (data is Map && data["token"] != null) ? data["token"].toString() : "";
     if (ok && token.isNotEmpty) {
       setState(() {
         _lastIssuedToken = token;
@@ -142,14 +148,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _toast("Pickup QR issued");
       return;
     }
-    _toast((data is Map && data["message"] != null) ? data["message"].toString() : "QR issue failed");
+    _toast((data is Map && data["message"] != null)
+        ? data["message"].toString()
+        : "QR issue failed");
   }
 
   Future<void> _issueDeliveryQr() async {
     final res = await _svc.issueQr(widget.orderId, "delivery_driver");
     final ok = res["ok"] == true;
     final data = res["data"];
-    final token = (data is Map && data["token"] != null) ? data["token"].toString() : "";
+    final token =
+        (data is Map && data["token"] != null) ? data["token"].toString() : "";
     if (ok && token.isNotEmpty) {
       setState(() {
         _lastIssuedToken = token;
@@ -159,7 +168,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _toast("Delivery QR issued");
       return;
     }
-    _toast((data is Map && data["message"] != null) ? data["message"].toString() : "QR issue failed");
+    _toast((data is Map && data["message"] != null)
+        ? data["message"].toString()
+        : "QR issue failed");
   }
 
   Future<void> _scanQr() async {
@@ -176,10 +187,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _load();
       return;
     }
-    final msg = (data is Map && data["message"] != null) ? data["message"].toString() : "QR scan failed";
+    final msg = (data is Map && data["message"] != null)
+        ? data["message"].toString()
+        : "QR scan failed";
     _toast(msg);
   }
-
 
   Future<void> _sellerConfirmPickup() async {
     final code = _pickupCodeCtrl.text.trim();
@@ -200,7 +212,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _toast("Pickup locked after too many attempts");
       return;
     }
-    final msg = (data is Map && data["message"] != null) ? data["message"].toString() : "Pickup confirm failed";
+    final msg = (data is Map && data["message"] != null)
+        ? data["message"].toString()
+        : "Pickup confirm failed";
     _toast(msg);
   }
 
@@ -223,7 +237,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _toast("Delivery locked after too many attempts");
       return;
     }
-    final msg = (data is Map && data["message"] != null) ? data["message"].toString() : "Delivery confirm failed";
+    final msg = (data is Map && data["message"] != null)
+        ? data["message"].toString()
+        : "Delivery confirm failed";
     _toast(msg);
   }
 
@@ -241,9 +257,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget _progressStep(String label, bool done) {
     return Row(
       children: [
-        Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, size: 18, color: done ? Colors.green : Colors.grey),
+        Icon(done ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 18, color: done ? Colors.green : Colors.grey),
         const SizedBox(width: 8),
-        Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+        Expanded(
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w600))),
       ],
     );
   }
@@ -270,23 +289,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final isDriver = role == 'driver';
     final isBuyer = role == 'buyer';
     final statusLower = status.toLowerCase();
-    final isDone = statusLower == 'delivered' || statusLower == 'completed' || statusLower == 'cancelled';
-    final pickupCode = (delivery['pickup_code'] ?? _order?['pickup_code'] ?? '').toString();
-    final deliveryCode = (delivery['dropoff_code'] ?? _order?['dropoff_code'] ?? _order?['delivery_code'] ?? '').toString();
-    final pickupAttemptsLeft = (delivery['pickup_attempts_left'] ?? _order?['pickup_attempts_left'] ?? '').toString();
-    final deliveryAttemptsLeft = (delivery['dropoff_attempts_left'] ?? _order?['delivery_attempts_left'] ?? '').toString();
+    final isDone = statusLower == 'delivered' ||
+        statusLower == 'completed' ||
+        statusLower == 'cancelled';
+    final pickupCode =
+        (delivery['pickup_code'] ?? _order?['pickup_code'] ?? '').toString();
+    final deliveryCode = (delivery['dropoff_code'] ??
+            _order?['dropoff_code'] ??
+            _order?['delivery_code'] ??
+            '')
+        .toString();
+    final pickupAttemptsLeft = (delivery['pickup_attempts_left'] ??
+            _order?['pickup_attempts_left'] ??
+            '')
+        .toString();
+    final deliveryAttemptsLeft = (delivery['dropoff_attempts_left'] ??
+            _order?['delivery_attempts_left'] ??
+            '')
+        .toString();
     final canScanQr = (isAdmin || isMerchant || isDriver) && !isDone;
     final canIssuePickupQr = (isDriver || isAdmin) && !isDone;
     final canIssueDeliveryQr = (isBuyer || isAdmin) && !isDone;
     final canShowPickupCode = (isMerchant || isAdmin) && pickupCode.isNotEmpty;
-    final canShowDeliveryCode = (isDriver || isAdmin || isBuyer) && deliveryCode.isNotEmpty;
-    final canConfirmPickup = (isMerchant || isAdmin) && !['picked_up', 'delivered', 'completed', 'cancelled'].contains(statusLower);
-    final canConfirmDelivery = (isDriver || isAdmin) && statusLower == 'picked_up';
+    final canShowDeliveryCode =
+        (isDriver || isAdmin || isBuyer) && deliveryCode.isNotEmpty;
+    final canConfirmPickup = (isMerchant || isAdmin) &&
+        !['picked_up', 'delivered', 'completed', 'cancelled']
+            .contains(statusLower);
+    final canConfirmDelivery =
+        (isDriver || isAdmin) && statusLower == 'picked_up';
 
     return Scaffold(
       appBar: AppBar(
         title: Text("Order #${widget.orderId}"),
-        actions: [IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -297,27 +337,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   children: [
                     _pill("Status: $status"),
                     const SizedBox(height: 12),
-
                     OutlinedButton.icon(
                       onPressed: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const ReceiptsScreen()));
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const ReceiptsScreen()));
                       },
                       icon: const Icon(Icons.receipt_long),
                       label: const Text("View Receipts"),
                     ),
-
                     const SizedBox(height: 12),
                     Text(
                       "Amount: ₦${_order?['amount'] ?? 0}",
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
-                    Text("Delivery Fee: ₦${_order?['delivery_fee'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text("Delivery Fee: ₦${_order?['delivery_fee'] ?? 0}",
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 10),
-                    if ((_order?['pickup'] ?? '').toString().isNotEmpty) Text("Pickup: ${_order?['pickup']}"),
-                    if ((_order?['dropoff'] ?? '').toString().isNotEmpty) Text("Dropoff: ${_order?['dropoff']}"),
+                    if ((_order?['pickup'] ?? '').toString().isNotEmpty)
+                      Text("Pickup: ${_order?['pickup']}"),
+                    if ((_order?['dropoff'] ?? '').toString().isNotEmpty)
+                      Text("Dropoff: ${_order?['dropoff']}"),
                     const SizedBox(height: 14),
-
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
@@ -347,7 +391,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               controller: _qrTokenCtrl,
                               decoration: InputDecoration(
                                 labelText: 'QR token',
-                                helperText: _lastIssuedToken != null ? "Issued step: ${_lastIssuedStep ?? ''}" : null,
+                                helperText: _lastIssuedToken != null
+                                    ? "Issued step: ${_lastIssuedStep ?? ''}"
+                                    : null,
                                 border: const OutlineInputBorder(),
                               ),
                             ),
@@ -359,13 +405,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                             label: const Text("Scan QR"),
                           ),
                         if (canShowPickupCode)
-                          OutlinedButton(
-                            onPressed: null,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border:
+                                  Border.all(color: Colors.blueGrey.shade200),
+                            ),
                             child: Text("Dispatch code: $pickupCode"),
                           ),
                         if (canShowDeliveryCode)
-                          OutlinedButton(
-                            onPressed: null,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
                             child: Text("Delivery code: $deliveryCode"),
                           ),
                         if (canConfirmPickup)
@@ -375,7 +434,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               controller: _pickupCodeCtrl,
                               decoration: InputDecoration(
                                 labelText: 'Pickup code',
-                                helperText: pickupAttemptsLeft.isNotEmpty ? "Attempts left: $pickupAttemptsLeft" : null,
+                                helperText: pickupAttemptsLeft.isNotEmpty
+                                    ? "Attempts left: $pickupAttemptsLeft"
+                                    : null,
                                 border: const OutlineInputBorder(),
                               ),
                             ),
@@ -393,7 +454,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               controller: _deliveryCodeCtrl,
                               decoration: InputDecoration(
                                 labelText: 'Delivery code',
-                                helperText: deliveryAttemptsLeft.isNotEmpty ? "Attempts left: $deliveryAttemptsLeft" : null,
+                                helperText: deliveryAttemptsLeft.isNotEmpty
+                                    ? "Attempts left: $deliveryAttemptsLeft"
+                                    : null,
                                 border: const OutlineInputBorder(),
                               ),
                             ),
@@ -423,15 +486,32 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                           ),
                       ],
                     ),
-
                     const SizedBox(height: 12),
-                    const Text("Delivery Progress", style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text("Delivery Progress",
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
-                    _progressStep("Merchant accepted", ["merchant_accepted", "driver_assigned", "picked_up", "delivered", "completed"].contains(statusLower)),
+                    _progressStep(
+                        "Merchant accepted",
+                        [
+                          "merchant_accepted",
+                          "driver_assigned",
+                          "picked_up",
+                          "delivered",
+                          "completed"
+                        ].contains(statusLower)),
                     const SizedBox(height: 4),
-                    _progressStep("Pickup confirmed", (delivery['pickup_confirmed_at'] ?? '').toString().isNotEmpty),
+                    _progressStep(
+                        "Pickup confirmed",
+                        (delivery['pickup_confirmed_at'] ?? '')
+                            .toString()
+                            .isNotEmpty),
                     const SizedBox(height: 4),
-                    _progressStep("Delivery confirmed", (delivery['dropoff_confirmed_at'] ?? '').toString().isNotEmpty || ["delivered", "completed"].contains(statusLower)),
+                    _progressStep(
+                        "Delivery confirmed",
+                        (delivery['dropoff_confirmed_at'] ?? '')
+                                .toString()
+                                .isNotEmpty ||
+                            ["delivered", "completed"].contains(statusLower)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -443,7 +523,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const SizedBox(width: 10),
                         if ((pickupCode.isEmpty && deliveryCode.isEmpty))
                           const Flexible(
-                            child: Text("Codes not ready yet. Tap refresh or contact Admin for help.", style: TextStyle(color: Colors.black87)),
+                            child: Text(
+                                "Codes not ready yet. Tap refresh or contact Admin for help.",
+                                style: TextStyle(color: Colors.black87)),
                           ),
                       ],
                     ),
@@ -452,19 +534,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const SupportChatScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const SupportChatScreen()),
                         );
                       },
                       icon: const Icon(Icons.support_agent),
                       label: const Text("Contact Admin Support"),
                     ),
                     const Divider(height: 28),
-                    const Text("Timeline", style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text("Timeline",
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     if (_events.isEmpty)
                       const Text("No events yet.")
                     else
-                      ..._events.whereType<Map>().map((e) => _eventTile(Map<String, dynamic>.from(e))),
+                      ..._events
+                          .whereType<Map>()
+                          .map((e) => _eventTile(Map<String, dynamic>.from(e))),
                   ],
                 ),
     );

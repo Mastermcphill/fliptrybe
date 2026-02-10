@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 
@@ -8,9 +7,28 @@ class MerchantService {
 
   Future<List<dynamic>> getLeaderboard() async {
     try {
-      final res = await _client.dio.get(ApiConfig.api('/merchant/leaderboard'));
+      final res =
+          await _client.dio.get(ApiConfig.api('/leaderboards') + '?limit=50');
       final data = res.data;
-      return data is List ? data : <dynamic>[];
+      final items = (data is Map && data['items'] is List)
+          ? (data['items'] as List)
+          : <dynamic>[];
+      return items.map((raw) {
+        if (raw is! Map) return <String, dynamic>{};
+        final m = Map<String, dynamic>.from(raw as Map);
+        return <String, dynamic>{
+          'user_id': m['user_id'],
+          'name': (m['shop_name'] ?? '').toString().trim().isEmpty
+              ? 'Merchant #${m['user_id'] ?? '-'}'
+              : (m['shop_name'] ?? '').toString(),
+          'score': m['score'] ?? 0,
+          'orders': m['total_orders'] ?? 0,
+          'listings': m['listings_count'] ?? 0,
+          'revenue_gross': m['total_sales'] ?? 0,
+          'state': m['state'] ?? '',
+          'city': m['city'] ?? '',
+        };
+      }).toList();
     } catch (_) {
       return <dynamic>[];
     }
@@ -18,7 +36,7 @@ class MerchantService {
 
   Future<Map<String, dynamic>> getKpis() async {
     try {
-      final res = await _client.dio.get(ApiConfig.api('/merchant/kpis'));
+      final res = await _client.dio.get(ApiConfig.api('/kpis/merchant'));
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return <String, dynamic>{'ok': false};
@@ -29,7 +47,8 @@ class MerchantService {
 
   Future<List<dynamic>> topMerchants({int limit = 20}) async {
     try {
-      final res = await _client.dio.get(ApiConfig.api('/merchants/top') + '?limit=$limit');
+      final res = await _client.dio
+          .get(ApiConfig.api('/merchants/top') + '?limit=$limit');
       final data = res.data;
       if (data is Map && data['items'] is List) return data['items'] as List;
       return <dynamic>[];
@@ -51,7 +70,8 @@ class MerchantService {
 
   Future<Map<String, dynamic>> followMerchant(int userId) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/merchants/$userId/follow'));
+      final res =
+          await _client.dio.post(ApiConfig.api('/merchants/$userId/follow'));
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return <String, dynamic>{'ok': false};
@@ -62,7 +82,8 @@ class MerchantService {
 
   Future<Map<String, dynamic>> unfollowMerchant(int userId) async {
     try {
-      final res = await _client.dio.delete(ApiConfig.api('/merchants/$userId/follow'));
+      final res =
+          await _client.dio.delete(ApiConfig.api('/merchants/$userId/follow'));
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return <String, dynamic>{'ok': false};
@@ -71,9 +92,12 @@ class MerchantService {
     }
   }
 
-  Future<bool> simulateSale({required int userId, required double amount}) async {
+  Future<bool> simulateSale(
+      {required int userId, required double amount}) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/merchants/$userId/simulate-sale'), data: {'amount': amount});
+      final res = await _client.dio.post(
+          ApiConfig.api('/merchants/$userId/simulate-sale'),
+          data: {'amount': amount});
       final code = res.statusCode ?? 0;
       return code == 200;
     } catch (_) {
@@ -81,9 +105,18 @@ class MerchantService {
     }
   }
 
-  Future<Map<String, dynamic>> addReview({required int userId, required int rating, required String comment, String raterName = 'Anonymous'}) async {
+  Future<Map<String, dynamic>> addReview(
+      {required int userId,
+      required int rating,
+      required String comment,
+      String raterName = 'Anonymous'}) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/merchants/$userId/review'), data: {'rating': rating, 'comment': comment, 'rater_name': raterName});
+      final res = await _client.dio
+          .post(ApiConfig.api('/merchants/$userId/review'), data: {
+        'rating': rating,
+        'comment': comment,
+        'rater_name': raterName
+      });
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return <String, dynamic>{'ok': false};
@@ -101,7 +134,8 @@ class MerchantService {
     String lga = '',
   }) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/merchants/profile'), data: {
+      final res =
+          await _client.dio.post(ApiConfig.api('/merchants/profile'), data: {
         'shop_name': shopName,
         'shop_category': category,
         'state': state,

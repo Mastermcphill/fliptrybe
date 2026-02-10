@@ -31,7 +31,8 @@ class OrderService {
     };
 
     try {
-      final res = await _client.dio.post(ApiConfig.api('/orders'), data: payload);
+      final res =
+          await _client.dio.post(ApiConfig.api('/orders'), data: payload);
       final data = _asMap(res.data);
       final status = res.statusCode ?? 0;
       data['status'] = status;
@@ -82,7 +83,9 @@ class OrderService {
       paymentReference: paymentReference,
     );
     if (data['ok'] != true) return null;
-    if (data['order'] is Map) return Map<String, dynamic>.from(data['order'] as Map);
+    if (data['order'] is Map) {
+      return Map<String, dynamic>.from(data['order'] as Map);
+    }
     return null;
   }
 
@@ -117,7 +120,8 @@ class OrderService {
 
   Future<List<dynamic>> timeline(int orderId) async {
     try {
-      final res = await _client.dio.get(ApiConfig.api('/orders/$orderId/timeline'));
+      final res =
+          await _client.dio.get(ApiConfig.api('/orders/$orderId/timeline'));
       final data = res.data;
       if (data is Map && data['items'] is List) return data['items'] as List;
       return <dynamic>[];
@@ -128,7 +132,8 @@ class OrderService {
 
   Future<Map<String, dynamic>> getDelivery(int orderId) async {
     try {
-      final res = await _client.dio.get(ApiConfig.api('/orders/$orderId/delivery'));
+      final res =
+          await _client.dio.get(ApiConfig.api('/orders/$orderId/delivery'));
       if (res.data is Map) return Map<String, dynamic>.from(res.data as Map);
       return <String, dynamic>{};
     } catch (_) {
@@ -138,7 +143,8 @@ class OrderService {
 
   Future<bool> merchantAccept(int orderId) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/orders/$orderId/merchant/accept'));
+      final res = await _client.dio
+          .post(ApiConfig.api('/orders/$orderId/merchant/accept'));
       final statusCode = res.statusCode ?? 0;
       return statusCode >= 200 && statusCode < 300;
     } catch (_) {
@@ -159,7 +165,8 @@ class OrderService {
     }
   }
 
-  Future<bool> driverSetStatus(int orderId, String status, {String? code}) async {
+  Future<bool> driverSetStatus(int orderId, String status,
+      {String? code}) async {
     try {
       final res = await _client.dio.post(
         ApiConfig.api('/orders/$orderId/driver/status'),
@@ -207,7 +214,8 @@ class OrderService {
     }
   }
 
-  Future<Map<String, dynamic>> sellerConfirmPickup(int orderId, String code) async {
+  Future<Map<String, dynamic>> sellerConfirmPickup(
+      int orderId, String code) async {
     try {
       final res = await _client.dio.post(
         ApiConfig.api('/seller/orders/$orderId/confirm-pickup'),
@@ -223,7 +231,8 @@ class OrderService {
     }
   }
 
-  Future<Map<String, dynamic>> driverConfirmDelivery(int orderId, String code) async {
+  Future<Map<String, dynamic>> driverConfirmDelivery(
+      int orderId, String code) async {
     try {
       final res = await _client.dio.post(
         ApiConfig.api('/driver/orders/$orderId/confirm-delivery'),
@@ -240,15 +249,9 @@ class OrderService {
   }
 
   Future<bool> buyerConfirmDelivery(int orderId, String code) async {
-    try {
-      final res = await _client.dio.post(
-        ApiConfig.api('/orders/$orderId/buyer/confirm'),
-        data: {'code': code.trim()},
-      );
-      final status = res.statusCode ?? 0;
-      return status >= 200 && status < 300;
-    } catch (_) {
-      return false;
-    }
+    // Buyer confirm endpoint is not exposed in backend route inventory yet.
+    // Keep this deterministic and non-breaking for callers.
+    final _ = code.trim();
+    return false;
   }
 }

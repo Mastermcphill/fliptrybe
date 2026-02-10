@@ -150,7 +150,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final dynamic verifiedRaw = _profile?['is_verified'];
     final bool isVerified = verifiedRaw == true;
     final kycTierRaw = _profile?['kyc_tier'];
-    final int kycTier = (kycTierRaw is int) ? kycTierRaw : int.tryParse(kycTierRaw?.toString() ?? '0') ?? 0;
+    final int kycTier = (kycTierRaw is int)
+        ? kycTierRaw
+        : int.tryParse(kycTierRaw?.toString() ?? '0') ?? 0;
     final bool isAvailable = _profile?['is_available'] == true;
 
     final String tier = _profile?['tier']?.toString() ?? "Novice";
@@ -164,7 +166,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsDemoScreen()));
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const SettingsDemoScreen()));
             },
           ),
           IconButton(
@@ -188,7 +193,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const Center(
                       child: Text(
                         "Session not available",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w800),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -244,7 +250,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             const Text(
                               "Escrow Balance",
-                              style: TextStyle(color: Colors.white70, fontSize: 14),
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 14),
                             ),
                             const SizedBox(height: 10),
                             Text(
@@ -268,14 +275,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(
                                     color: Colors.black26,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Text(
                                     tier,
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 12),
                                   ),
                                 )
                               ],
@@ -293,29 +302,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF2A2A2A),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.orangeAccent.withOpacity(0.6)),
+                            border: Border.all(
+                                color: Colors.orangeAccent.withOpacity(0.6)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
                                 'Verify your email to unlock withdrawals, tier upgrades, and selling.',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, height: 1.3),
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.3),
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 'We will email you a secure link to confirm your account.',
-                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12.5),
+                                style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 12.5),
                               ),
                               const SizedBox(height: 10),
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
-                                  onPressed: _sendingVerify ? null : _resendVerify,
+                                  onPressed:
+                                      _sendingVerify ? null : _resendVerify,
                                   icon: _sendingVerify
-                                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))
                                       : const Icon(Icons.mail_outline),
-                                  label: Text(_sendingVerify ? 'Sending...' : 'Resend verification link'),
+                                  label: Text(_sendingVerify
+                                      ? 'Sending...'
+                                      : 'Resend verification link'),
                                 ),
                               ),
                             ],
@@ -328,16 +350,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildActionButton(Icons.account_balance_wallet, "Withdraw"),
-                          _buildActionButton(Icons.history, "History", onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ReceiptsScreen()));
+                          _buildActionButton(
+                              Icons.account_balance_wallet, "Withdraw",
+                              onTap: () {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const WalletScreen()));
+                          }),
+                          _buildActionButton(Icons.history, "History",
+                              onTap: () {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const ReceiptsScreen()));
                           }),
                           _buildActionButton(
                             Icons.verified_user,
                             "Verify ID",
                             isAlert: !isVerified,
                             onTap: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const KycDemoScreen()));
                             },
                           ),
                         ],
@@ -346,33 +382,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 30),
 
                       // 3. MENU LIST
-                      _buildMenuItem(Icons.shopping_bag, "My Orders", onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen()));
+                      _buildMenuItem(Icons.shopping_bag, "My Orders",
+                          onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const OrdersScreen()));
                       }),
-                      _buildMenuItem(Icons.store, "My Listings",
-                          onTap: (() {
-                            final role = (_profile?["role"] ?? "buyer").toString();
-                            final isMerchant = role == "merchant" || role == "admin";
-                            if (!isMerchant) return null;
-                            return () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantListingsDemoScreen()));
-                            };
-                          })(),
+                      _buildMenuItem(
+                        Icons.store,
+                        "My Listings",
+                        onTap: (() {
+                          final role =
+                              (_profile?["role"] ?? "buyer").toString();
+                          final isMerchant =
+                              role == "merchant" || role == "admin";
+                          if (!isMerchant) return null;
+                          return () {
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        const MerchantListingsDemoScreen()));
+                          };
+                        })(),
                       ),
-                      _buildMenuItem(Icons.analytics, "Sales Analytics", onTap: () {
+                      _buildMenuItem(Icons.analytics, "Sales Analytics",
+                          onTap: () {
                         final role = (_profile?["role"] ?? "buyer").toString();
                         if (role == "merchant" || role == "admin") {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SalesAnalyticsScreen()));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const SalesAnalyticsScreen()));
                         } else {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const InvestorMetricsScreen()));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const InvestorMetricsScreen()));
                         }
                       }),
-                      _buildMenuItem(Icons.support_agent, "Help & Disputes", onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportTicketsScreen()));
+                      _buildMenuItem(Icons.support_agent, "Help & Disputes",
+                          onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SupportTicketsScreen()));
                       }),
-                      _buildMenuItem(Icons.mark_email_read, "Verify Email", onTap: () {
+                      _buildMenuItem(Icons.mark_email_read, "Verify Email",
+                          onTap: () {
                         final email = _profile?['email']?.toString();
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => EmailVerifyScreen(initialEmail: email)));
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    EmailVerifyScreen(initialEmail: email)));
                       }),
 
                       const SizedBox(height: 20),
@@ -380,18 +446,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (kDebugMode) ...[
                         const SizedBox(height: 6),
                         ListTile(
-                          leading: const Icon(Icons.bug_report_outlined, color: Colors.orange),
-                          title: const Text('Auth Debug', style: TextStyle(color: Colors.white)),
-                          subtitle: const Text('Dev-only auth diagnostics', style: TextStyle(color: Colors.grey)),
+                          leading: const Icon(Icons.bug_report_outlined,
+                              color: Colors.orange),
+                          title: const Text('Auth Debug',
+                              style: TextStyle(color: Colors.white)),
+                          subtitle: const Text('Dev-only auth diagnostics',
+                              style: TextStyle(color: Colors.grey)),
                           onTap: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthDebugScreen()));
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) => const AuthDebugScreen()));
                           },
                         ),
                       ],
 
                       ListTile(
                         leading: const Icon(Icons.logout, color: Colors.red),
-                        title: const Text("Log Out", style: TextStyle(color: Colors.red)),
+                        title: const Text("Log Out",
+                            style: TextStyle(color: Colors.red)),
                         onTap: _handleLogout,
                       ),
                     ],
@@ -401,7 +474,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label, {bool isAlert = false, VoidCallback? onTap}) {
+  Widget _buildActionButton(IconData icon, String label,
+      {bool isAlert = false, VoidCallback? onTap}) {
     return Column(
       children: [
         InkWell(
@@ -410,19 +484,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Stack(
             children: [
               Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(15),
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E1E),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(icon, color: Colors.white, size: 28),
               ),
-              child: Icon(icon, color: Colors.white, size: 28),
-            ),
-            if (isAlert)
-              const Positioned(
-                right: 0,
-                top: 0,
-                child: CircleAvatar(radius: 6, backgroundColor: Colors.red),
-              )
+              if (isAlert)
+                const Positioned(
+                  right: 0,
+                  top: 0,
+                  child: CircleAvatar(radius: 6, backgroundColor: Colors.red),
+                )
             ],
           ),
         ),
@@ -443,14 +517,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: ListTile(
         leading: Icon(icon, color: Colors.white),
         title: Text(title, style: const TextStyle(color: Colors.white)),
-        subtitle: enabled ? null : const Text('In next release', style: TextStyle(color: Colors.grey)),
-        trailing: Icon(enabled ? Icons.arrow_forward_ios : Icons.lock_outline, color: Colors.grey, size: 16),
+        subtitle: enabled
+            ? null
+            : const Text('In next release',
+                style: TextStyle(color: Colors.grey)),
+        trailing: Icon(enabled ? Icons.arrow_forward_ios : Icons.lock_outline,
+            color: Colors.grey, size: 16),
         onTap: onTap,
       ),
     );
   }
 }
-
 
 class AuthDebugScreen extends StatefulWidget {
   const AuthDebugScreen({super.key});

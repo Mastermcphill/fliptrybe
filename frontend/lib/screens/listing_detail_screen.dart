@@ -123,8 +123,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       );
 
       if (result['ok'] != true) {
-        final msg = (result['message'] ?? result['error'] ?? 'Order not created').toString();
-        if (ApiService.isEmailNotVerified(result) || ApiService.isEmailNotVerified(msg)) {
+        final msg =
+            (result['message'] ?? result['error'] ?? 'Order not created')
+                .toString();
+        if (ApiService.isEmailNotVerified(result) ||
+            ApiService.isEmailNotVerified(msg)) {
           if (!mounted) return;
           await showEmailVerificationRequiredDialog(
             context,
@@ -133,7 +136,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           );
           return;
         }
-        if (ApiService.isSellerCannotBuyOwnListing(result) || ApiService.isSellerCannotBuyOwnListing(msg)) {
+        if (ApiService.isSellerCannotBuyOwnListing(result) ||
+            ApiService.isSellerCannotBuyOwnListing(msg)) {
           _toast("You can't place an order on your own listing.");
           return;
         }
@@ -141,14 +145,19 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         return;
       }
 
-      final orderRaw = result['order'] is Map ? Map<String, dynamic>.from(result['order'] as Map) : result;
+      final orderRaw = result['order'] is Map
+          ? Map<String, dynamic>.from(result['order'] as Map)
+          : result;
       final order = Map<String, dynamic>.from(orderRaw);
       final orderId = _asInt(order['id']);
       if (orderId == null) throw Exception('Order not created');
 
       if (!mounted) return;
       _toast('Order created');
-      Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)));
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(orderId: orderId)));
     } catch (e) {
       if (mounted) _toast('Failed: $e');
     } finally {
@@ -167,8 +176,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     final merchantId = _asInt(_detail['user_id']) ??
         _asInt(_detail['merchant_id']) ??
         _asInt(_detail['owner_id']);
-    final isOwnListing = _viewerId != null && merchantId != null && merchantId == _viewerId;
-    final canBuy = !isOwnListing && listingId != null && listingId > 0 && merchantId != null && merchantId > 0;
+    final isOwnListing =
+        _viewerId != null && merchantId != null && merchantId == _viewerId;
+    final canBuy = !isOwnListing &&
+        listingId != null &&
+        listingId > 0 &&
+        merchantId != null &&
+        merchantId > 0;
 
     if (title.trim().isEmpty && price <= 0) {
       return Scaffold(
@@ -186,7 +200,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           if (_detailError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Load failed: $_detailError', style: const TextStyle(color: Colors.redAccent)),
+              child: Text('Load failed: $_detailError',
+                  style: const TextStyle(color: Colors.redAccent)),
             ),
           SafeImage(
             url: img,
@@ -195,9 +210,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
-          Text('NGN $price', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          Text('NGN $price',
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 10),
           if (desc.isNotEmpty) Text(desc),
           if (isDemo) ...[
@@ -208,34 +227,41 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ),
           ],
           const Divider(height: 28),
-          const Text('Delivery details', style: TextStyle(fontWeight: FontWeight.w800)),
+          const Text('Delivery details',
+              style: TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           TextField(
             controller: _pickupCtrl,
-            decoration: const InputDecoration(labelText: 'Pickup', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Pickup', border: OutlineInputBorder()),
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _dropoffCtrl,
-            decoration: const InputDecoration(labelText: 'Dropoff', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Dropoff', border: OutlineInputBorder()),
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _deliveryFeeCtrl,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Delivery fee (NGN)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Delivery fee (NGN)', border: OutlineInputBorder()),
           ),
           const SizedBox(height: 14),
           if (isOwnListing)
-            const Text("You can't buy your own listing.", style: TextStyle(color: Colors.redAccent)),
+            const Text("You can't buy your own listing.",
+                style: TextStyle(color: Colors.redAccent)),
           ElevatedButton(
             onPressed: _busy || !canBuy ? null : _buyNowAndRequestDelivery,
             child: Text(
               _busy
                   ? 'Processing...'
-                  : (canBuy ? 'Buy Now + Request Delivery' : 'Not available yet'),
+                  : (canBuy
+                      ? 'Buy Now + Request Delivery'
+                      : 'Not available yet'),
             ),
           ),
         ],
