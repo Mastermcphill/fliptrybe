@@ -45,6 +45,93 @@ function Fail($msg) { Write-Host "FAIL:" $msg; exit 1 }
 function OkStatus($code) { return ($code -ge 200 -and $code -lt 300) }
 function New-RandomEmail($prefix) { return ("{0}_{1}@t.com" -f $prefix, (Get-Random)) }
 function New-RandomPhone() { return ("+23480{0}" -f (Get-Random -Minimum 100000000 -Maximum 999999999)) }
+function Get-ListingOwnerId($item) {
+  if ($null -eq $item) { return $null }
+  foreach ($k in @("user_id", "merchant_id", "owner_id")) {
+    if ($item.PSObject.Properties.Name -contains $k) {
+      $v = $item.$k
+      if ($null -ne $v -and "$v" -ne "") {
+        try { return [int]$v } catch { return $v }
+      }
+    }
+  }
+  return $null
+}
+function Resolve-MerchantOwnedListingId {
+  param(
+    [hashtable]$AdminHeaders,
+    [hashtable]$MerchantHeaders,
+    [int]$MerchantId
+  )
+
+  $firstFive = @()
+  $adminListings = Invoke-Api -Method "GET" -Path "/api/admin/listings" -Headers $AdminHeaders
+  Write-Host "admin listings:" $adminListings.StatusCode
+
+  if (OkStatus $adminListings.StatusCode -and $adminListings.Json -and $adminListings.Json.items) {
+    $items = @($adminListings.Json.items)
+    $firstFive = $items | Select-Object -First 5 | ForEach-Object {
+      [pscustomobject]@{ id = $_.id; owner_id = (Get-ListingOwnerId $_) }
+    }
+    $owned = $items | Where-Object { [int](Get-ListingOwnerId $_) -eq $MerchantId } | Select-Object -First 1
+    if ($owned -and $owned.id) {
+      return [pscustomobject]@{
+        ok = $true
+        listing_id = [int]$owned.id
+        reason = "found_merchant_owned_listing"
+        first_five = $firstFive
+      }
+    }
+  }
+
+  $createListing = Invoke-Api -Method "POST" -Path "/api/listings" -Headers $MerchantHeaders -BodyObj @{
+    title = "QA Listing $(Get-Date -Format 'yyyyMMddHHmmss')"
+    description = "QA"
+    price = 100
+    state = "Lagos"
+    city = "Ikeja"
+    locality = ""
+  }
+  Write-Host "create listing (merchant):" $createListing.StatusCode
+  if ($createListing.Body) { Write-Host "create listing body:" $createListing.Body }
+  if (OkStatus $createListing.StatusCode -and $createListing.Json -and $createListing.Json.listing -and $createListing.Json.listing.id) {
+    return [pscustomobject]@{
+      ok = $true
+      listing_id = [int]$createListing.Json.listing.id
+      reason = "created_listing_as_merchant"
+      first_five = $firstFive
+    }
+  }
+
+  $seed = Invoke-Api -Method "POST" -Path "/api/admin/demo/seed-listing" -Headers $AdminHeaders
+  Write-Host "seed listing:" $seed.StatusCode
+  if ($seed.Body) { Write-Host "seed listing body:" $seed.Body }
+
+  $adminListingsAfter = Invoke-Api -Method "GET" -Path "/api/admin/listings" -Headers $AdminHeaders
+  Write-Host "admin listings (after seed):" $adminListingsAfter.StatusCode
+  if (OkStatus $adminListingsAfter.StatusCode -and $adminListingsAfter.Json -and $adminListingsAfter.Json.items) {
+    $itemsAfter = @($adminListingsAfter.Json.items)
+    $firstFive = $itemsAfter | Select-Object -First 5 | ForEach-Object {
+      [pscustomobject]@{ id = $_.id; owner_id = (Get-ListingOwnerId $_) }
+    }
+    $ownedAfter = $itemsAfter | Where-Object { [int](Get-ListingOwnerId $_) -eq $MerchantId } | Select-Object -First 1
+    if ($ownedAfter -and $ownedAfter.id) {
+      return [pscustomobject]@{
+        ok = $true
+        listing_id = [int]$ownedAfter.id
+        reason = "found_after_seed"
+        first_five = $firstFive
+      }
+    }
+  }
+
+  return [pscustomobject]@{
+    ok = $false
+    listing_id = $null
+    reason = "no_merchant_owned_listing_found"
+    first_five = $firstFive
+  }
+}
 
 Write-Host "base:" $Base
 $version = Invoke-Api -Method "GET" -Path "/api/version"
@@ -106,6 +193,8 @@ if ($MerchantEmail) {
   if (OkStatus $merchantLogin.StatusCode -and $merchantLogin.Json -and $merchantLogin.Json.token) {
     $merchantToken = $merchantLogin.Json.token
     $merchantHeaders = @{ Authorization = "Bearer $merchantToken" }
+  } else {
+    Fail "merchant login failed for provided MERCHANT_EMAIL/MERCHANT_PASSWORD"
   }
 }
 
@@ -201,89 +290,41 @@ $chat = Invoke-Api -Method "POST" -Path "/api/support/messages" -Headers $buyerH
 Write-Host "buyer chat non-admin target:" $chat.StatusCode
 if ($chat.StatusCode -ne 403) { Fail "chat not blocked" }
 
-# Self-buy guard test: choose merchant-owned listing if possible; otherwise test using owner id from any listing via admin.
-$listingId = $null
-$listingOwnerId = $null
-
-$createListing = Invoke-Api -Method "POST" -Path "/api/listings" -Headers $merchantHeaders -BodyObj @{
-  title = "QA Listing $(Get-Date -Format 'yyyyMMddHHmmss')"
-  description = "QA"
-  price = 100
-  state = "Lagos"
-  city = "Ikeja"
-  locality = ""
-}
-Write-Host "create listing (merchant):" $createListing.StatusCode
-if (OkStatus $createListing.StatusCode -and $createListing.Json -and $createListing.Json.listing) {
-  $listingId = $createListing.Json.listing.id
-  $listingOwnerId = $merchantId
-}
-
-if (-not $listingId) {
-  $adminListings = Invoke-Api -Method "GET" -Path "/api/admin/listings" -Headers $adminHeaders
-  Write-Host "admin listings:" $adminListings.StatusCode
-
-  if (OkStatus $adminListings.StatusCode -and $adminListings.Json -and $adminListings.Json.items -and $adminListings.Json.items.Count -eq 0) {
-    $seed = Invoke-Api -Method "POST" -Path "/api/admin/demo/seed-listing" -Headers $adminHeaders
-    Write-Host "seed listing:" $seed.StatusCode
-    if ($seed.Body) { Write-Host "seed listing body:" $seed.Body }
-    $adminListings = Invoke-Api -Method "GET" -Path "/api/admin/listings" -Headers $adminHeaders
-    Write-Host "admin listings (after seed):" $adminListings.StatusCode
-
-    if (OkStatus $adminListings.StatusCode -and $adminListings.Json -and $adminListings.Json.items -and $adminListings.Json.items.Count -eq 0) {
-      $demoSeed = Invoke-Api -Method "POST" -Path "/api/demo/seed"
-      Write-Host "demo seed fallback:" $demoSeed.StatusCode
-      if ($demoSeed.Body) { Write-Host "demo seed body:" $demoSeed.Body }
-      $adminListings = Invoke-Api -Method "GET" -Path "/api/admin/listings" -Headers $adminHeaders
-      Write-Host "admin listings (after demo seed):" $adminListings.StatusCode
+# Self-buy guard test: must use a merchant-owned listing.
+$resolvedListing = Resolve-MerchantOwnedListingId -AdminHeaders $adminHeaders -MerchantHeaders $merchantHeaders -MerchantId ([int]$merchantId
+)
+if (-not $resolvedListing.ok -or -not $resolvedListing.listing_id) {
+  Write-Host "merchant id:" $merchantId
+  Write-Host "listing resolve reason:" $resolvedListing.reason
+  if ($resolvedListing.first_five -and $resolvedListing.first_five.Count -gt 0) {
+    Write-Host "first 5 admin listings (id/owner_id):"
+    foreach ($row in $resolvedListing.first_five) {
+      Write-Host " - id=$($row.id), owner_id=$($row.owner_id)"
     }
+  } else {
+    Write-Host "first 5 admin listings (id/owner_id): none"
   }
-
-  if (OkStatus $adminListings.StatusCode -and $adminListings.Json -and $adminListings.Json.items -and $adminListings.Json.items.Count -gt 0) {
-    $owned = $adminListings.Json.items | Where-Object { [int]$_.merchant_id -eq [int]$merchantId } | Select-Object -First 1
-    $chosen = $owned
-    if (-not $chosen) { $chosen = $adminListings.Json.items | Select-Object -First 1 }
-    if ($chosen) {
-      $listingId = [int]$chosen.id
-      $listingOwnerId = [int]$chosen.merchant_id
-    }
-  }
+  Fail "merchant-owned listing id missing"
 }
 
-$selfBuySkipped = $false
-if (-not $listingId -or -not $listingOwnerId) {
-  $selfBuySkipped = $true
-  Write-Host "WARN: self-buy check skipped (no listing data available)."
-} else {
-  $orderHeaders = $merchantHeaders
-  $orderBody = @{
-    listing_id = [int]$listingId
-    amount = 100
-    delivery_fee = 0
-    inspection_fee = 0
-    pickup = "Ikeja"
-    dropoff = "Ikeja"
-    payment_reference = "qa_selfbuy_$(Get-Date -Format 'yyyyMMddHHmmss')"
-  }
-
-  if ([int]$listingOwnerId -ne [int]$merchantId) {
-    # Use admin to simulate owner self-buy when listing is not owned by our generated merchant.
-    $orderHeaders = $adminHeaders
-    $orderBody["buyer_id"] = [int]$listingOwnerId
-  }
-
-  $buy = Invoke-Api -Method "POST" -Path "/api/orders" -Headers $orderHeaders -BodyObj $orderBody
-  Write-Host "self-buy order:" $buy.StatusCode
-  if ($buy.StatusCode -ne 409 -and $buy.StatusCode -ne 400) { Fail "self-buy not blocked with expected status" }
-  if (-not $buy.Json) { Fail "self-buy response missing JSON body" }
-  if ($buy.Json.error -ne "SELLER_CANNOT_BUY_OWN_LISTING") { Fail "self-buy response missing expected error code" }
-  if (-not ($buy.Json.message -like "*own listing*")) { Fail "self-buy response missing expected message" }
+$listingId = [int]$resolvedListing.listing_id
+$buy = Invoke-Api -Method "POST" -Path "/api/orders" -Headers $merchantHeaders -BodyObj @{
+  listing_id = $listingId
+  merchant_id = [int]$merchantId
+  amount = 100
+  delivery_fee = 0
+  inspection_fee = 0
+  pickup = "Ikeja"
+  dropoff = "Ikeja"
+  payment_reference = "qa_selfbuy_$(Get-Date -Format 'yyyyMMddHHmmss')"
 }
+Write-Host "self-buy order:" $buy.StatusCode
+if ($buy.Body) { Write-Host "self-buy body:" $buy.Body }
+if ($buy.StatusCode -ne 409 -and $buy.StatusCode -ne 400) { Fail "self-buy not blocked with expected status" }
+if (-not $buy.Json) { Fail "self-buy response missing JSON body" }
+if ($buy.Json.error -ne "SELLER_CANNOT_BUY_OWN_LISTING") { Fail "self-buy response missing expected error code" }
+if (-not ($buy.Json.message -like "*own listing*")) { Fail "self-buy response missing expected message" }
 
 if ($generatedBuyerEmail) { Write-Host "buyer generated email:" $generatedBuyerEmail }
 if ($generatedMerchantEmail) { Write-Host "merchant generated email:" $generatedMerchantEmail }
-if ($selfBuySkipped) {
-  Write-Host "OK: rules smoke passed (self-buy skipped)"
-} else {
-  Write-Host "OK: rules smoke passed"
-}
+Write-Host "OK: rules smoke passed"
