@@ -5,6 +5,7 @@ import hmac
 import random
 import secrets
 import uuid
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
@@ -327,7 +328,11 @@ def _ensure_availability_request(order: Order, listing: Listing | None, merchant
         recipients.append(int(seller_id))
 
     _queue_availability_notifications(order, token, recipients)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        # Notification queue drift should not break order state transitions.
+        db.session.rollback()
     return row
 
 
@@ -512,6 +517,22 @@ def create_order():
                 out["params"] = params
         return out
 
+    def _parse_money(raw_value, field_name: str, *, required: bool = False) -> Decimal | None:
+        if raw_value is None:
+            if required:
+                raise ValueError(f"{field_name} required")
+            return None
+        text_value = str(raw_value).strip()
+        if text_value == "":
+            if required:
+                raise ValueError(f"{field_name} required")
+            return None
+        try:
+            parsed = Decimal(text_value)
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValueError(f"{field_name} invalid")
+        return parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
     buyer_id_raw = payload.get("buyer_id")
     try:
         buyer_id = int(buyer_id_raw or u.id)
@@ -588,22 +609,11 @@ def create_order():
         })}), 400
 
     try:
-        amount = float(payload.get("amount") or 0.0)
-    except Exception:
-        amount = 0.0
-    try:
-        total_price = float(payload.get("total_price") or payload.get("totalPrice") or amount or 0.0)
-    except Exception:
-        total_price = float(amount or 0.0)
-
-    try:
-        delivery_fee = float(payload.get("delivery_fee") or 0.0)
-    except Exception:
-        delivery_fee = 0.0
-    try:
-        inspection_fee = float(payload.get("inspection_fee") or 0.0)
-    except Exception:
-        inspection_fee = 0.0
+        amount_dec = _parse_money(payload.get("amount"), "amount", required=False)
+        delivery_fee_dec = _parse_money(payload.get("delivery_fee"), "delivery_fee", required=False) or Decimal("0.00")
+        inspection_fee_dec = _parse_money(payload.get("inspection_fee"), "inspection_fee", required=False) or Decimal("0.00")
+    except ValueError as parse_error:
+        return jsonify({"ok": False, "message": str(parse_error), **_debug_payload()}), 400
 
     pickup = (payload.get("pickup") or "").strip()
     dropoff = (payload.get("dropoff") or "").strip()
@@ -644,21 +654,51 @@ def create_order():
         except Exception:
             seller_role = "buyer"
 
-        base_price = float(getattr(listing, "base_price", 0.0) or 0.0)
-        if base_price <= 0.0:
-            base_price = float(getattr(listing, "price", 0.0) or 0.0)
-        platform_fee = float(getattr(listing, "platform_fee", 0.0) or 0.0)
-        final_price = float(getattr(listing, "final_price", 0.0) or 0.0)
+        try:
+            base_price = Decimal(str(getattr(listing, "base_price", 0.0) or 0.0))
+        except Exception:
+            base_price = Decimal("0.00")
+        if base_price <= 0:
+            try:
+                base_price = Decimal(str(getattr(listing, "price", 0.0) or 0.0))
+            except Exception:
+                base_price = Decimal("0.00")
+        try:
+            platform_fee = Decimal(str(getattr(listing, "platform_fee", 0.0) or 0.0))
+        except Exception:
+            platform_fee = Decimal("0.00")
+        try:
+            final_price = Decimal(str(getattr(listing, "final_price", 0.0) or 0.0))
+        except Exception:
+            final_price = Decimal("0.00")
+
+        base_price = base_price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        platform_fee = platform_fee.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        final_price = final_price.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
         if seller_role == "merchant":
-            if platform_fee <= 0.0:
-                platform_fee = round(base_price * 0.03, 2)
-            if final_price <= 0.0:
-                final_price = round(base_price + platform_fee, 2)
-            amount = float(final_price)
+            if platform_fee <= 0:
+                platform_fee = (base_price * Decimal("0.03")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if final_price <= 0:
+                final_price = (base_price + platform_fee).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            amount_dec = final_price
         else:
-            amount = float(base_price)
-        total_price = float(amount)
+            amount_dec = base_price
+
+    if amount_dec is None:
+        return jsonify({"ok": False, "message": "amount required", **_debug_payload({
+            "amount_raw": payload.get("amount"),
+        })}), 400
+
+    amount_dec = amount_dec.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    if amount_dec < 0 or delivery_fee_dec < 0 or inspection_fee_dec < 0:
+        return jsonify({"ok": False, "message": "amount values must be non-negative", **_debug_payload()}), 400
+
+    total_price_dec = (amount_dec + delivery_fee_dec + inspection_fee_dec).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    amount = float(amount_dec)
+    delivery_fee = float(delivery_fee_dec)
+    inspection_fee = float(inspection_fee_dec)
+    total_price = float(total_price_dec)
 
     handshake_id = (payload.get("handshake_id") or "").strip()
     if not handshake_id:
@@ -685,10 +725,21 @@ def create_order():
         db.session.add(order)
         db.session.commit()
         if payment_reference:
-            _mark_paid(order, payment_reference, actor_id=int(u.id))
-            order.updated_at = datetime.utcnow()
-            db.session.add(order)
-            db.session.commit()
+            try:
+                _mark_paid(order, payment_reference, actor_id=int(u.id))
+                order.updated_at = datetime.utcnow()
+                db.session.add(order)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                try:
+                    current_app.logger.exception(
+                        "orders.create_mark_paid_side_effect_failed order_id=%s user_id=%s",
+                        int(getattr(order, "id", 0) or 0),
+                        int(getattr(u, "id", 0) or 0),
+                    )
+                except Exception:
+                    pass
         _event(order.id, u.id, "created", "Order created")
         _notify_user(int(order.merchant_id), "New Order", f"You received a new order #{int(order.id)}")
         _notify_user(int(order.buyer_id), "Order Created", f"Your order #{int(order.id)} was created")
