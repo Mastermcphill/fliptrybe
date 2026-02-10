@@ -6,11 +6,13 @@ import '../services/api_config.dart';
 class LandingScreen extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onSignup;
+  final bool enableTicker;
 
   const LandingScreen({
     super.key,
     required this.onLogin,
     required this.onSignup,
+    this.enableTicker = true,
   });
 
   @override
@@ -25,16 +27,18 @@ class _LandingScreenState extends State<LandingScreen> {
   @override
   void initState() {
     super.initState();
-    _loadTicker();
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
-      if (_items.isNotEmpty) {
-        setState(() => _idx = (_idx + 1) % _items.length);
-      }
-      // refresh occasionally
-      if (DateTime.now().second % 30 == 0) {
-        _loadTicker();
-      }
-    });
+    if (widget.enableTicker) {
+      _loadTicker();
+      _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+        if (_items.isNotEmpty) {
+          setState(() => _idx = (_idx + 1) % _items.length);
+        }
+        // refresh occasionally
+        if (DateTime.now().second % 30 == 0) {
+          _loadTicker();
+        }
+      });
+    }
   }
 
   Future<void> _loadTicker() async {
@@ -71,86 +75,92 @@ class _LandingScreenState extends State<LandingScreen> {
     return Alignment.center;
   }
 
-  BoxFit _heroFit(BoxConstraints c) {
-    final r = c.maxHeight / (c.maxWidth == 0 ? 1 : c.maxWidth);
-    // Use fitWidth on tall screens to avoid aggressive cropping.
-    if (r > 1.7) return BoxFit.fitWidth;
-    return BoxFit.cover;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, c) {
-          final alignment = _heroAlignment(c);
-          final fit = _heroFit(c);
-          final isCompact = c.maxWidth < 360;
-          final headlineSize = isCompact ? 30.0 : 36.0;
-          final bodySize = isCompact ? 14.0 : 15.0;
-          final ctaHeight = isCompact ? 48.0 : 52.0;
-          final ctaRadius = isCompact ? 12.0 : 14.0;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              // Responsive hero crop for iOS/Android/Mac/Windows
-              Image.asset(
-                'assets/images/landing_hero.jpg',
-                fit: fit,
-                alignment: alignment,
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.55),
-                      Colors.black.withOpacity(0.78),
-                    ],
-                  ),
-                ),
-              ),
-
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
+      backgroundColor: const Color(0xFF020617),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final alignment = _heroAlignment(c);
+            final isCompact = c.maxWidth < 360 || c.maxHeight < 700;
+            final headlineSize = isCompact ? 28.0 : 36.0;
+            final bodySize = isCompact ? 13.0 : 15.0;
+            final ctaHeight = isCompact ? 46.0 : 52.0;
+            final ctaRadius = isCompact ? 12.0 : 14.0;
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: c.maxHeight - 30),
+                child: IntrinsicHeight(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Floating live confirmation board
-                      if (_items.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.white.withOpacity(0.2)),
-                          ),
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 400),
-                            child: Text(
-                              _items[_idx],
-                              key: ValueKey(_items[_idx]),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                                height: 1.1,
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.asset(
+                                'assets/images/landing_hero.jpg',
+                                fit: BoxFit.cover,
+                                alignment: alignment,
                               ),
-                            ),
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.black.withValues(alpha: 0.35),
+                                      Colors.black.withValues(alpha: 0.65),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              if (_items.isNotEmpty)
+                                Align(
+                                  alignment: Alignment.topLeft,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                      ),
+                                      child: AnimatedSwitcher(
+                                        duration: const Duration(milliseconds: 400),
+                                        child: Text(
+                                          _items[_idx],
+                                          key: ValueKey(_items[_idx]),
+                                          maxLines: isCompact ? 1 : 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            height: 1.1,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-
-                      const SizedBox(height: 18),
+                      ),
+                      const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
+                          color: Colors.white.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white.withOpacity(0.18)),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
                         ),
                         child: const Text(
                           "FlipTrybe",
@@ -161,7 +171,7 @@ class _LandingScreenState extends State<LandingScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       Text(
                         "Trade with trust.\nMove with confidence.",
                         style: TextStyle(
@@ -171,17 +181,17 @@ class _LandingScreenState extends State<LandingScreen> {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
-                        "Listings, inspections, and delivery that keep your money safe.\nBuilt for real-world hustle, without the chaos.",
+                        "Listings, inspections, and delivery that keep your money safe. Built for real-world hustle, without the chaos.",
                         style: TextStyle(
                           fontSize: bodySize,
-                          height: 1.45,
-                          color: Colors.white.withOpacity(0.92),
+                          height: 1.4,
+                          color: Colors.white.withValues(alpha: 0.92),
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
                         height: ctaHeight,
@@ -208,7 +218,7 @@ class _LandingScreenState extends State<LandingScreen> {
                           onPressed: widget.onSignup,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withOpacity(0.75)),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.75)),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(ctaRadius),
                             ),
@@ -221,16 +231,19 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        "Merchants can sell globally, while we handle inspection + delivery in Nigeria.",
-                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontWeight: FontWeight.w600),
+                        "Merchants can sell globally, while we handle inspection and delivery in Nigeria.",
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

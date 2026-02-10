@@ -215,6 +215,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     required String subtitle,
     required IconData icon,
     bool primary = false,
+    String? badge,
   }) {
     final selected = _role == value;
     final double cardPadding = _compact ? 14 : 16;
@@ -280,6 +281,36 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                       fontWeight: FontWeight.w600,
                       fontSize: _compact ? 11.5 : 12.5,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      if (badge != null && badge.trim().isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            badge,
+                            style: TextStyle(
+                              color: selected ? Colors.white : const Color(0xFF0F172A),
+                              fontSize: _compact ? 10 : 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      const Spacer(),
+                      Text(
+                        "Tap to continue",
+                        style: TextStyle(
+                          color: selected ? Colors.white.withOpacity(0.9) : const Color(0xFF1D4ED8),
+                          fontWeight: FontWeight.w700,
+                          fontSize: _compact ? 10.5 : 11.5,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -366,7 +397,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               _roleCard(
                 value: "buyer",
                 title: "Buy & Sell",
-                subtitle: "Buy and sell items safely with escrow and delivery confirmation.",
+                subtitle: "Buy and sell, track orders, and chat admin for support.",
                 icon: Icons.shopping_bag_rounded,
                 primary: true,
               ),
@@ -374,22 +405,25 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               _roleCard(
                 value: "merchant",
                 title: "Merchant",
-                subtitle: "List items, manage orders, and grow followers.",
+                subtitle: "List products and manage sales. Verified email required for sensitive actions.",
                 icon: Icons.storefront_rounded,
+                badge: "Requires admin approval",
               ),
               const SizedBox(height: 10),
               _roleCard(
                 value: "driver",
                 title: "Driver",
-                subtitle: "Deliver orders and earn. Access driver jobs based on locality.",
+                subtitle: "Accept delivery jobs and complete pickup/dropoff code confirmations.",
                 icon: Icons.delivery_dining_rounded,
+                badge: "Requires admin approval",
               ),
               const SizedBox(height: 10),
               _roleCard(
                 value: "inspector",
                 title: "Inspector",
-                subtitle: "Verify items and approve inspection tasks.",
+                subtitle: "Handle inspection tickets and submit inspection outcomes.",
                 icon: Icons.verified_user_rounded,
+                badge: "Requires admin approval",
               ),
 
               const Divider(height: 28),
