@@ -640,7 +640,11 @@ def create_order():
     try:
         seller_id_for_check = listing_merchant_id if listing_merchant_id is not None else merchant_id
         if seller_id_for_check is not None and int(buyer_id) == int(seller_id_for_check) and not _is_admin(u):
-            return jsonify({"ok": False, "message": "Sellers cannot buy their own listings"}), 409
+            return jsonify({
+                "ok": False,
+                "error": "SELLER_CANNOT_BUY_OWN_LISTING",
+                "message": "You can't place an order on your own listing.",
+            }), 409
     except Exception:
         pass
 

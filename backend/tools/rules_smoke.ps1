@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Continue"
-
 param(
   [string]$Base = "https://tri-o-fliptrybe.onrender.com",
   [string]$AdminEmail = $env:ADMIN_EMAIL,
@@ -9,6 +7,8 @@ param(
   [string]$MerchantEmail = $env:MERCHANT_EMAIL,
   [string]$MerchantPassword = $env:MERCHANT_PASSWORD
 )
+
+$ErrorActionPreference = "Continue"
 
 function Invoke-Api {
   param([string]$Method="GET",[string]$Path,[hashtable]$Headers=@{},$BodyObj=$null)
@@ -88,6 +88,8 @@ if ($merchants.Json -is [System.Collections.IEnumerable]) {
   $merchantId = ($merchants.Json | Select-Object -First 1).user_id
   if (-not $merchantId) { $merchantId = ($merchants.Json | Select-Object -First 1).id }
 }
+$merchantMe = Invoke-Api -Method "GET" -Path "/api/auth/me" -Headers $merchantHeaders
+if (-not $merchantId -and $merchantMe.Json -and $merchantMe.Json.id) { $merchantId = $merchantMe.Json.id }
 if (-not $merchantId) { Fail "no merchant id found" }
 
 # Buyer can follow merchant
@@ -102,7 +104,6 @@ if ($merchantFollow.StatusCode -ne 403) { Fail "merchant follow not blocked" }
 
 # Chat rule: user-to-user chat blocked (buyer tries to target merchant user_id)
 $buyerMe = Invoke-Api -Method "GET" -Path "/api/auth/me" -Headers $buyerHeaders
-$merchantMe = Invoke-Api -Method "GET" -Path "/api/auth/me" -Headers $merchantHeaders
 $targetId = $merchantMe.Json.id
 $chat = Invoke-Api -Method "POST" -Path "/api/support/messages" -Headers $buyerHeaders -BodyObj @{ body="Hi"; user_id=$targetId }
 Write-Host "buyer chat non-admin target:" $chat.StatusCode
@@ -118,6 +119,9 @@ if (-not $listingId) { Fail "listing id missing" }
 $merchantId = $merchantMe.Json.id
 $buy = Invoke-Api -Method "POST" -Path "/api/orders" -Headers $merchantHeaders -BodyObj @{ merchant_id=$merchantId; amount=100; delivery_fee=0; inspection_fee=0; pickup="Ikeja"; dropoff="Ikeja"; listing_id=$listingId; payment_reference="qa_selfbuy_$(Get-Date -Format 'yyyyMMddHHmmss')" }
 Write-Host "self-buy order:" $buy.StatusCode
-if ($buy.StatusCode -ne 403 -and $buy.StatusCode -ne 409) { Fail "self-buy not blocked" }
+if ($buy.StatusCode -ne 409 -and $buy.StatusCode -ne 400) { Fail "self-buy not blocked with expected status" }
+if (-not $buy.Json) { Fail "self-buy response missing JSON body" }
+if ($buy.Json.error -ne "SELLER_CANNOT_BUY_OWN_LISTING") { Fail "self-buy response missing expected error code" }
+if (-not ($buy.Json.message -like "*own listing*")) { Fail "self-buy response missing expected message" }
 
 Write-Host "OK: rules smoke passed"
