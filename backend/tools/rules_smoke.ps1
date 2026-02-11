@@ -30,6 +30,9 @@ function Invoke-Api {
       $status = [int]$_.Exception.Response.StatusCode
       $sr = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
       $body = $sr.ReadToEnd()
+      if ([string]::IsNullOrWhiteSpace($body) -and $_.ErrorDetails -and $_.ErrorDetails.Message) {
+        $body = $_.ErrorDetails.Message
+      }
     } elseif ($_.ErrorDetails) {
       $body = $_.ErrorDetails.Message
     } else {
@@ -158,6 +161,39 @@ if (-not (OkStatus $adminLogin.StatusCode)) { Fail "admin login failed" }
 $adminToken = $adminLogin.Json.token
 if (-not $adminToken) { Fail "admin token missing" }
 $adminHeaders = @{ Authorization = "Bearer $adminToken" }
+
+# Merchant register validation contract:
+#  - Missing phone -> 400 + PHONE_REQUIRED
+#  - With phone -> 201
+$merchantValidationEmail = New-RandomEmail "merchant_phone_req"
+$merchantMissingPhone = Invoke-Api -Method "POST" -Path "/api/auth/register/merchant" -BodyObj @{
+  owner_name = "Rules Merchant"
+  email = $merchantValidationEmail
+  password = "TestPass123!"
+  business_name = "Rules Merchant Store"
+  state = "Lagos"
+  city = "Ikeja"
+  category = "general"
+  reason = "merchant smoke validation"
+}
+Write-Host "merchant register missing phone:" $merchantMissingPhone.StatusCode
+if ($merchantMissingPhone.StatusCode -ne 400) { Fail "merchant register missing phone must return 400" }
+if (-not $merchantMissingPhone.Json) { Fail "merchant missing-phone response must be JSON" }
+if ("$($merchantMissingPhone.Json.error)" -ne "PHONE_REQUIRED") { Fail "merchant missing-phone response must return PHONE_REQUIRED" }
+
+$merchantWithPhone = Invoke-Api -Method "POST" -Path "/api/auth/register/merchant" -BodyObj @{
+  owner_name = "Rules Merchant"
+  email = $merchantValidationEmail
+  password = "TestPass123!"
+  phone = (New-RandomPhone)
+  business_name = "Rules Merchant Store"
+  state = "Lagos"
+  city = "Ikeja"
+  category = "general"
+  reason = "merchant smoke validation"
+}
+Write-Host "merchant register with phone:" $merchantWithPhone.StatusCode
+if ($merchantWithPhone.StatusCode -ne 201) { Fail "merchant register with phone must return 201" }
 
 $buyerLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email = $BuyerEmail; password = $BuyerPassword }
 Write-Host "buyer login:" $buyerLogin.StatusCode

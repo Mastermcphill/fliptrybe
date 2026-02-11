@@ -63,7 +63,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim();
-    final phone = _phoneCtrl.text.trim();
+    final phone = _phoneCtrl.text.replaceAll(RegExp(r'\s+'), '').trim();
     final reason = _reasonCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
     final confirm = _confirmCtrl.text.trim();

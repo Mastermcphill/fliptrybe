@@ -687,7 +687,7 @@ def register_merchant():
     if not business_name:
         return jsonify({"message": "business_name is required"}), 400
     if not phone:
-        return jsonify({"message": "phone is required"}), 400
+        return jsonify({"ok": False, "error": "PHONE_REQUIRED", "message": "Phone is required"}), 400
     if not state or not city:
         return jsonify({"message": "state and city are required"}), 400
     if not category:
@@ -762,7 +762,12 @@ def register_merchant():
             pass
         return jsonify({"message": conflict_msg}), 409
     else:
-        user = User(name=(data.get("owner_name") or data.get("name") or business_name), email=email, role="buyer")
+        user = User(
+            name=(data.get("owner_name") or data.get("name") or business_name),
+            email=email,
+            role="buyer",
+            phone=phone,
+        )
         user.set_password(password)
         try:
             user.is_verified = False
@@ -777,14 +782,19 @@ def register_merchant():
                 current_app.logger.exception("register_merchant_integrity_error")
             except Exception:
                 pass
-            return jsonify({"message": _conflict_message_from_integrity(e)}), 409
+            emsg = str(e).lower()
+            if "phone" in emsg and ("not null" in emsg or "null value" in emsg):
+                return jsonify({"ok": False, "error": "PHONE_REQUIRED", "message": "Phone is required"}), 400
+            if "unique" in emsg or "duplicate key" in emsg:
+                return jsonify({"ok": False, "error": "CONFLICT", "message": _conflict_message_from_integrity(e)}), 409
+            return jsonify({"ok": False, "error": "REGISTER_FAILED", "message": "Failed to register"}), 500
         except SQLAlchemyError:
             db.session.rollback()
             try:
                 current_app.logger.exception("register_merchant_db_error")
             except Exception:
                 pass
-            return jsonify({"message": "Failed to register"}), 500
+            return jsonify({"ok": False, "error": "REGISTER_FAILED", "message": "Failed to register"}), 500
         try:
             vtoken = _issue_verification_token(user, ttl_minutes=30)
             if vtoken:

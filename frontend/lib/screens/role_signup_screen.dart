@@ -68,7 +68,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       final name = _name.text.trim();
       final email = _email.text.trim();
       final password = _password.text.trim();
-      final phone = _phone.text.trim();
+      final phone = _phone.text.replaceAll(RegExp(r'\s+'), '').trim();
 
       if (name.isEmpty) {
         _toast("Full name is required");
