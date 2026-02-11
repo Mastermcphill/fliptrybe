@@ -12,7 +12,7 @@ class EmailVerifyScreen extends StatefulWidget {
 
 class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
   final _emailCtrl = TextEditingController();
-  final _codeCtrl = TextEditingController();
+  final _tokenCtrl = TextEditingController();
   bool _loading = false;
   bool _verified = false;
   String? _status;
@@ -52,8 +52,13 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
     if (_loading) return;
     setState(() => _loading = true);
     try {
-      await ApiService.verifySend();
-      _toast('If the account exists, a verification message was sent.');
+      final res = await ApiService.verifySend();
+      final link = (res['verification_link'] ?? '').toString().trim();
+      if (link.isNotEmpty) {
+        _toast('Verification link generated. Check logs/inbox.');
+      } else {
+        _toast('Verification link sent. Check your inbox.');
+      }
     } catch (e) {
       _toast('Send failed: $e');
     } finally {
@@ -63,14 +68,14 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
 
   Future<void> _confirm() async {
     if (_loading) return;
-    final codeOrToken = _codeCtrl.text.trim();
-    if (codeOrToken.isEmpty) {
-      _toast('Enter the code or token.');
+    final token = _tokenCtrl.text.trim();
+    if (token.isEmpty) {
+      _toast('Enter the token from the verification link.');
       return;
     }
     setState(() => _loading = true);
     try {
-      await ApiService.verifyConfirm(token: codeOrToken);
+      await ApiService.verifyConfirm(token: token);
       _toast('Email verified.');
       await _loadStatus();
     } catch (e) {
@@ -83,7 +88,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
   @override
   void dispose() {
     _emailCtrl.dispose();
-    _codeCtrl.dispose();
+    _tokenCtrl.dispose();
     super.dispose();
   }
 
@@ -99,7 +104,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
             const SizedBox(height: 12),
           ],
           const Text(
-            'Paste the verification token from your email link. If you did not receive it, resend a new link.',
+            'Paste the token from your verification link. If you did not receive it, resend a new link.',
             style: TextStyle(height: 1.35),
           ),
           const SizedBox(height: 12),
@@ -112,7 +117,7 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: _codeCtrl,
+            controller: _tokenCtrl,
             decoration: const InputDecoration(
               labelText: 'Verification token',
               border: OutlineInputBorder(),
@@ -121,12 +126,12 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _loading ? null : _send,
-            child: Text(_loading ? 'Please wait...' : 'Send Verification'),
+            child: Text(_loading ? 'Please wait...' : 'Resend verification link'),
           ),
           const SizedBox(height: 10),
           OutlinedButton(
             onPressed: _loading ? null : _confirm,
-            child: const Text('Confirm Verification'),
+            child: const Text('Verify email'),
           ),
           const SizedBox(height: 8),
           if (_verified)

@@ -14,6 +14,7 @@ from app.models import User, RoleChangeRequest, EmailVerificationToken, Password
 from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 from app.utils.notify import queue_email
+from app.utils.autopilot import get_settings
 
 
 def _conflict_message(email_user: User | None, phone_user: User | None) -> str | None:
@@ -59,11 +60,27 @@ def _verification_base_url() -> str:
         return ""
 
 
-def _send_verification_email(user: User, token: str) -> None:
+def _integration_mode() -> str:
+    env_mode = (os.getenv("INTEGRATIONS_MODE") or "").strip().lower()
+    if env_mode in ("disabled", "sandbox", "live"):
+        return env_mode
+    try:
+        settings = get_settings()
+        db_mode = (getattr(settings, "integrations_mode", "") or "").strip().lower()
+        if db_mode in ("disabled", "sandbox", "live"):
+            return db_mode
+    except Exception:
+        pass
+    return "disabled"
+
+
+def _send_verification_email(user: User, token: str) -> dict:
     email = (getattr(user, "email", "") or "").strip().lower()
     if not email:
-        return
+        return {"ok": False, "error": "EMAIL_REQUIRED", "message": "User email is missing", "mode": _integration_mode()}
     link = f"{_verification_base_url()}/api/auth/verify-email?token={token}"
+    mode = _integration_mode()
+    delivery = "smtp" if mode == "live" else ("mock" if mode == "sandbox" else "disabled")
     smtp_host = (os.getenv("SMTP_HOST") or "").strip()
     smtp_port = int((os.getenv("SMTP_PORT") or "587").strip() or 587)
     smtp_user = (os.getenv("SMTP_USER") or "").strip()
@@ -71,7 +88,24 @@ def _send_verification_email(user: User, token: str) -> None:
     smtp_from = (os.getenv("SMTP_FROM") or smtp_user or "no-reply@fliptrybe.com").strip()
     smtp_reply_to = (os.getenv("SMTP_REPLY_TO") or "").strip()
 
-    if smtp_host:
+    if mode == "live":
+        missing = []
+        if not smtp_host:
+            missing.append("SMTP_HOST")
+        if not ((os.getenv("SMTP_FROM") or "").strip() or smtp_user):
+            missing.append("SMTP_FROM")
+        if missing:
+            message = f"missing {', '.join(missing)}"
+            current_app.logger.warning("email_verify_misconfigured %s", message)
+            return {
+                "ok": False,
+                "error": "INTEGRATION_MISCONFIGURED",
+                "message": message,
+                "mode": mode,
+                "delivery": delivery,
+                "link": link,
+            }
+
         msg = EmailMessage()
         msg["Subject"] = "Verify your FlipTrybe email"
         msg["From"] = smtp_from
@@ -90,11 +124,24 @@ def _send_verification_email(user: User, token: str) -> None:
                     server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
             current_app.logger.info("email_verify_sent email=%s", email)
-            return
+            return {
+                "ok": True,
+                "mode": mode,
+                "delivery": delivery,
+                "message": "Verification email sent",
+            }
         except Exception:
             current_app.logger.exception("email_verify_send_failed")
+            return {
+                "ok": False,
+                "error": "EMAIL_SEND_FAILED",
+                "message": "Failed to send verification email",
+                "mode": mode,
+                "delivery": delivery,
+                "link": link,
+            }
 
-    # Fallback: log link for dev/Render
+    # Non-live fallback: log link for dev/sandbox/disabled environments.
     current_app.logger.info("EMAIL_VERIFY_LINK: %s", link)
     try:
         queue_email(
@@ -107,6 +154,13 @@ def _send_verification_email(user: User, token: str) -> None:
         db.session.commit()
     except Exception:
         db.session.rollback()
+    return {
+        "ok": True,
+        "mode": mode,
+        "delivery": delivery,
+        "message": "Verification link generated",
+        "link": link,
+    }
 
 
 def _issue_verification_token(user: User, ttl_minutes: int = 30) -> str | None:
@@ -1056,23 +1110,49 @@ def resend_verify_email():
     if bool(getattr(u, "is_verified", False)):
         return jsonify({"ok": True, "message": "Already verified"}), 200
 
+    debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
     now = datetime.utcnow()
     try:
         last = EmailVerificationToken.query.filter_by(user_id=int(u.id)).order_by(EmailVerificationToken.created_at.desc()).first()
         if last and (now - last.created_at).total_seconds() < 60:
-            return jsonify({"ok": True, "message": "Please wait before resending"}), 200
+            wait_seconds = int(max(0, 60 - (now - last.created_at).total_seconds()))
+            body = {
+                "ok": True,
+                "message": "Please wait before resending",
+                "mode": _integration_mode(),
+                "retry_after_seconds": wait_seconds,
+            }
+            return jsonify(body), 200
     except Exception:
         pass
 
     try:
         vtoken = _issue_verification_token(u, ttl_minutes=30)
-        if vtoken:
-            _send_verification_email(u, vtoken)
+        if not vtoken:
+            return jsonify({"ok": False, "error": "TOKEN_ISSUE_FAILED", "message": "Failed to issue verification token"}), 500
+        send_result = _send_verification_email(u, vtoken)
+        if not bool(send_result.get("ok")):
+            code = (send_result.get("error") or "VERIFY_SEND_FAILED").strip()
+            message = (send_result.get("message") or "Failed to send verification email").strip()
+            status = 503 if code == "INTEGRATION_DISABLED" else 500
+            body = {"ok": False, "error": code, "message": message, "mode": send_result.get("mode")}
+            if debug_requested and (send_result.get("mode") or "") != "live":
+                body["verification_link"] = send_result.get("link")
+            return jsonify(body), status
         current_app.logger.info("email_verify_resend user_id=%s", u.id)
+        body = {
+            "ok": True,
+            "message": "Verification email sent",
+            "mode": send_result.get("mode"),
+            "delivery": send_result.get("delivery"),
+        }
+        if debug_requested and (send_result.get("mode") or "") != "live":
+            body["verification_link"] = send_result.get("link")
+        return jsonify(body), 200
     except Exception:
         db.session.rollback()
         current_app.logger.exception("email_verify_resend_failed")
-    return jsonify({"ok": True, "message": "Verification email sent"}), 200
+        return jsonify({"ok": False, "error": "VERIFY_SEND_FAILED", "message": "Failed to send verification email"}), 500
 
 
 @auth_bp.get("/verify-email/status")
