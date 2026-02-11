@@ -5,6 +5,8 @@ import 'package:fliptrybe/screens/role_signup_screen.dart';
 import 'package:fliptrybe/screens/marketplace_screen.dart';
 import 'package:fliptrybe/screens/marketplace_filters_screen.dart';
 import 'package:fliptrybe/screens/listing_detail_screen.dart';
+import 'package:fliptrybe/screens/merchant_home_screen.dart';
+import 'package:fliptrybe/shells/merchant_shell.dart';
 
 void main() {
   testWidgets('MaterialApp smoke test', (WidgetTester tester) async {
@@ -16,7 +18,8 @@ void main() {
     expect(find.byType(MaterialApp), findsOneWidget);
   });
 
-  testWidgets('Landing signup CTA routes to role chooser', (WidgetTester tester) async {
+  testWidgets('Landing signup CTA routes to role chooser',
+      (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -42,7 +45,8 @@ void main() {
     expect(find.byType(RoleSignupScreen), findsOneWidget);
   });
 
-  testWidgets('Marketplace listing tap opens listing detail', (WidgetTester tester) async {
+  testWidgets('Marketplace listing tap opens listing detail',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: MarketplaceScreen()));
     await tester.pumpAndSettle();
 
@@ -57,7 +61,8 @@ void main() {
     expect(find.byType(ListingDetailScreen), findsOneWidget);
   });
 
-  testWidgets('Marketplace filter icon opens filters screen', (WidgetTester tester) async {
+  testWidgets('Marketplace filter icon opens filters screen',
+      (WidgetTester tester) async {
     await tester.pumpWidget(const MaterialApp(home: MarketplaceScreen()));
     await tester.pumpAndSettle();
 
@@ -67,5 +72,36 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(MarketplaceFiltersScreen), findsOneWidget);
+  });
+
+  testWidgets('Merchant shell renders 5 tabs', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MerchantShell(debugUseLightweightTabs: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Listings'), findsOneWidget);
+    expect(find.text('Orders'), findsOneWidget);
+    expect(find.text('Wallet'), findsOneWidget);
+    expect(find.text('Growth'), findsOneWidget);
+  });
+
+  testWidgets('Merchant home shows action buttons',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MerchantHomeScreen(autoLoad: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Listing'), findsOneWidget);
+    expect(find.text('My Listings'), findsOneWidget);
+    expect(find.text('View Orders'), findsOneWidget);
+    expect(find.text('Chat Admin'), findsOneWidget);
+    expect(find.text('Leaderboards'), findsOneWidget);
   });
 }

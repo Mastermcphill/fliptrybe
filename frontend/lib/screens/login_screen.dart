@@ -5,13 +5,13 @@ import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../services/token_storage.dart';
 import 'admin_hub_screen.dart';
-import 'driver_jobs_screen.dart';
 import 'home_screen.dart';
-import 'merchant_dashboard_screen.dart';
-import 'inspector_dashboard_screen.dart';
 import 'pending_approval_screen.dart';
 import 'role_signup_screen.dart';
 import 'forgot_password_screen.dart';
+import '../shells/driver_shell.dart';
+import '../shells/merchant_shell.dart';
+import '../shells/inspector_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -31,9 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
     if (r == 'admin') return const AdminHubScreen();
-    if (r == 'driver') return const DriverJobsScreen();
-    if (r == 'merchant') return const MerchantDashboardScreen();
-    if (r == 'inspector') return const InspectorDashboardScreen();
+    if (r == 'driver') return const DriverShell();
+    if (r == 'merchant') return const MerchantShell();
+    if (r == 'inspector') return const InspectorShell();
     return const HomeScreen();
   }
 
@@ -72,7 +72,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       if (roleStatus.toLowerCase() == 'pending') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: roleForNav)),
+          MaterialPageRoute(
+              builder: (_) => PendingApprovalScreen(role: roleForNav)),
         );
       } else {
         Navigator.of(context).pushReplacement(
@@ -117,7 +118,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       if (roleStatus.toLowerCase() == 'pending') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: roleForNav)),
+          MaterialPageRoute(
+              builder: (_) => PendingApprovalScreen(role: roleForNav)),
         );
       } else {
         Navigator.of(context).pushReplacement(
@@ -179,7 +181,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ? null
                   : () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordScreen()),
                       );
                     },
               child: const Text('Forgot Password?'),
@@ -190,7 +193,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ? null
                   : () {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const RoleSignupScreen()),
                       );
                     },
               child: const Text('Create Account'),

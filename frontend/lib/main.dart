@@ -4,11 +4,11 @@ import 'screens/landing_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_signup_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/merchant_dashboard_screen.dart';
-import 'screens/driver_jobs_screen.dart';
-import 'screens/inspector_dashboard_screen.dart';
 import 'screens/admin_hub_screen.dart';
 import 'screens/pending_approval_screen.dart';
+import 'shells/merchant_shell.dart';
+import 'shells/driver_shell.dart';
+import 'shells/inspector_shell.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
 import 'services/token_storage.dart';
@@ -145,9 +145,9 @@ class _StartupScreenState extends State<StartupScreen> {
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
     if (r == 'admin') return const AdminHubScreen();
-    if (r == 'driver') return const DriverJobsScreen();
-    if (r == 'merchant') return const MerchantDashboardScreen();
-    if (r == 'inspector') return const InspectorDashboardScreen();
+    if (r == 'driver') return const DriverShell();
+    if (r == 'merchant') return const MerchantShell();
+    if (r == 'inspector') return const InspectorShell();
     return const HomeScreen();
   }
 

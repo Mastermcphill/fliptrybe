@@ -4,11 +4,11 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
 import '../services/token_storage.dart';
-import 'driver_jobs_screen.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
-import 'merchant_dashboard_screen.dart';
 import '../constants/ng_states.dart';
+import '../shells/driver_shell.dart';
+import '../shells/merchant_shell.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -48,8 +48,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
-    if (r == 'driver') return const DriverJobsScreen();
-    if (r == 'merchant') return const MerchantDashboardScreen();
+    if (r == 'driver') return const DriverShell();
+    if (r == 'merchant') return const MerchantShell();
     return const HomeScreen();
   }
 
@@ -68,7 +68,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final password = _passwordCtrl.text.trim();
     final confirm = _confirmCtrl.text.trim();
 
-    if (name.isEmpty || email.isEmpty || phone.isEmpty || password.isEmpty || confirm.isEmpty) {
+    if (name.isEmpty ||
+        email.isEmpty ||
+        phone.isEmpty ||
+        password.isEmpty ||
+        confirm.isEmpty) {
       _toast('All fields are required.');
       return;
     }
@@ -97,7 +101,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'business_name': '$name Store',
           'phone': phone,
           'state': _selectedState,
-          'city': _selectedState == 'Federal Capital Territory' ? 'Abuja' : _selectedState,
+          'city': _selectedState == 'Federal Capital Territory'
+              ? 'Abuja'
+              : _selectedState,
           'category': 'general',
           'reason': reason,
         };
@@ -109,7 +115,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'password': password,
           'phone': phone,
           'state': _selectedState,
-          'city': _selectedState == 'Federal Capital Territory' ? 'Abuja' : _selectedState,
+          'city': _selectedState == 'Federal Capital Territory'
+              ? 'Abuja'
+              : _selectedState,
           'vehicle_type': 'bike',
           'plate_number': 'DEMO-001',
         };
@@ -124,11 +132,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       if (kDebugMode) {
-        final keys = payload.keys.where((k) => k.toLowerCase() != 'password').toList();
+        final keys =
+            payload.keys.where((k) => k.toLowerCase() != 'password').toList();
         debugPrint('Signup payload keys: $keys role=$_role path=$path');
       }
 
-      final res = await ApiClient.instance.postJson(ApiConfig.api(path), payload);
+      final res =
+          await ApiClient.instance.postJson(ApiConfig.api(path), payload);
       if (res is! Map) {
         _toast('Signup failed.');
         return;
@@ -189,7 +199,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     ),
                   )
                   .toList(),
-              onChanged: _loading ? null : (v) => setState(() => _role = v ?? 'user'),
+              onChanged:
+                  _loading ? null : (v) => setState(() => _role = v ?? 'user'),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -249,7 +260,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                     )
                     .toList(),
-                onChanged: _loading ? null : (v) => setState(() => _selectedState = v ?? 'Lagos'),
+                onChanged: _loading
+                    ? null
+                    : (v) => setState(() => _selectedState = v ?? 'Lagos'),
               ),
               const SizedBox(height: 12),
             ],

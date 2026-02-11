@@ -16,6 +16,7 @@ import 'leaderboards_screen.dart';
 import 'login_screen.dart';
 import 'role_signup_screen.dart';
 import 'admin_support_threads_screen.dart';
+import 'not_available_yet_screen.dart';
 
 class AdminHubScreen extends StatefulWidget {
   const AdminHubScreen({super.key});
@@ -144,77 +145,124 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text('Admin tools (demo-ready).', style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text('Admin tools (demo-ready).',
+              style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
           ListTile(
             leading: const Icon(Icons.payments_outlined),
             title: const Text('Payout Console'),
             subtitle: const Text('Approve / reject / mark paid'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPayoutConsoleScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminPayoutConsoleScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.receipt_long_outlined),
             title: const Text('Audit Logs'),
             subtitle: const Text('Everything the system is doing'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAuditScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AdminAuditScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.support_agent_outlined),
             title: const Text('Support Chat'),
             subtitle: const Text('View and reply to support threads'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSupportThreadsScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminSupportThreadsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
             title: const Text('Autopilot'),
             subtitle: const Text('Automate payouts, queue + driver assignment'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminAutopilotScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminAutopilotScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Notify Queue'),
-            subtitle: const Text('Retry and manage outbound notification queue'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminNotifyQueueScreen())),
+            subtitle:
+                const Text('Retry and manage outbound notification queue'),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminNotifyQueueScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.verified_user_outlined),
             title: const Text('Role Approvals'),
             subtitle: const Text('Approve merchants, drivers, inspectors'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminRoleApprovalsScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminRoleApprovalsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.assignment_ind_outlined),
             title: const Text('Inspector Requests'),
             subtitle: const Text('Review inspector access requests'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminInspectorRequestsScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminInspectorRequestsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.badge_outlined),
             title: const Text('KYC Review'),
             subtitle: const Text('Approve or reject KYC submissions'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminKycReviewScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminKycReviewScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.emoji_events_outlined),
             title: const Text('Leaderboards'),
             subtitle: const Text('Top merchants & drivers'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaderboardsScreen())),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const LeaderboardsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.percent_outlined),
             title: const Text('Commission Rules'),
             subtitle: const Text('Set commission by kind/state/category'),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminCommissionRulesScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminCommissionRulesScreen())),
           ),
-          const ListTile(
-            leading: Icon(Icons.gavel_outlined),
-            title: Text('Dispute Resolution'),
-            subtitle: Text('Not available yet'),
+          ListTile(
+            leading: const Icon(Icons.gavel_outlined),
+            title: const Text('Dispute Resolution'),
+            subtitle: const Text('Not available yet'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotAvailableYetScreen(
+                  title: 'Dispute Resolution',
+                  reason: 'Dispute workflows are not enabled in this release.',
+                ),
+              ),
+            ),
           ),
-          const ListTile(
-            leading: Icon(Icons.shield_outlined),
-            title: Text('Inspector Bonds'),
-            subtitle: Text('Not available yet'),
+          ListTile(
+            leading: const Icon(Icons.shield_outlined),
+            title: const Text('Inspector Bonds'),
+            subtitle: const Text('Not available yet'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotAvailableYetScreen(
+                  title: 'Inspector Bonds',
+                  reason:
+                      'Inspector bond workflows are not enabled in this release.',
+                ),
+              ),
+            ),
           ),
         ],
       ),
