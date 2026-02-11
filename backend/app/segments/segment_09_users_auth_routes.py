@@ -1094,6 +1094,7 @@ def resend_verify_email():
         db.session.rollback()
     except Exception:
         pass
+    mode = _integration_mode()
     token = _bearer_token()
     payload = decode_token(token) if token else None
     sub = payload.get("sub") if isinstance(payload, dict) else None
@@ -1102,13 +1103,13 @@ def resend_verify_email():
     except Exception:
         uid = None
     if not uid:
-        return jsonify({"message": "Unauthorized"}), 401
+        return jsonify({"ok": False, "message": "Unauthorized", "mode": mode}), 401
 
     u = User.query.get(int(uid))
     if not u:
-        return jsonify({"message": "Unauthorized"}), 401
+        return jsonify({"ok": False, "message": "Unauthorized", "mode": mode}), 401
     if bool(getattr(u, "is_verified", False)):
-        return jsonify({"ok": True, "message": "Already verified"}), 200
+        return jsonify({"ok": True, "message": "Already verified", "mode": mode}), 200
 
     debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
     now = datetime.utcnow()
@@ -1119,7 +1120,7 @@ def resend_verify_email():
             body = {
                 "ok": True,
                 "message": "Please wait before resending",
-                "mode": _integration_mode(),
+                "mode": mode,
                 "retry_after_seconds": wait_seconds,
             }
             return jsonify(body), 200
@@ -1129,30 +1130,31 @@ def resend_verify_email():
     try:
         vtoken = _issue_verification_token(u, ttl_minutes=30)
         if not vtoken:
-            return jsonify({"ok": False, "error": "TOKEN_ISSUE_FAILED", "message": "Failed to issue verification token"}), 500
+            return jsonify({"ok": False, "error": "TOKEN_ISSUE_FAILED", "message": "Failed to issue verification token", "mode": mode}), 500
         send_result = _send_verification_email(u, vtoken)
+        effective_mode = (send_result.get("mode") or mode or "disabled").strip().lower()
         if not bool(send_result.get("ok")):
             code = (send_result.get("error") or "VERIFY_SEND_FAILED").strip()
             message = (send_result.get("message") or "Failed to send verification email").strip()
             status = 503 if code == "INTEGRATION_DISABLED" else 500
-            body = {"ok": False, "error": code, "message": message, "mode": send_result.get("mode")}
-            if debug_requested and (send_result.get("mode") or "") != "live":
+            body = {"ok": False, "error": code, "message": message, "mode": effective_mode}
+            if debug_requested and effective_mode != "live":
                 body["verification_link"] = send_result.get("link")
             return jsonify(body), status
         current_app.logger.info("email_verify_resend user_id=%s", u.id)
         body = {
             "ok": True,
             "message": "Verification email sent",
-            "mode": send_result.get("mode"),
+            "mode": effective_mode,
             "delivery": send_result.get("delivery"),
         }
-        if debug_requested and (send_result.get("mode") or "") != "live":
+        if debug_requested and effective_mode != "live":
             body["verification_link"] = send_result.get("link")
         return jsonify(body), 200
     except Exception:
         db.session.rollback()
         current_app.logger.exception("email_verify_resend_failed")
-        return jsonify({"ok": False, "error": "VERIFY_SEND_FAILED", "message": "Failed to send verification email"}), 500
+        return jsonify({"ok": False, "error": "VERIFY_SEND_FAILED", "message": "Failed to send verification email", "mode": mode}), 500
 
 
 @auth_bp.get("/verify-email/status")

@@ -131,8 +131,14 @@ if ($resend.Json) {
   $verificationLink = (($resend.Json.verification_link | Out-String).Trim())
 }
 
-if ($mode -eq "") { $mode = "unknown" }
+if ([string]::IsNullOrWhiteSpace($mode)) {
+  if ($resend.Body) { Write-Host $resend.Body }
+  Fail "resend response missing mode"
+}
 Write-Host "resend mode: $mode"
+if (-not [string]::IsNullOrWhiteSpace($verificationLink)) {
+  Write-Host "verification_link: $verificationLink"
+}
 
 if ([string]::IsNullOrWhiteSpace($verificationLink)) {
   if ($mode -ne "live") {
