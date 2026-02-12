@@ -21,6 +21,10 @@ class AutopilotSettings(db.Model):
     termii_enabled_sms = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
     termii_enabled_wa = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
     integrations_mode = db.Column(db.String(24), nullable=False, default="disabled", server_default="disabled")
+    payments_mode = db.Column(db.String(32), nullable=False, default="mock", server_default="mock")
+    last_paystack_webhook_at = db.Column(db.DateTime, nullable=True)
+    payments_mode_changed_at = db.Column(db.DateTime, nullable=True)
+    payments_mode_changed_by = db.Column(db.Integer, nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -35,5 +39,9 @@ class AutopilotSettings(db.Model):
             "termii_enabled_sms": bool(self.termii_enabled_sms),
             "termii_enabled_wa": bool(self.termii_enabled_wa),
             "integrations_mode": (self.integrations_mode or "disabled"),
+            "payments_mode": (self.payments_mode or "mock"),
+            "last_paystack_webhook_at": self.last_paystack_webhook_at.isoformat() if self.last_paystack_webhook_at else None,
+            "payments_mode_changed_at": self.payments_mode_changed_at.isoformat() if self.payments_mode_changed_at else None,
+            "payments_mode_changed_by": int(self.payments_mode_changed_by) if self.payments_mode_changed_by is not None else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

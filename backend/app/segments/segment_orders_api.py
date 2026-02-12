@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
-from sqlalchemy import text
+from sqlalchemy import text, or_
 
 from app.extensions import db
 from app.models import (
@@ -1126,8 +1126,61 @@ def admin_listings():
     if not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
 
+    q_text = (request.args.get("q") or "").strip()
+    state = (request.args.get("state") or "").strip()
+    category = (request.args.get("category") or "").strip()
+    status = (request.args.get("status") or "").strip().lower()
+    sort = (request.args.get("sort") or "newest").strip().lower()
     try:
-        rows = Listing.query.order_by(Listing.created_at.desc()).limit(200).all()
+        limit = int(request.args.get("limit") or 50)
+    except Exception:
+        limit = 50
+    try:
+        offset = int(request.args.get("offset") or 0)
+    except Exception:
+        offset = 0
+    if limit < 1:
+        limit = 1
+    if limit > 200:
+        limit = 200
+    if offset < 0:
+        offset = 0
+
+    try:
+        query = Listing.query.outerjoin(User, User.id == Listing.user_id)
+        if q_text:
+            like = f"%{q_text}%"
+            query = query.filter(
+                or_(
+                    Listing.title.ilike(like),
+                    Listing.description.ilike(like),
+                    Listing.city.ilike(like),
+                    Listing.state.ilike(like),
+                    User.email.ilike(like),
+                    User.name.ilike(like),
+                )
+            )
+        if state:
+            query = query.filter(Listing.state.ilike(state))
+        if category:
+            query = query.filter(Listing.category.ilike(category))
+        if status in ("active", "inactive"):
+            query = query.filter(Listing.is_active.is_(status == "active"))
+
+        if sort == "price_asc":
+            query = query.order_by(Listing.price.asc(), Listing.id.desc())
+        elif sort == "price_desc":
+            query = query.order_by(Listing.price.desc(), Listing.id.desc())
+        elif sort == "oldest":
+            query = query.order_by(Listing.created_at.asc(), Listing.id.asc())
+        else:
+            query = query.order_by(Listing.created_at.desc(), Listing.id.desc())
+
+        total = query.count()
+        rows = query.offset(offset).limit(limit).all()
+        merchant_ids = [int(r.user_id) for r in rows if getattr(r, "user_id", None) is not None]
+        merchants = User.query.filter(User.id.in_(merchant_ids)).all() if merchant_ids else []
+        merchants_by_id = {int(m.id): m for m in merchants}
         items = []
         for r in rows:
             merchant_id = None
@@ -1135,18 +1188,37 @@ def admin_listings():
                 merchant_id = int(r.user_id) if r.user_id is not None else None
             except Exception:
                 merchant_id = None
+            merchant = merchants_by_id.get(merchant_id) if merchant_id is not None else None
             items.append({
                 "id": int(r.id),
+                "title": (r.title or ""),
+                "description": (r.description or ""),
+                "state": (r.state or ""),
+                "city": (r.city or ""),
+                "category": (getattr(r, "category", None) or ""),
+                "price": float(r.price or 0.0),
+                "base_price": float(getattr(r, "base_price", 0.0) or 0.0),
+                "platform_fee": float(getattr(r, "platform_fee", 0.0) or 0.0),
+                "final_price": float(getattr(r, "final_price", 0.0) or 0.0),
+                "is_active": bool(getattr(r, "is_active", True)),
+                "status": "active" if bool(getattr(r, "is_active", True)) else "inactive",
+                "created_at": r.created_at.isoformat() if getattr(r, "created_at", None) else None,
                 "merchant_id": merchant_id,
+                "merchant": {
+                    "id": merchant_id,
+                    "name": (getattr(merchant, "name", "") or "") if merchant else "",
+                    "email": (getattr(merchant, "email", "") or "") if merchant else "",
+                    "role": (getattr(merchant, "role", "") or "") if merchant else "",
+                },
             })
-        return jsonify({"ok": True, "items": items}), 200
+        return jsonify({"ok": True, "items": items, "total": int(total), "limit": int(limit), "offset": int(offset)}), 200
     except Exception:
         db.session.rollback()
         try:
             current_app.logger.exception("admin_listings_list_failed")
         except Exception:
             pass
-        return jsonify({"ok": True, "items": []}), 200
+        return jsonify({"ok": True, "items": [], "total": 0, "limit": int(limit), "offset": int(offset)}), 200
 
 
 @orders_bp.post("/orders/<int:order_id>/merchant/accept")

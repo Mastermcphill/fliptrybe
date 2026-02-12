@@ -8,7 +8,7 @@ from app.extensions import db, migrate, cors
 from app.models import User
 from app.segments.segment_09_users_auth_routes import auth_bp
 from app.segments.segment_20_rides_routes import ride_bp
-from app.segments.segment_payments import payments_bp
+from app.segments.segment_payments import payments_bp, admin_payments_bp
 from app.segments.segment_payout_recipient import recipient_bp
 from app.segments.segment_audit_admin import audit_bp
 from app.segments.segment_reconciliation_admin import recon_bp
@@ -26,7 +26,7 @@ from app.segments.segment_notification_queue import notifq_bp
 from app.segments.segment_leaderboard import leader_bp
 from app.segments.segment_wallet_analytics import analytics_bp
 from app.segments.segment_payout_pdf import payout_pdf_bp
-from app.segments.segment_autopilot import autopilot_bp
+from app.segments.segment_autopilot import autopilot_bp, payments_settings_bp
 from app.segments.segment_driver_availability import driver_avail_bp
 from app.segments.segment_driver_offers import driver_offer_bp
 from app.segments.segment_merchants import merchants_bp
@@ -118,6 +118,7 @@ def create_app():
     app.register_blueprint(analytics_bp)
     app.register_blueprint(payout_pdf_bp)
     app.register_blueprint(autopilot_bp)
+    app.register_blueprint(payments_settings_bp)
     app.register_blueprint(merchants_bp)
     app.register_blueprint(webhooks_bp)
     app.register_blueprint(notifications_bp)
@@ -339,6 +340,7 @@ def create_app():
     app.register_blueprint(driver_avail_bp)
 
     app.register_blueprint(payments_bp)
+    app.register_blueprint(admin_payments_bp)
     app.register_blueprint(recipient_bp)
     app.register_blueprint(driver_offer_bp)
     app.register_blueprint(drivers_bp)

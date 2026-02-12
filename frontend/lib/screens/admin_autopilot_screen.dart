@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/admin_autopilot_service.dart';
+import 'admin_manual_payments_screen.dart';
 
 class AdminAutopilotScreen extends StatefulWidget {
   const AdminAutopilotScreen({super.key});
@@ -16,9 +17,11 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   String _lastRun = "-";
   Map<String, dynamic> _lastTick = const {};
   Map<String, dynamic> _health = const {};
+  Map<String, dynamic> _paymentsSettings = const {};
 
   String _provider = "mock";
   String _mode = "disabled";
+  String _paymentsMode = "mock";
   bool _paystackEnabled = false;
   bool _smsEnabled = false;
   bool _waEnabled = false;
@@ -32,19 +35,44 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final s = await _svc.status();
+    final pay = await _svc.getPaymentsSettings();
     if (!mounted) return;
-    final settings = Map<String, dynamic>.from((s['settings'] ?? {}) as Map? ?? <String, dynamic>{});
-    final integrations = Map<String, dynamic>.from((settings['integrations'] ?? {}) as Map? ?? <String, dynamic>{});
-    final health = Map<String, dynamic>.from((settings['integration_health'] ?? {}) as Map? ?? <String, dynamic>{});
+    final settings = Map<String, dynamic>.from(
+        (s['settings'] ?? {}) as Map? ?? <String, dynamic>{});
+    final integrations = Map<String, dynamic>.from(
+        (settings['integrations'] ?? {}) as Map? ?? <String, dynamic>{});
+    final health = Map<String, dynamic>.from(
+        (settings['integration_health'] ?? {}) as Map? ?? <String, dynamic>{});
+    final paySettings = Map<String, dynamic>.from(
+        (pay['settings'] ?? {}) as Map? ?? <String, dynamic>{});
     setState(() {
       _enabled = (settings['enabled'] ?? true) == true;
       _lastRun = (settings['last_run_at'] ?? '-')?.toString() ?? '-';
-      _provider = (integrations['payments_provider'] ?? settings['payments_provider'] ?? "mock").toString();
-      _mode = (integrations['integrations_mode'] ?? settings['integrations_mode'] ?? "disabled").toString();
-      _paystackEnabled = (integrations['paystack_enabled'] ?? settings['paystack_enabled'] ?? false) == true;
-      _smsEnabled = (integrations['termii_enabled_sms'] ?? settings['termii_enabled_sms'] ?? false) == true;
-      _waEnabled = (integrations['termii_enabled_wa'] ?? settings['termii_enabled_wa'] ?? false) == true;
+      _provider = (integrations['payments_provider'] ??
+              settings['payments_provider'] ??
+              "mock")
+          .toString();
+      _mode = (integrations['integrations_mode'] ??
+              settings['integrations_mode'] ??
+              "disabled")
+          .toString();
+      _paymentsMode =
+          (paySettings['mode'] ?? settings['payments_mode'] ?? "mock")
+              .toString();
+      _paystackEnabled = (integrations['paystack_enabled'] ??
+              settings['paystack_enabled'] ??
+              false) ==
+          true;
+      _smsEnabled = (integrations['termii_enabled_sms'] ??
+              settings['termii_enabled_sms'] ??
+              false) ==
+          true;
+      _waEnabled = (integrations['termii_enabled_wa'] ??
+              settings['termii_enabled_wa'] ??
+              false) ==
+          true;
       _health = health;
+      _paymentsSettings = paySettings;
       _loading = false;
     });
   }
@@ -78,7 +106,24 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     if (!mounted) return;
     final ok = r['ok'] == true;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(ok ? 'Integration settings updated' : (r['message'] ?? 'Failed to update settings').toString())),
+      SnackBar(
+          content: Text(ok
+              ? 'Integration settings updated'
+              : (r['message'] ?? 'Failed to update settings').toString())),
+    );
+    await _load();
+  }
+
+  Future<void> _savePaymentsMode() async {
+    setState(() => _loading = true);
+    final r = await _svc.setPaymentsMode(mode: _paymentsMode);
+    if (!mounted) return;
+    final ok = r['ok'] == true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(ok
+              ? 'Payments mode updated'
+              : (r['message'] ?? 'Failed to update payments mode').toString())),
     );
     await _load();
   }
@@ -88,7 +133,10 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          SizedBox(width: 140, child: Text(k, style: const TextStyle(fontWeight: FontWeight.w900))),
+          SizedBox(
+              width: 140,
+              child:
+                  Text(k, style: const TextStyle(fontWeight: FontWeight.w900))),
           Expanded(child: Text(v)),
         ],
       ),
@@ -98,7 +146,9 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   Widget _healthCard(String title, Map<String, dynamic> payload) {
     final status = (payload['status'] ?? 'unknown').toString();
     final missingRaw = payload['missing'];
-    final missing = missingRaw is List ? missingRaw.map((e) => e.toString()).toList() : <String>[];
+    final missing = missingRaw is List
+        ? missingRaw.map((e) => e.toString()).toList()
+        : <String>[];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -117,12 +167,25 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final paymentsHealth = Map<String, dynamic>.from((_health['payments'] ?? {}) as Map? ?? <String, dynamic>{});
-    final messagingHealth = Map<String, dynamic>.from((_health['messaging'] ?? {}) as Map? ?? <String, dynamic>{});
+    final paymentsHealth = Map<String, dynamic>.from(
+        (_health['payments'] ?? {}) as Map? ?? <String, dynamic>{});
+    final messagingHealth = Map<String, dynamic>.from(
+        (_health['messaging'] ?? {}) as Map? ?? <String, dynamic>{});
+    final paymentsHealthSignals = Map<String, dynamic>.from(
+        (_paymentsSettings['health'] ?? {}) as Map? ?? <String, dynamic>{});
+    final paymentsAudit = Map<String, dynamic>.from(
+        (_paymentsSettings['audit'] ?? {}) as Map? ?? <String, dynamic>{});
+    final missingKeys = (paymentsHealthSignals['missing_keys'] is List)
+        ? (paymentsHealthSignals['missing_keys'] as List)
+            .map((e) => '$e')
+            .toList()
+        : <String>[];
     return Scaffold(
       appBar: AppBar(
         title: const Text("Admin: Autopilot"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -136,33 +199,119 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                   subtitle: Text("Last run: $_lastRun"),
                 ),
                 const SizedBox(height: 8),
-                const Text("Integrations", style: TextStyle(fontWeight: FontWeight.w900)),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Payments Control Panel",
+                            style: TextStyle(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          value: _paymentsMode,
+                          items: const [
+                            DropdownMenuItem(
+                                value: "paystack_auto",
+                                child: Text("paystack_auto")),
+                            DropdownMenuItem(
+                                value: "manual_company_account",
+                                child: Text("manual_company_account")),
+                            DropdownMenuItem(
+                                value: "mock", child: Text("mock")),
+                          ],
+                          decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: "Payments mode"),
+                          onChanged: (v) =>
+                              setState(() => _paymentsMode = (v ?? "mock")),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: _savePaymentsMode,
+                          icon: const Icon(Icons.save_outlined),
+                          label: const Text("Save payments mode"),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_paymentsMode == "manual_company_account")
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              border: Border.all(color: Colors.amber.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                                "Manual payment enabled. Paystack is bypassed and admin must mark orders as paid."),
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                            "Paystack key present: ${paymentsHealthSignals['paystack_secret_present'] == true}"),
+                        Text(
+                            "Paystack public key present: ${paymentsHealthSignals['paystack_public_present'] == true}"),
+                        Text(
+                            "Webhook secret present: ${paymentsHealthSignals['paystack_webhook_secret_present'] == true}"),
+                        Text(
+                            "Last webhook processed: ${(paymentsHealthSignals['last_paystack_webhook_at'] ?? 'none').toString()}"),
+                        if (missingKeys.isNotEmpty)
+                          Text("Missing keys: ${missingKeys.join(', ')}"),
+                        Text(
+                            "Last mode change: ${(paymentsAudit['last_changed_at'] ?? 'unknown').toString()}"),
+                        Text(
+                            "Changed by: ${(paymentsAudit['last_changed_by_email'] ?? paymentsAudit['last_changed_by'] ?? 'unknown').toString()}"),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const AdminManualPaymentsScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.account_balance_outlined),
+                          label: const Text("Open manual payments queue"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text("Integrations",
+                    style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _provider,
                   items: const [
                     DropdownMenuItem(value: "mock", child: Text("mock")),
-                    DropdownMenuItem(value: "paystack", child: Text("paystack")),
+                    DropdownMenuItem(
+                        value: "paystack", child: Text("paystack")),
                   ],
-                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: "Payments provider"),
+                  decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: "Payments provider"),
                   onChanged: (v) => setState(() => _provider = (v ?? "mock")),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: _mode,
                   items: const [
-                    DropdownMenuItem(value: "disabled", child: Text("disabled")),
+                    DropdownMenuItem(
+                        value: "disabled", child: Text("disabled")),
                     DropdownMenuItem(value: "sandbox", child: Text("sandbox")),
                     DropdownMenuItem(value: "live", child: Text("live")),
                   ],
-                  decoration: const InputDecoration(border: OutlineInputBorder(), labelText: "Integrations mode"),
+                  decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: "Integrations mode"),
                   onChanged: (v) => setState(() => _mode = (v ?? "disabled")),
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   value: _paystackEnabled,
                   title: const Text("Payments enabled"),
-                  subtitle: const Text("Blocks/permits /api/payments/initialize"),
+                  subtitle:
+                      const Text("Blocks/permits /api/payments/initialize"),
                   onChanged: (v) => setState(() => _paystackEnabled = v),
                 ),
                 SwitchListTile(
@@ -191,7 +340,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                   label: const Text("Run manual tick"),
                 ),
                 const SizedBox(height: 16),
-                const Text("Last tick result", style: TextStyle(fontWeight: FontWeight.w900)),
+                const Text("Last tick result",
+                    style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 if (_lastTick.isEmpty) const Text("No tick run yet."),
                 if (_lastTick.isNotEmpty) ...[
@@ -205,4 +355,3 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     );
   }
 }
-

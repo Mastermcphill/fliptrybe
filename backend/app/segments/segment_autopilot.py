@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import json
+import os
+from datetime import datetime
+
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
-from app.models import User
+from app.models import User, AuditLog
 from app.utils.jwt_utils import decode_token
 from app.utils.autopilot import get_settings, tick
 from app.integrations.payments.factory import payment_health
 from app.integrations.messaging.factory import messaging_health
 
 autopilot_bp = Blueprint("autopilot_bp", __name__, url_prefix="/api/admin/autopilot")
+payments_settings_bp = Blueprint("payments_settings_bp", __name__, url_prefix="/api/admin/settings")
 
 _INIT = False
 
@@ -79,6 +84,7 @@ def _settings_payload(s):
     m_health = messaging_health(s)
     base["integrations"] = {
         "payments_provider": base.get("payments_provider"),
+        "payments_mode": base.get("payments_mode") or "mock",
         "paystack_enabled": base.get("paystack_enabled"),
         "termii_enabled_sms": base.get("termii_enabled_sms"),
         "termii_enabled_wa": base.get("termii_enabled_wa"),
@@ -89,6 +95,71 @@ def _settings_payload(s):
         "messaging": m_health,
     }
     return base
+
+
+def _payments_mode(s) -> str:
+    mode = (getattr(s, "payments_mode", None) or "").strip().lower()
+    if mode in ("paystack_auto", "manual_company_account", "mock"):
+        return mode
+    provider = (getattr(s, "payments_provider", "mock") or "mock").strip().lower()
+    return "mock" if provider == "mock" else "paystack_auto"
+
+
+def _payments_health_payload(s) -> dict:
+    mode = _payments_mode(s)
+    paystack_secret_present = bool((os.getenv("PAYSTACK_SECRET_KEY") or "").strip())
+    paystack_public_present = bool((os.getenv("PAYSTACK_PUBLIC_KEY") or "").strip())
+    paystack_webhook_secret_present = bool((os.getenv("PAYSTACK_WEBHOOK_SECRET") or "").strip())
+    missing_keys = []
+    if mode == "paystack_auto":
+        if not paystack_secret_present:
+            missing_keys.append("PAYSTACK_SECRET_KEY")
+        if not paystack_public_present:
+            missing_keys.append("PAYSTACK_PUBLIC_KEY")
+        if not paystack_webhook_secret_present and not paystack_secret_present:
+            missing_keys.append("PAYSTACK_WEBHOOK_SECRET")
+    return {
+        "mode": mode,
+        "paystack_secret_present": paystack_secret_present,
+        "paystack_public_present": paystack_public_present,
+        "paystack_webhook_secret_present": paystack_webhook_secret_present,
+        "missing_keys": missing_keys,
+        "last_paystack_webhook_at": s.last_paystack_webhook_at.isoformat() if getattr(s, "last_paystack_webhook_at", None) else None,
+        "misconfigured": bool(mode == "paystack_auto" and missing_keys),
+    }
+
+
+def _payments_audit_payload(s) -> dict:
+    changed_by_id = getattr(s, "payments_mode_changed_by", None)
+    changed_by_email = None
+    if changed_by_id is not None:
+        try:
+            actor = db.session.get(User, int(changed_by_id))
+            if actor:
+                changed_by_email = getattr(actor, "email", None)
+        except Exception:
+            changed_by_email = None
+    return {
+        "last_changed_at": s.payments_mode_changed_at.isoformat() if getattr(s, "payments_mode_changed_at", None) else None,
+        "last_changed_by": int(changed_by_id) if changed_by_id is not None else None,
+        "last_changed_by_email": changed_by_email,
+    }
+
+
+def _save_payments_mode_audit(*, actor_id: int | None, old_mode: str, new_mode: str) -> None:
+    try:
+        db.session.add(
+            AuditLog(
+                actor_user_id=actor_id,
+                action="payments_mode_changed",
+                target_type="autopilot_settings",
+                target_id=1,
+                meta=json.dumps({"from": old_mode, "to": new_mode}),
+            )
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 @autopilot_bp.get("")
@@ -137,8 +208,20 @@ def update_settings():
     s.paystack_enabled = _as_bool(data.get("paystack_enabled"), bool(s.paystack_enabled))
     s.termii_enabled_sms = _as_bool(data.get("termii_enabled_sms"), bool(s.termii_enabled_sms))
     s.termii_enabled_wa = _as_bool(data.get("termii_enabled_wa"), bool(s.termii_enabled_wa))
+    incoming_payments_mode = (data.get("payments_mode") or "").strip().lower()
+    mode_changed = False
+    old_mode = _payments_mode(s)
+    if incoming_payments_mode:
+        if incoming_payments_mode not in ("paystack_auto", "manual_company_account", "mock"):
+            return jsonify({"ok": False, "message": "payments_mode must be paystack_auto|manual_company_account|mock"}), 400
+        s.payments_mode = incoming_payments_mode
+        s.payments_mode_changed_at = datetime.utcnow()
+        s.payments_mode_changed_by = int(u.id)
+        mode_changed = old_mode != incoming_payments_mode
     db.session.add(s)
     db.session.commit()
+    if mode_changed:
+        _save_payments_mode_audit(actor_id=int(u.id), old_mode=old_mode, new_mode=incoming_payments_mode)
     return jsonify({"ok": True, "settings": _settings_payload(s)}), 200
 
 
@@ -149,3 +232,55 @@ def manual_tick():
         return jsonify({"message": "Forbidden"}), 403
     res = tick()
     return jsonify(res), 200
+
+
+@payments_settings_bp.get("/payments")
+def get_payments_settings():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    s = get_settings()
+    payload = {
+        "mode": _payments_mode(s),
+        "paystack_enabled": bool(getattr(s, "paystack_enabled", False)),
+        "integrations_mode": (getattr(s, "integrations_mode", "disabled") or "disabled"),
+        "payments_provider": (getattr(s, "payments_provider", "mock") or "mock"),
+        "health": _payments_health_payload(s),
+        "audit": _payments_audit_payload(s),
+    }
+    return jsonify({"ok": True, "settings": payload}), 200
+
+
+@payments_settings_bp.post("/payments")
+def set_payments_settings():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    data = request.get_json(silent=True) or {}
+    mode = (data.get("mode") or "").strip().lower()
+    if mode not in ("paystack_auto", "manual_company_account", "mock"):
+        return jsonify({"ok": False, "message": "mode must be paystack_auto|manual_company_account|mock"}), 400
+
+    s = get_settings()
+    old_mode = _payments_mode(s)
+    s.payments_mode = mode
+    s.payments_mode_changed_at = datetime.utcnow()
+    s.payments_mode_changed_by = int(u.id)
+    if mode == "mock":
+        s.payments_provider = "mock"
+    elif mode == "paystack_auto" and (getattr(s, "payments_provider", "mock") or "mock").strip().lower() == "mock":
+        s.payments_provider = "paystack"
+    db.session.add(s)
+    db.session.commit()
+    if old_mode != mode:
+        _save_payments_mode_audit(actor_id=int(u.id), old_mode=old_mode, new_mode=mode)
+
+    payload = {
+        "mode": _payments_mode(s),
+        "paystack_enabled": bool(getattr(s, "paystack_enabled", False)),
+        "integrations_mode": (getattr(s, "integrations_mode", "disabled") or "disabled"),
+        "payments_provider": (getattr(s, "payments_provider", "mock") or "mock"),
+        "health": _payments_health_payload(s),
+        "audit": _payments_audit_payload(s),
+    }
+    return jsonify({"ok": True, "settings": payload}), 200

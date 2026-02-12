@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/merchant_service.dart';
 import 'leaderboards_screen.dart';
-import 'not_available_yet_screen.dart';
+import 'merchant_followers_screen.dart';
 
 class MerchantGrowthScreen extends StatefulWidget {
   const MerchantGrowthScreen({super.key, this.onSelectTab});
@@ -129,12 +129,7 @@ class _MerchantGrowthScreenState extends State<MerchantGrowthScreen> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const NotAvailableYetScreen(
-                          title: 'Followers',
-                          reason:
-                              'Followers detail view is not enabled yet. Use rankings for growth tracking.',
-                        ),
-                      ),
+                          builder: (_) => const MerchantFollowersScreen()),
                     );
                   },
                   icon: const Icon(Icons.people_alt_outlined),

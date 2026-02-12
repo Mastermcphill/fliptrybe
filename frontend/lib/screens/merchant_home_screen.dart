@@ -20,7 +20,7 @@ import 'leaderboards_screen.dart';
 import 'moneybox_autosave_screen.dart';
 import 'moneybox_tier_screen.dart';
 import 'moneybox_withdraw_screen.dart';
-import 'not_available_yet_screen.dart';
+import 'merchant_followers_screen.dart';
 import 'support_chat_screen.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
@@ -435,11 +435,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   _quickAction(
                     icon: Icons.people_alt_outlined,
                     label: 'Followers',
-                    onTap: () => _safePush(const NotAvailableYetScreen(
-                      title: 'Followers',
-                      reason:
-                          'Followers endpoint is not active yet in this deployment.',
-                    )),
+                    onTap: () => _safePush(const MerchantFollowersScreen()),
                   ),
                   const SizedBox(height: 8),
                   _quickAction(

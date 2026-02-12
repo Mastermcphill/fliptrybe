@@ -19,6 +19,7 @@ def get_settings() -> AutopilotSettings:
         row.paystack_enabled = False
         row.termii_enabled_sms = False
         row.termii_enabled_wa = False
+        row.payments_mode = "mock"
         db.session.add(row)
         db.session.commit()
     changed = False
@@ -36,6 +37,9 @@ def get_settings() -> AutopilotSettings:
         changed = True
     if getattr(row, "termii_enabled_wa", None) is None:
         row.termii_enabled_wa = False
+        changed = True
+    if not getattr(row, "payments_mode", None):
+        row.payments_mode = "mock"
         changed = True
     if changed:
         db.session.add(row)

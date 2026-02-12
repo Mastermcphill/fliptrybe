@@ -148,11 +148,14 @@ Call-And-Check -Method "GET" -Path "/api/wallet/admin/payouts?status=pending" -H
 Call-And-Check -Method "GET" -Path "/api/admin/audit" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/admin/support/threads" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/admin/autopilot" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/settings/payments" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/admin/notify-queue" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/payments/manual/pending?limit=10" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/admin/role-requests?status=PENDING" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/admin/inspector-requests?status=pending" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/kyc/admin/pending" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/admin/commission" -Headers $headers
+Call-And-Check -Method "GET" -Path "/api/admin/listings?limit=10&sort=newest" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/leaderboards?limit=20" -Headers $headers
 Call-And-Check -Method "GET" -Path "/api/leaderboards?state=Lagos&limit=20" -Headers $headers
 

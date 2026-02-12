@@ -92,6 +92,84 @@ class MerchantService {
     }
   }
 
+  Future<Map<String, dynamic>> followStatus(int userId) async {
+    try {
+      final res = await _client.dio
+          .get(ApiConfig.api('/merchants/$userId/follow-status'));
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return <String, dynamic>{'ok': false, 'following': false};
+    } catch (_) {
+      return <String, dynamic>{'ok': false, 'following': false};
+    }
+  }
+
+  Future<Map<String, dynamic>> followersCount(int userId) async {
+    try {
+      final res = await _client.dio
+          .get(ApiConfig.api('/merchants/$userId/followers-count'));
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return <String, dynamic>{'ok': false, 'followers': 0};
+    } catch (_) {
+      return <String, dynamic>{'ok': false, 'followers': 0};
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> myFollowingMerchants(
+      {int limit = 50, int offset = 0}) async {
+    try {
+      final res = await _client.dio.get(
+          ApiConfig.api('/me/following-merchants?limit=$limit&offset=$offset'));
+      final data = res.data;
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .whereType<Map>()
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .toList();
+      }
+      if (data is List) {
+        return data
+            .whereType<Map>()
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .toList();
+      }
+      return <Map<String, dynamic>>[];
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> merchantFollowers(
+      {int limit = 50, int offset = 0}) async {
+    try {
+      final res = await _client.dio.get(
+          ApiConfig.api('/merchant/followers?limit=$limit&offset=$offset'));
+      final data = res.data;
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .whereType<Map>()
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .toList();
+      }
+      return <Map<String, dynamic>>[];
+    } catch (_) {
+      return <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<Map<String, dynamic>> merchantFollowersCount() async {
+    try {
+      final res =
+          await _client.dio.get(ApiConfig.api('/merchant/followers/count'));
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return <String, dynamic>{'ok': false, 'followers': 0};
+    } catch (_) {
+      return <String, dynamic>{'ok': false, 'followers': 0};
+    }
+  }
+
   Future<bool> simulateSale(
       {required int userId, required double amount}) async {
     try {

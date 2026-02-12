@@ -17,8 +17,10 @@ from app.utils.autopilot import get_settings
 from app.utils.idempotency import lookup_response, store_response
 from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
 from app.integrations.payments.factory import build_payments_provider
+from app.integrations.payments.mock_provider import MockPaymentsProvider
 
 payments_bp = Blueprint("payments_bp", __name__, url_prefix="/api/payments")
+admin_payments_bp = Blueprint("admin_payments_bp", __name__, url_prefix="/api/admin/payments")
 
 _INIT = False
 
@@ -86,6 +88,37 @@ def _json_decimal(v) -> Decimal:
 
 def _json_float(v) -> float:
     return float(_json_decimal(v))
+
+
+def _payments_mode(settings) -> str:
+    mode = (getattr(settings, "payments_mode", None) or "").strip().lower()
+    if mode in ("paystack_auto", "manual_company_account", "mock"):
+        return mode
+    provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+    return "mock" if provider == "mock" else "paystack_auto"
+
+
+def _manual_instructions_payload() -> dict:
+    return {
+        "message": "Manual payment mode is enabled. Send proof and await admin confirmation.",
+        "account_name": (os.getenv("COMPANY_ACCOUNT_NAME") or "").strip(),
+        "account_number": (os.getenv("COMPANY_ACCOUNT_NUMBER") or "").strip(),
+        "bank_name": (os.getenv("COMPANY_BANK_NAME") or "").strip(),
+    }
+
+
+def _find_manual_intent_for_order(order_id: int) -> PaymentIntent | None:
+    rows = (
+        PaymentIntent.query
+        .filter_by(provider="manual_company_account", purpose="order")
+        .order_by(PaymentIntent.created_at.desc())
+        .limit(300)
+        .all()
+    )
+    for row in rows:
+        if _extract_order_id(row.meta) == int(order_id):
+            return row
+    return None
 
 
 def _order_is_paid(order: Order) -> bool:
@@ -198,6 +231,15 @@ def _check_webhook_amount(pi: PaymentIntent | None, data: dict) -> bool:
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) == expected
 
 
+def _touch_last_paystack_webhook(settings) -> None:
+    try:
+        settings.last_paystack_webhook_at = datetime.utcnow()
+        db.session.add(settings)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None, source: str = "payments") -> tuple[dict, int]:
     try:
         settings = get_settings()
@@ -221,6 +263,7 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
 
         event = event_raw.strip()
         reference = str((data.get("reference") or "")).strip()
+        _touch_last_paystack_webhook(settings)
 
         # Live Paystack must validate signature. Mock/disabled paths never require it.
         verified = False
@@ -333,15 +376,9 @@ def initialize_payment():
         return jsonify({"ok": False, "message": "purpose must be topup|order"}), 400
 
     settings = get_settings()
-    try:
-        provider = build_payments_provider(settings)
-    except IntegrationDisabledError as e:
-        return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": str(e)}), 503
-    except IntegrationMisconfiguredError as e:
-        return jsonify({"ok": False, "error": "INTEGRATION_MISCONFIGURED", "message": str(e)}), 500
+    payments_mode = _payments_mode(settings)
 
     order = None
-    order_id = None
     amount = Decimal("0.00")
     if purpose == "order":
         try:
@@ -365,19 +402,76 @@ def initialize_payment():
             return jsonify({"ok": False, "message": "amount must be > 0"}), 400
 
     now_stamp = int(datetime.utcnow().timestamp())
-    if purpose == "order":
-        reference = (getattr(order, "payment_reference", None) or "").strip()
-        if not reference:
-            reference = f"FT-ORD-{int(order.id)}-{now_stamp}"
-    else:
-        reference = f"FT-TOP-{int(u.id)}-{now_stamp}"
-
     meta = {
         "purpose": purpose,
         "order_id": int(order.id) if order is not None else None,
         "initiated_by": int(u.id),
         "source": "api.payments.initialize",
     }
+
+    if payments_mode == "manual_company_account":
+        if purpose != "order":
+            return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": "manual payment mode supports order payments only"}), 503
+        if order is None:
+            return jsonify({"ok": False, "message": "order_id required for order payments"}), 400
+
+        existing_manual = _find_manual_intent_for_order(int(order.id))
+        reference = (getattr(order, "payment_reference", None) or "").strip()
+        if existing_manual and not reference:
+            reference = (existing_manual.reference or "").strip()
+        if not reference:
+            reference = f"FT-MAN-{int(order.id)}-{now_stamp}"
+
+        try:
+            pi = _ensure_payment_intent(
+                user_id=int(u.id),
+                provider="manual_company_account",
+                reference=reference,
+                purpose=purpose,
+                amount=float(amount),
+                meta={**meta, "mode": "manual_company_account"},
+            )
+            pi.status = "manual_pending"
+            db.session.add(pi)
+            order.payment_reference = pi.reference
+            db.session.add(order)
+            db.session.commit()
+            response = {
+                "ok": True,
+                "mode": "manual_company_account",
+                "provider": "manual_company_account",
+                "reference": pi.reference,
+                "authorization_url": None,
+                "purpose": purpose,
+                "order_id": int(order.id),
+                "amount": float(amount),
+                "requires_admin_mark_paid": True,
+                "manual_instructions": _manual_instructions_payload(),
+            }
+            if idem_row is not None:
+                store_response(idem_row, response, 200)
+            return jsonify(response), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.exception("payments_initialize_manual_failed")
+            return jsonify({"ok": False, "error": "PAYMENT_INIT_FAILED", "message": str(e)}), 500
+
+    if payments_mode == "mock":
+        provider = MockPaymentsProvider()
+    else:
+        try:
+            provider = build_payments_provider(settings)
+        except IntegrationDisabledError as e:
+            return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": str(e)}), 503
+        except IntegrationMisconfiguredError as e:
+            return jsonify({"ok": False, "error": "INTEGRATION_MISCONFIGURED", "message": str(e)}), 500
+
+    if purpose == "order":
+        reference = (getattr(order, "payment_reference", None) or "").strip()
+        if not reference:
+            reference = f"FT-ORD-{int(order.id)}-{now_stamp}"
+    else:
+        reference = f"FT-TOP-{int(u.id)}-{now_stamp}"
 
     try:
         pi = _ensure_payment_intent(
@@ -411,6 +505,7 @@ def initialize_payment():
         response = {
             "ok": True,
             "provider": provider.name,
+            "mode": payments_mode,
             "reference": init.reference,
             "authorization_url": init.authorization_url,
             "purpose": purpose,
@@ -485,3 +580,163 @@ def paystack_webhook():
             pass
         current_app.logger.exception("paystack_webhook_route_failed")
         return jsonify({"ok": False, "error": "WEBHOOK_HANDLER_FAILED"}), 200
+
+
+def _parse_page_values() -> tuple[int, int]:
+    try:
+        limit = int(request.args.get("limit") or 50)
+    except Exception:
+        limit = 50
+    try:
+        offset = int(request.args.get("offset") or 0)
+    except Exception:
+        offset = 0
+    if limit < 1:
+        limit = 1
+    if limit > 100:
+        limit = 100
+    if offset < 0:
+        offset = 0
+    return limit, offset
+
+
+def _manual_pending_filter_query():
+    return PaymentIntent.query.filter_by(provider="manual_company_account", purpose="order")
+
+
+@admin_payments_bp.get("/manual/pending")
+def admin_manual_pending():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    q = (request.args.get("q") or "").strip().lower()
+    limit, offset = _parse_page_values()
+
+    base_query = _manual_pending_filter_query().filter(
+        PaymentIntent.status.in_(("manual_pending", "initialized"))
+    )
+    rows = base_query.order_by(PaymentIntent.created_at.desc()).all()
+
+    items = []
+    for row in rows:
+        oid = _extract_order_id(row.meta)
+        order = db.session.get(Order, int(oid)) if oid else None
+        buyer = db.session.get(User, int(order.buyer_id)) if order and order.buyer_id else None
+
+        searchable = " ".join(
+            [
+                str(row.reference or ""),
+                str(oid or ""),
+                str(getattr(buyer, "email", "") or ""),
+                str(getattr(buyer, "name", "") or ""),
+            ]
+        ).lower()
+        if q and q not in searchable:
+            continue
+
+        items.append(
+            {
+                "intent_id": int(row.id),
+                "reference": row.reference or "",
+                "status": row.status or "",
+                "amount": float(row.amount or 0.0),
+                "order_id": int(oid) if oid else None,
+                "buyer_id": int(order.buyer_id) if order and order.buyer_id is not None else None,
+                "buyer_email": getattr(buyer, "email", "") or "",
+                "merchant_id": int(order.merchant_id) if order and order.merchant_id is not None else None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+        )
+
+    total = len(items)
+    paged = items[offset:offset + limit]
+    return jsonify({"ok": True, "items": paged, "total": total, "limit": limit, "offset": offset}), 200
+
+
+@admin_payments_bp.post("/manual/mark-paid")
+def admin_mark_manual_paid():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        order_id = int(data.get("order_id"))
+    except Exception:
+        return jsonify({"ok": False, "message": "order_id required"}), 400
+
+    order = db.session.get(Order, int(order_id))
+    if not order:
+        return jsonify({"ok": False, "error": "ORDER_NOT_FOUND"}), 404
+
+    if _order_is_paid(order):
+        return jsonify({"ok": True, "idempotent": True, "order_id": int(order.id)}), 200
+
+    amount_minor = data.get("amount_minor")
+    if amount_minor is not None:
+        try:
+            expected_minor = int((_order_payment_amount(order) * 100.0))
+            provided_minor = int(amount_minor)
+        except Exception:
+            return jsonify({"ok": False, "message": "amount_minor invalid"}), 400
+        if expected_minor != provided_minor:
+            return jsonify({"ok": False, "error": "AMOUNT_MISMATCH", "expected_minor": expected_minor, "provided_minor": provided_minor}), 409
+
+    reference = str((data.get("reference") or "")).strip()
+    note = str((data.get("note") or "")).strip()
+    now_stamp = int(datetime.utcnow().timestamp())
+
+    manual_intent = _find_manual_intent_for_order(int(order.id))
+    if not manual_intent:
+        fallback_ref = reference or (order.payment_reference or "").strip() or f"FT-MAN-{int(order.id)}-{now_stamp}"
+        manual_intent = _ensure_payment_intent(
+            user_id=int(order.buyer_id),
+            provider="manual_company_account",
+            reference=fallback_ref,
+            purpose="order",
+            amount=float(_json_decimal(_order_payment_amount(order))),
+            meta={"purpose": "order", "order_id": int(order.id), "source": "api.admin.payments.manual.mark-paid"},
+        )
+
+    final_reference = reference or (manual_intent.reference or "").strip() or (order.payment_reference or "").strip()
+    if not final_reference:
+        final_reference = f"FT-MAN-{int(order.id)}-{now_stamp}"
+
+    try:
+        manual_intent.reference = final_reference
+        manual_intent.status = "paid"
+        manual_intent.paid_at = datetime.utcnow()
+        manual_intent.provider = "manual_company_account"
+        manual_intent.purpose = "order"
+        manual_intent.meta = json.dumps(
+            {
+                "purpose": "order",
+                "order_id": int(order.id),
+                "marked_by_admin_id": int(u.id),
+                "note": note[:180],
+                "source": "api.admin.payments.manual.mark-paid",
+            }
+        )
+        db.session.add(manual_intent)
+        db.session.commit()
+
+        _mark_order_paid(order, reference=final_reference)
+        try:
+            db.session.add(
+                AuditLog(
+                    actor_user_id=int(u.id),
+                    action="manual_payment_mark_paid",
+                    target_type="order",
+                    target_id=int(order.id),
+                    meta=json.dumps({"reference": final_reference, "note": note[:180]}),
+                )
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return jsonify({"ok": True, "order_id": int(order.id), "reference": final_reference}), 200
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("admin_mark_manual_paid_failed order_id=%s", int(order.id))
+        return jsonify({"ok": False, "error": "MANUAL_MARK_PAID_FAILED", "message": str(e)}), 500

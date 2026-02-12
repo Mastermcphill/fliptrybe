@@ -13,6 +13,12 @@ def _settings_value(settings, key: str, default=None):
 
 
 def build_payments_provider(settings) -> PaymentsProvider:
+    payments_mode = (_settings_value(settings, "payments_mode", "") or "").strip().lower()
+    if payments_mode == "mock":
+        return MockPaymentsProvider()
+    if payments_mode == "manual_company_account":
+        raise IntegrationDisabledError("INTEGRATION_DISABLED:manual_company_account")
+
     mode = (_settings_value(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
     enabled = bool(_settings_value(settings, "paystack_enabled", False))
     provider = (_settings_value(settings, "payments_provider", "mock") or "mock").strip().lower()
@@ -34,16 +40,27 @@ def build_payments_provider(settings) -> PaymentsProvider:
 
 
 def payment_health(settings) -> dict:
+    payments_mode = (getattr(settings, "payments_mode", "") or "").strip().lower()
+    if payments_mode not in ("paystack_auto", "manual_company_account", "mock"):
+        provider_fallback = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+        payments_mode = "mock" if provider_fallback == "mock" else "paystack_auto"
     mode = (getattr(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
     enabled = bool(getattr(settings, "paystack_enabled", False))
     provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
     missing = []
-    if mode != "disabled" and enabled and provider == "paystack":
+    if payments_mode == "paystack_auto" and mode != "disabled" and enabled and provider == "paystack":
         if not (os.getenv("PAYSTACK_SECRET_KEY") or "").strip():
             missing.append("PAYSTACK_SECRET_KEY")
         if not (os.getenv("PAYSTACK_PUBLIC_KEY") or "").strip():
             missing.append("PAYSTACK_PUBLIC_KEY")
-    if mode == "disabled" or not enabled:
+        if not (os.getenv("PAYSTACK_WEBHOOK_SECRET") or "").strip():
+            missing.append("PAYSTACK_WEBHOOK_SECRET")
+
+    if payments_mode == "manual_company_account":
+        status = "manual"
+    elif payments_mode == "mock":
+        status = "configured"
+    elif mode == "disabled" or not enabled:
         status = "disabled"
     elif missing:
         status = "misconfigured"
@@ -51,9 +68,9 @@ def payment_health(settings) -> dict:
         status = "configured"
     return {
         "status": status,
+        "payments_mode": payments_mode,
         "mode": mode,
         "provider": provider,
         "enabled": enabled,
         "missing": missing,
     }
-

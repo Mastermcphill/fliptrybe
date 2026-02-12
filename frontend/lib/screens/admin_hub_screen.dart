@@ -9,6 +9,8 @@ import 'admin_audit_screen.dart';
 import 'admin_kyc_review_screen.dart';
 import 'admin_role_approvals_screen.dart';
 import 'admin_inspector_requests_screen.dart';
+import 'admin_manual_payments_screen.dart';
+import 'admin_marketplace_screen.dart';
 import 'leaderboards_screen.dart';
 import 'admin_support_threads_screen.dart';
 import 'not_available_yet_screen.dart';
@@ -153,6 +155,15 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                     builder: (_) => const AdminAutopilotScreen())),
           ),
           ListTile(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: const Text('Manual Payments'),
+            subtitle: const Text('Review manual payment intents and mark paid'),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminManualPaymentsScreen())),
+          ),
+          ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Notify Queue'),
             subtitle:
@@ -188,6 +199,15 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 context,
                 MaterialPageRoute(
                     builder: (_) => const AdminKycReviewScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.storefront_outlined),
+            title: const Text('Marketplace'),
+            subtitle: const Text('Browse and search listings as admin'),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminMarketplaceScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.emoji_events_outlined),

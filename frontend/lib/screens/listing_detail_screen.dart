@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/listing_service.dart';
+import '../services/merchant_service.dart';
 import '../services/order_service.dart';
 import '../widgets/email_verification_dialog.dart';
 import '../widgets/listing/listing_card.dart';
@@ -23,6 +24,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final _listings = ListingService();
   final _orders = OrderService();
   final _auth = AuthService();
+  final _merchantSvc = MerchantService();
 
   final _pickupCtrl = TextEditingController(text: 'Ikeja, Lagos');
   final _dropoffCtrl = TextEditingController(text: 'Lekki, Lagos');
@@ -32,7 +34,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _busy = false;
   bool _loading = false;
   bool _loadingSimilar = false;
+  bool _followBusy = false;
+  bool _following = false;
   int _imageIndex = 0;
+  int _followersCount = 0;
   int? _viewerId;
   Map<String, dynamic> _detail = const {};
   List<String> _images = const [];
@@ -47,6 +52,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _loadDetail();
     _loadViewer();
     _loadSimilar();
+    _loadFollowState();
   }
 
   @override
@@ -72,6 +78,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           _detail = data;
           _images = _extractImages(data);
         });
+        _loadFollowState();
       }
     } catch (e) {
       if (mounted) {
@@ -86,6 +93,55 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     final profile = await _auth.me();
     if (!mounted) return;
     setState(() => _viewerId = _asInt(profile?['id']));
+    _loadFollowState();
+  }
+
+  int _merchantId() {
+    return _asInt(_detail['user_id']) ??
+        _asInt(_detail['merchant_id']) ??
+        _asInt(_detail['owner_id']) ??
+        0;
+  }
+
+  Future<void> _loadFollowState() async {
+    final merchantId = _merchantId();
+    if (merchantId <= 0) return;
+    try {
+      final values = await Future.wait([
+        _merchantSvc.followStatus(merchantId),
+        _merchantSvc.followersCount(merchantId),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _following = values[0]['following'] == true;
+        _followersCount =
+            int.tryParse((values[1]['followers'] ?? 0).toString()) ?? 0;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFollow() async {
+    final merchantId = _merchantId();
+    if (_followBusy || merchantId <= 0) return;
+    if (_viewerId != null && merchantId == _viewerId) {
+      _toast('You cannot follow your own merchant profile.');
+      return;
+    }
+    setState(() => _followBusy = true);
+    try {
+      final response = _following
+          ? await _merchantSvc.unfollowMerchant(merchantId)
+          : await _merchantSvc.followMerchant(merchantId);
+      if (response['ok'] != true && mounted) {
+        _toast((response['message'] ?? 'Unable to update follow state')
+            .toString());
+      }
+      await _loadFollowState();
+    } catch (e) {
+      if (mounted) _toast('Unable to update follow state: $e');
+    } finally {
+      if (mounted) setState(() => _followBusy = false);
+    }
   }
 
   Future<void> _loadSimilar() async {
@@ -381,10 +437,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                     title: Text(merchantName),
                     subtitle: Text(
-                        'Seller #${merchantId?.toString() ?? '-'} • Rating coming soon'),
+                        'Seller #${merchantId?.toString() ?? '-'} • $_followersCount followers'),
                     trailing: OutlinedButton(
-                      onPressed: () => _toast('Follow seller is coming soon.'),
-                      child: const Text('Follow'),
+                      onPressed: _followBusy ? null : _toggleFollow,
+                      child: Text(_following ? 'Following' : 'Follow'),
                     ),
                   ),
                 ],
