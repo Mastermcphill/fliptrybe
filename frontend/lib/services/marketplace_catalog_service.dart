@@ -4,6 +4,16 @@ import 'listing_service.dart';
 import 'api_client.dart';
 import 'api_config.dart';
 
+class MarketplaceRemoteSearchResult {
+  const MarketplaceRemoteSearchResult({
+    required this.items,
+    required this.supportedFilters,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final Map<String, bool> supportedFilters;
+}
+
 class MarketplaceCatalogService {
   MarketplaceCatalogService({ListingService? listingService})
       : _listingService = listingService ?? ListingService();
@@ -173,6 +183,42 @@ class MarketplaceCatalogService {
     double? minPrice,
     double? maxPrice,
     String condition = '',
+    bool? deliveryAvailable,
+    bool? inspectionRequired,
+    String status = '',
+    String sort = 'relevance',
+    int limit = 40,
+    int offset = 0,
+    bool admin = false,
+  }) async {
+    final result = await searchRemoteDetailed(
+      query: query,
+      category: category,
+      state: state,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+      condition: condition,
+      deliveryAvailable: deliveryAvailable,
+      inspectionRequired: inspectionRequired,
+      status: status,
+      sort: sort,
+      limit: limit,
+      offset: offset,
+      admin: admin,
+    );
+    return result.items;
+  }
+
+  Future<MarketplaceRemoteSearchResult> searchRemoteDetailed({
+    String query = '',
+    String category = '',
+    String state = '',
+    double? minPrice,
+    double? maxPrice,
+    String condition = '',
+    bool? deliveryAvailable,
+    bool? inspectionRequired,
+    String status = '',
     String sort = 'relevance',
     int limit = 40,
     int offset = 0,
@@ -193,18 +239,45 @@ class MarketplaceCatalogService {
     if (minPrice != null) qp['min_price'] = minPrice.toStringAsFixed(0);
     if (maxPrice != null) qp['max_price'] = maxPrice.toStringAsFixed(0);
     if (condition.trim().isNotEmpty) qp['condition'] = condition.trim();
+    if (status.trim().isNotEmpty && status.trim().toLowerCase() != 'all') {
+      qp['status'] = status.trim();
+    }
+    if (deliveryAvailable != null) {
+      qp['delivery_available'] = deliveryAvailable ? '1' : '0';
+    }
+    if (inspectionRequired != null) {
+      qp['inspection_required'] = inspectionRequired ? '1' : '0';
+    }
     final path = admin ? '/admin/listings/search' : '/public/listings/search';
     final uri = Uri(path: path, queryParameters: qp);
+    final defaultFilters = <String, bool>{
+      'delivery_available': false,
+      'inspection_required': false,
+    };
     try {
       final data = await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
       if (data is Map && data['items'] is List) {
-        return (data['items'] as List)
+        final items = (data['items'] as List)
             .whereType<Map>()
-            .map((raw) => _normalize(Map<String, dynamic>.from(raw as Map)))
+            .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
             .toList();
+        final supported = <String, bool>{...defaultFilters};
+        final rawSupported = data['supported_filters'];
+        if (rawSupported is Map) {
+          for (final entry in rawSupported.entries) {
+            supported[entry.key.toString()] = entry.value == true;
+          }
+        }
+        return MarketplaceRemoteSearchResult(
+          items: items,
+          supportedFilters: supported,
+        );
       }
     } catch (_) {}
-    return <Map<String, dynamic>>[];
+    return MarketplaceRemoteSearchResult(
+      items: const <Map<String, dynamic>>[],
+      supportedFilters: defaultFilters,
+    );
   }
 
   String _mapSort(String sort) {

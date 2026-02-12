@@ -50,7 +50,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
       if (_state != allNigeriaLabel) query['state'] = _state;
       if (_status != 'all') query['status'] = _status;
       if (_category.trim().isNotEmpty) query['category'] = _category.trim();
-      final uri = Uri(path: '/admin/listings', queryParameters: query);
+      final uri = Uri(path: '/admin/listings/search', queryParameters: query);
       final data =
           await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
       if (!mounted) return;
@@ -60,7 +60,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
       setState(() {
         _items = rows
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _loading = false;
       });
@@ -132,7 +132,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _status,
+                        initialValue: _status,
                         items: const [
                           DropdownMenuItem(
                               value: 'all', child: Text('All Status')),
@@ -149,18 +149,16 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _sort,
+                        initialValue: _sort,
                         items: const [
                           DropdownMenuItem(
                               value: 'newest', child: Text('Newest')),
                           DropdownMenuItem(
-                              value: 'oldest', child: Text('Oldest')),
-                          DropdownMenuItem(
                               value: 'price_asc',
-                              child: Text('Price Low→High')),
+                              child: Text('Price Low to High')),
                           DropdownMenuItem(
                               value: 'price_desc',
-                              child: Text('Price High→Low')),
+                              child: Text('Price High to Low')),
                         ],
                         decoration: const InputDecoration(
                             border: OutlineInputBorder(), labelText: 'Sort'),
@@ -174,7 +172,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _state,
+                        initialValue: _state,
                         isExpanded: true,
                         items: <String>[allNigeriaLabel, ...nigeriaStates]
                             .map((state) => DropdownMenuItem(

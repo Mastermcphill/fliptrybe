@@ -147,17 +147,34 @@ def _is_owner(u: User | None, listing: Listing) -> bool:
 
 
 def _search_args():
+    def _to_bool(raw: str | None):
+        if raw is None:
+            return None
+        value = str(raw).strip().lower()
+        if value in ("1", "true", "yes", "on"):
+            return True
+        if value in ("0", "false", "no", "off"):
+            return False
+        return None
+
     q = (request.args.get("q") or "").strip()
     category = (request.args.get("category") or "").strip()
     state = (request.args.get("state") or "").strip()
     condition = (request.args.get("condition") or "").strip()
+    status = (request.args.get("status") or "").strip()
     sort = (request.args.get("sort") or "relevance").strip().lower()
+    min_price_raw = request.args.get("min_price")
+    if min_price_raw in (None, ""):
+        min_price_raw = request.args.get("price_min")
+    max_price_raw = request.args.get("max_price")
+    if max_price_raw in (None, ""):
+        max_price_raw = request.args.get("price_max")
     try:
-        min_price = float(request.args.get("min_price")) if request.args.get("min_price") not in (None, "") else None
+        min_price = float(min_price_raw) if min_price_raw not in (None, "") else None
     except Exception:
         min_price = None
     try:
-        max_price = float(request.args.get("max_price")) if request.args.get("max_price") not in (None, "") else None
+        max_price = float(max_price_raw) if max_price_raw not in (None, "") else None
     except Exception:
         max_price = None
     try:
@@ -173,9 +190,12 @@ def _search_args():
         "category": category,
         "state": state,
         "condition": condition,
+        "status": status,
         "sort": sort,
         "min_price": min_price,
         "max_price": max_price,
+        "delivery_available": _to_bool(request.args.get("delivery_available")),
+        "inspection_required": _to_bool(request.args.get("inspection_required")),
         "limit": max(1, min(limit, 100)),
         "offset": max(0, offset),
     }
@@ -335,6 +355,9 @@ def public_listings_search():
             min_price=args["min_price"],
             max_price=args["max_price"],
             condition=args["condition"],
+            status=args["status"],
+            delivery_available=args["delivery_available"],
+            inspection_required=args["inspection_required"],
             sort=args["sort"],
             limit=args["limit"],
             offset=args["offset"],
@@ -369,6 +392,9 @@ def admin_listings_search():
             min_price=args["min_price"],
             max_price=args["max_price"],
             condition=args["condition"],
+            status=args["status"],
+            delivery_available=args["delivery_available"],
+            inspection_required=args["inspection_required"],
             sort=args["sort"],
             limit=args["limit"],
             offset=args["offset"],

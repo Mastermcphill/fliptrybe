@@ -58,6 +58,9 @@ def search_listings_v2(
     min_price: float | None = None,
     max_price: float | None = None,
     condition: str = "",
+    status: str = "",
+    delivery_available: bool | None = None,
+    inspection_required: bool | None = None,
     sort: str = "relevance",
     limit: int = 20,
     offset: int = 0,
@@ -76,6 +79,18 @@ def search_listings_v2(
     if condition and hasattr(Listing, "condition"):
         like_condition = f"%{condition.strip()}%"
         query = query.filter(getattr(Listing, "condition").ilike(like_condition))
+
+    status_key = (status or "").strip().lower()
+    if status_key and status_key not in ("all", "any"):
+        if status_key in ("active", "inactive") and hasattr(Listing, "is_active"):
+            query = query.filter(getattr(Listing, "is_active").is_(status_key == "active"))
+        elif hasattr(Listing, "status"):
+            query = query.filter(getattr(Listing, "status").ilike(status_key))
+
+    if delivery_available is not None and hasattr(Listing, "delivery_available"):
+        query = query.filter(getattr(Listing, "delivery_available").is_(bool(delivery_available)))
+    if inspection_required is not None and hasattr(Listing, "inspection_required"):
+        query = query.filter(getattr(Listing, "inspection_required").is_(bool(inspection_required)))
 
     min_p = _safe_float(min_price, None)
     max_p = _safe_float(max_price, None)
@@ -124,7 +139,17 @@ def search_listings_v2(
                 )
             )
 
-    sort_key = (sort or "relevance").strip().lower()
+    raw_sort = (sort or "relevance").strip().lower()
+    if raw_sort in ("price_low", "price_low_to_high", "priceasc"):
+        sort_key = "price_asc"
+    elif raw_sort in ("price_high", "price_high_to_low", "pricedesc"):
+        sort_key = "price_desc"
+    elif raw_sort in ("new", "latest"):
+        sort_key = "newest"
+    elif raw_sort in ("relevance", "newest", "price_asc", "price_desc"):
+        sort_key = raw_sort
+    else:
+        sort_key = "relevance"
     if sort_key == "price_asc":
         query = query.order_by(Listing.price.asc(), Listing.id.desc())
     elif sort_key == "price_desc":
@@ -155,4 +180,8 @@ def search_listings_v2(
         "offset": int(safe_offset),
         "sort": sort_key,
         "q": search_text,
+        "supported_filters": {
+            "delivery_available": hasattr(Listing, "delivery_available"),
+            "inspection_required": hasattr(Listing, "inspection_required"),
+        },
     }

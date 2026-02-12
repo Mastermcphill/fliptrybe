@@ -7,6 +7,8 @@ class MarketplaceQueryState {
     this.minPrice,
     this.maxPrice,
     this.conditions = const <String>[],
+    this.deliveryAvailable = false,
+    this.inspectionRequired = false,
     this.gridView = true,
   });
 
@@ -17,6 +19,8 @@ class MarketplaceQueryState {
   final double? minPrice;
   final double? maxPrice;
   final List<String> conditions;
+  final bool deliveryAvailable;
+  final bool inspectionRequired;
   final bool gridView;
 
   MarketplaceQueryState copyWith({
@@ -29,6 +33,8 @@ class MarketplaceQueryState {
     bool clearMinPrice = false,
     bool clearMaxPrice = false,
     List<String>? conditions,
+    bool? deliveryAvailable,
+    bool? inspectionRequired,
     bool? gridView,
   }) {
     return MarketplaceQueryState(
@@ -39,6 +45,8 @@ class MarketplaceQueryState {
       minPrice: clearMinPrice ? null : (minPrice ?? this.minPrice),
       maxPrice: clearMaxPrice ? null : (maxPrice ?? this.maxPrice),
       conditions: conditions ?? this.conditions,
+      deliveryAvailable: deliveryAvailable ?? this.deliveryAvailable,
+      inspectionRequired: inspectionRequired ?? this.inspectionRequired,
       gridView: gridView ?? this.gridView,
     );
   }
@@ -52,6 +60,8 @@ class MarketplaceQueryState {
       'minPrice': minPrice,
       'maxPrice': maxPrice,
       'conditions': conditions,
+      'deliveryAvailable': deliveryAvailable,
+      'inspectionRequired': inspectionRequired,
       'gridView': gridView,
     };
   }
@@ -74,6 +84,8 @@ class MarketplaceQueryState {
               .where((item) => item.trim().isNotEmpty)
               .toList(growable: false)
           : const <String>[],
+      deliveryAvailable: map['deliveryAvailable'] == true,
+      inspectionRequired: map['inspectionRequired'] == true,
       gridView: map['gridView'] != false,
     );
   }

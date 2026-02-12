@@ -52,6 +52,8 @@ class _MarketplaceSearchResultsScreenState
   String _searchMode = 'off';
   bool _syncingRemote = false;
   int _shadowRemoteCount = 0;
+  bool _supportsDeliveryFilter = false;
+  bool _supportsInspectionFilter = false;
 
   static const _categories = [
     'All',
@@ -147,23 +149,38 @@ class _MarketplaceSearchResultsScreenState
     try {
       final firstCondition =
           _queryState.conditions.isNotEmpty ? _queryState.conditions.first : '';
-      final remote = await _catalog.searchRemote(
+      final remoteResult = await _catalog.searchRemoteDetailed(
         query: _queryCtrl.text.trim(),
         category: _queryState.category,
         state: _queryState.state,
         minPrice: _queryState.minPrice,
         maxPrice: _queryState.maxPrice,
         condition: firstCondition,
+        deliveryAvailable:
+            _queryState.deliveryAvailable ? _queryState.deliveryAvailable : null,
+        inspectionRequired:
+            _queryState.inspectionRequired ? _queryState.inspectionRequired : null,
         sort: _queryState.sort,
         limit: 60,
       );
+      final remote = remoteResult.items;
+      final supportsDelivery =
+          remoteResult.supportedFilters['delivery_available'] == true;
+      final supportsInspection =
+          remoteResult.supportedFilters['inspection_required'] == true;
       if (!mounted) return;
       if (_searchMode == 'on') {
         setState(() {
           _filtered = remote;
+          _supportsDeliveryFilter = supportsDelivery;
+          _supportsInspectionFilter = supportsInspection;
         });
       } else if (_searchMode == 'shadow') {
-        setState(() => _shadowRemoteCount = remote.length);
+        setState(() {
+          _shadowRemoteCount = remote.length;
+          _supportsDeliveryFilter = supportsDelivery;
+          _supportsInspectionFilter = supportsInspection;
+        });
       }
     } catch (_) {
       // ignore remote sync failures; local filtering remains authoritative in off/shadow mode.
@@ -214,6 +231,8 @@ class _MarketplaceSearchResultsScreenState
     String draftCategory = _queryState.category;
     String draftState = _queryState.state;
     final draftConditions = <String>{..._queryState.conditions};
+    bool draftDelivery = _queryState.deliveryAvailable;
+    bool draftInspection = _queryState.inspectionRequired;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -255,7 +274,7 @@ class _MarketplaceSearchResultsScreenState
                         style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
-                      value: draftState,
+                      initialValue: draftState,
                       items: [allNigeriaLabel, ...nigeriaStates]
                           .map((s) => DropdownMenuItem(
                               value: s, child: Text(displayState(s))))
@@ -324,18 +343,28 @@ class _MarketplaceSearchResultsScreenState
                         style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 6),
                     CheckboxListTile(
-                      value: false,
-                      onChanged: null,
+                      value: draftDelivery,
+                      onChanged: _supportsDeliveryFilter
+                          ? (next) =>
+                              setModal(() => draftDelivery = next == true)
+                          : null,
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Delivery available'),
-                      subtitle: const Text('Coming soon'),
+                      subtitle: Text(_supportsDeliveryFilter
+                          ? 'Filter listings with delivery support'
+                          : 'Coming soon'),
                     ),
                     CheckboxListTile(
-                      value: false,
-                      onChanged: null,
+                      value: draftInspection,
+                      onChanged: _supportsInspectionFilter
+                          ? (next) =>
+                              setModal(() => draftInspection = next == true)
+                          : null,
                       contentPadding: EdgeInsets.zero,
                       title: const Text('Inspection available'),
-                      subtitle: const Text('Coming soon'),
+                      subtitle: Text(_supportsInspectionFilter
+                          ? 'Filter listings with inspection support'
+                          : 'Coming soon'),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -349,6 +378,8 @@ class _MarketplaceSearchResultsScreenState
                                 draftCategory = 'All';
                                 draftState = allNigeriaLabel;
                                 draftConditions.clear();
+                                draftDelivery = false;
+                                draftInspection = false;
                                 minCtrl.clear();
                                 maxCtrl.clear();
                               });
@@ -370,6 +401,8 @@ class _MarketplaceSearchResultsScreenState
                                       double.tryParse(minCtrl.text.trim()),
                                   maxPrice:
                                       double.tryParse(maxCtrl.text.trim()),
+                                  deliveryAvailable: draftDelivery,
+                                  inspectionRequired: draftInspection,
                                 );
                                 _apply();
                               });
@@ -439,6 +472,28 @@ class _MarketplaceSearchResultsScreenState
                     .where((item) => item != c)
                     .toList(growable: false),
               );
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.deliveryAvailable) {
+      chips.add(FTChip(
+          label: 'Delivery available',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(deliveryAvailable: false);
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.inspectionRequired) {
+      chips.add(FTChip(
+          label: 'Inspection available',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(inspectionRequired: false);
               _apply();
             });
           }));
