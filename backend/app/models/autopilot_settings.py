@@ -25,6 +25,14 @@ class AutopilotSettings(db.Model):
     last_paystack_webhook_at = db.Column(db.DateTime, nullable=True)
     payments_mode_changed_at = db.Column(db.DateTime, nullable=True)
     payments_mode_changed_by = db.Column(db.Integer, nullable=True)
+    search_v2_mode = db.Column(db.String(16), nullable=False, default="off", server_default="off")
+    payments_allow_legacy_fallback = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=sa.text("false")
+    )
+    otel_enabled = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
+    rate_limit_enabled = db.Column(
+        db.Boolean, nullable=False, default=True, server_default=sa.text("true")
+    )
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -43,5 +51,9 @@ class AutopilotSettings(db.Model):
             "last_paystack_webhook_at": self.last_paystack_webhook_at.isoformat() if self.last_paystack_webhook_at else None,
             "payments_mode_changed_at": self.payments_mode_changed_at.isoformat() if self.payments_mode_changed_at else None,
             "payments_mode_changed_by": int(self.payments_mode_changed_by) if self.payments_mode_changed_by is not None else None,
+            "search_v2_mode": (self.search_v2_mode or "off"),
+            "payments_allow_legacy_fallback": bool(self.payments_allow_legacy_fallback),
+            "otel_enabled": bool(self.otel_enabled),
+            "rate_limit_enabled": bool(self.rate_limit_enabled),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -7,6 +7,8 @@ from flask import Blueprint, jsonify, request, current_app
 from app.extensions import db
 from app.models import Wallet, Transaction
 from app.segments.segment_payments import process_paystack_webhook
+from app.utils.autopilot import get_settings
+from app.services.risk_engine_service import record_event
 
 webhooks_bp = Blueprint("webhooks_bp", __name__, url_prefix="/api/webhooks")
 
@@ -78,7 +80,28 @@ def paystack_webhook():
         # Backward compatibility: old webhook payloads may not include a PaymentIntent reference.
         if int(status) == 200 and bool(body.get("ignored")) and isinstance(payload, dict) and (payload.get("data") or {}).get("metadata"):
             try:
-                if _legacy_credit_wallet_from_metadata(payload):
+                settings = get_settings()
+                allow_legacy = bool(getattr(settings, "payments_allow_legacy_fallback", False))
+                if not allow_legacy:
+                    try:
+                        record_event(
+                            "webhook_legacy_fallback_blocked",
+                            context={
+                                "provider": "paystack",
+                                "reason_code": "LEGACY_FALLBACK_DISABLED",
+                                "reference": ((payload.get("data") or {}).get("reference") or ""),
+                            },
+                            request_id=request.headers.get("X-Request-Id"),
+                        )
+                    except Exception:
+                        db.session.rollback()
+                    body = {
+                        "ok": False,
+                        "error": "LEGACY_FALLBACK_DISABLED",
+                        "message": "Legacy fallback is disabled; requires admin review",
+                    }
+                    status = 409
+                elif _legacy_credit_wallet_from_metadata(payload):
                     body = {"ok": True, "legacy": True}
             except Exception:
                 db.session.rollback()

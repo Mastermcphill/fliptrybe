@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'listing_service.dart';
+import 'api_client.dart';
+import 'api_config.dart';
 
 class MarketplaceCatalogService {
   MarketplaceCatalogService({ListingService? listingService})
@@ -131,6 +133,7 @@ class MarketplaceCatalogService {
       'created_at': '2026-02-04T16:00:00Z',
     },
   ];
+  String? _searchModeCache;
 
   Future<List<Map<String, dynamic>>> listAll() async {
     final rows = await _listingService.listListings();
@@ -144,6 +147,77 @@ class MarketplaceCatalogService {
       return mapped;
     }
     return _fallback.map(_normalize).toList();
+  }
+
+  Future<String> searchV2Mode() async {
+    if (_searchModeCache != null) return _searchModeCache!;
+    try {
+      final data = await ApiClient.instance.getJson(ApiConfig.api('/public/features'));
+      if (data is Map && data['features'] is Map) {
+        final features = Map<String, dynamic>.from(data['features'] as Map);
+        final mode = (features['search_v2_mode'] ?? 'off').toString().toLowerCase();
+        if (mode == 'off' || mode == 'shadow' || mode == 'on') {
+          _searchModeCache = mode;
+          return mode;
+        }
+      }
+    } catch (_) {}
+    _searchModeCache = 'off';
+    return _searchModeCache!;
+  }
+
+  Future<List<Map<String, dynamic>>> searchRemote({
+    String query = '',
+    String category = '',
+    String state = '',
+    double? minPrice,
+    double? maxPrice,
+    String condition = '',
+    String sort = 'relevance',
+    int limit = 40,
+    int offset = 0,
+    bool admin = false,
+  }) async {
+    final qp = <String, String>{
+      'q': query.trim(),
+      'sort': _mapSort(sort),
+      'limit': '$limit',
+      'offset': '$offset',
+    };
+    if (category.trim().isNotEmpty && category.trim().toLowerCase() != 'all') {
+      qp['category'] = category.trim();
+    }
+    if (state.trim().isNotEmpty && state.trim().toLowerCase() != 'all nigeria') {
+      qp['state'] = state.trim();
+    }
+    if (minPrice != null) qp['min_price'] = minPrice.toStringAsFixed(0);
+    if (maxPrice != null) qp['max_price'] = maxPrice.toStringAsFixed(0);
+    if (condition.trim().isNotEmpty) qp['condition'] = condition.trim();
+    final path = admin ? '/admin/listings/search' : '/public/listings/search';
+    final uri = Uri(path: path, queryParameters: qp);
+    try {
+      final data = await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .whereType<Map>()
+            .map((raw) => _normalize(Map<String, dynamic>.from(raw as Map)))
+            .toList();
+      }
+    } catch (_) {}
+    return <Map<String, dynamic>>[];
+  }
+
+  String _mapSort(String sort) {
+    switch (sort) {
+      case 'price_low':
+        return 'price_asc';
+      case 'price_high':
+        return 'price_desc';
+      case 'newest':
+        return 'newest';
+      default:
+        return 'relevance';
+    }
   }
 
   List<Map<String, dynamic>> recommended(List<Map<String, dynamic>> source,

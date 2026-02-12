@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
 
 class ApiConfig {
+  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0+1');
   /// Override at build/run time:
   /// flutter run --dart-define=BASE_URL=http://127.0.0.1:5000
   static const String _baseUrlEnv = String.fromEnvironment('BASE_URL', defaultValue: '');

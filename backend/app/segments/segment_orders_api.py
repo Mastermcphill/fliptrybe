@@ -49,6 +49,8 @@ from app.utils.escrow_unlocks import (
 from app.jobs.escrow_runner import _hold_order_into_escrow, _refund_escrow
 from app.escrow import release_seller_payout, release_driver_payout
 from app.jobs.availability_runner import run_availability_timeouts
+from app.services.escrow_service import transition_escrow, EscrowStatus
+from app.services.risk_engine_service import record_event
 
 orders_bp = Blueprint("orders_bp", __name__, url_prefix="/api")
 
@@ -425,6 +427,17 @@ def _mark_paid(order: Order, reference: str | None = None, actor_id: int | None 
     else:
         order.release_condition = "BUYER_CONFIRM"
     _hold_order_into_escrow(order)
+    try:
+        transition_escrow(
+            order,
+            EscrowStatus.HELD,
+            idempotency_key=f"order_paid_hold:{int(order.id)}:{(reference or '')[:40]}",
+            actor={"type": "system" if actor_id is None else "user", "id": actor_id},
+            reason="payment_marked_paid",
+            metadata={"reference": reference or "", "order_id": int(order.id)},
+        )
+    except Exception:
+        pass
     # Do NOT release escrow at payment. Availability + secret-code confirmations gate release.
 
     try:
@@ -821,6 +834,16 @@ def _availability_expire(order: Order, conf: AvailabilityConfirmation) -> None:
             if listing and hasattr(listing, "is_active"):
                 listing.is_active = True
         _refund_escrow(order)
+        try:
+            transition_escrow(
+                order,
+                EscrowStatus.REFUNDED,
+                idempotency_key=f"availability_expired_refund:{int(order.id)}",
+                actor={"type": "system"},
+                reason="availability_expired",
+            )
+        except Exception:
+            pass
         _event(int(order.id), None, "availability_expired", "Availability confirmation expired")
 
 
@@ -855,6 +878,16 @@ def availability_confirm():
         order.status = "cancelled"
         order.updated_at = now
         _refund_escrow(order)
+        try:
+            transition_escrow(
+                order,
+                EscrowStatus.REFUNDED,
+                idempotency_key=f"availability_no_refund:{int(order.id)}",
+                actor={"type": "system"},
+                reason="listing_unavailable",
+            )
+        except Exception:
+            pass
         _event(int(order.id), None, "availability_no", "Listing already locked")
         db.session.commit()
         return jsonify({"message": "Listing already unavailable"}), 409
@@ -906,6 +939,16 @@ def availability_deny():
             listing.is_active = True
 
     _refund_escrow(order)
+    try:
+        transition_escrow(
+            order,
+            EscrowStatus.REFUNDED,
+            idempotency_key=f"availability_deny_refund:{int(order.id)}",
+            actor={"type": "system"},
+            reason="availability_denied",
+        )
+    except Exception:
+        pass
     _event(int(order.id), None, "availability_no", "Availability denied by seller")
 
     db.session.add(order)
@@ -1617,7 +1660,7 @@ def _confirm_pickup_unlock(o: Order, u: User, code: str):
             db.session.add(unlock)
             db.session.commit()
         except Exception:
-            db.session.rollback()
+            pass
         if not allowed:
             return jsonify({"message": "Pickup code locked. Contact admin."}), 423
         return jsonify({"message": "Invalid pickup code"}), 400
@@ -1630,6 +1673,15 @@ def _confirm_pickup_unlock(o: Order, u: User, code: str):
 
     try:
         release_seller_payout(o)
+        try:
+            record_event(
+                "payout_release",
+                user=u,
+                context={"order_id": int(o.id), "role": "merchant", "step": "pickup_confirmed"},
+                request_id=request.headers.get("X-Request-Id"),
+            )
+        except Exception:
+            pass
         db.session.add(unlock)
         db.session.add(o)
         db.session.commit()
@@ -1669,7 +1721,7 @@ def _confirm_delivery_unlock(o: Order, u: User, code: str):
             db.session.add(unlock)
             db.session.commit()
         except Exception:
-            db.session.rollback()
+            pass
         if not allowed:
             return jsonify({"message": "Delivery code locked. Contact admin."}), 423
         return jsonify({"message": "Invalid delivery code"}), 400
@@ -1681,6 +1733,25 @@ def _confirm_delivery_unlock(o: Order, u: User, code: str):
 
     try:
         release_driver_payout(o)
+        try:
+            record_event(
+                "payout_release",
+                user=u,
+                context={"order_id": int(o.id), "role": "driver", "step": "delivery_confirmed"},
+                request_id=request.headers.get("X-Request-Id"),
+            )
+        except Exception:
+            db.session.rollback()
+        try:
+            transition_escrow(
+                o,
+                EscrowStatus.RELEASED,
+                idempotency_key=f"delivery_release:{int(o.id)}",
+                actor={"type": "driver", "id": int(getattr(u, 'id', 0) or 0)},
+                reason="delivery_confirmed",
+            )
+        except Exception:
+            db.session.rollback()
         db.session.add(unlock)
         db.session.add(o)
         db.session.commit()

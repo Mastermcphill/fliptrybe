@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy import or_
@@ -8,6 +8,9 @@ from sqlalchemy import or_
 from app.extensions import db
 from app.models import User, SupportMessage
 from app.utils.jwt_utils import decode_token, get_bearer_token
+from app.utils.autopilot import get_settings
+from app.utils.rate_limit import check_limit
+from app.services.risk_engine_service import record_event
 
 support_bp = Blueprint("support_chat_bp", __name__, url_prefix="/api/support")
 support_admin_bp = Blueprint("support_admin_bp", __name__, url_prefix="/api/admin/support")
@@ -61,6 +64,59 @@ def _is_admin(u: User | None) -> bool:
     return _role(u) == "admin"
 
 
+def _rate_limit_response(action: str, *, user: User | None, limit: int, window_seconds: int):
+    try:
+        settings = get_settings()
+        enabled = bool(getattr(settings, "rate_limit_enabled", True))
+    except Exception:
+        enabled = True
+    if not enabled:
+        return None
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "unknown").split(",")[0].strip()
+    uid = int(getattr(user, "id", 0) or 0) if user else 0
+    key = f"{action}:ip:{ip}:u:{uid}"
+    ok, retry_after = check_limit(key, limit=limit, window_seconds=window_seconds)
+    if ok:
+        return None
+    try:
+        record_event(
+            "support_message_spam",
+            user=user,
+            context={"rate_limited": True, "reason_code": "SUPPORT_RATE_LIMIT", "retry_after": retry_after},
+            request_id=request.headers.get("X-Request-Id"),
+        )
+    except Exception:
+        db.session.rollback()
+    return jsonify({"ok": False, "error": "RATE_LIMITED", "message": "Too many messages. Please wait and retry.", "retry_after": retry_after}), 429
+
+
+def _spam_body_response(user: User, body: str):
+    if _is_admin(user):
+        return None
+    now = datetime.utcnow()
+    rows = (
+        SupportMessage.query
+        .filter_by(user_id=int(user.id), sender_role="user")
+        .filter(SupportMessage.created_at >= now - timedelta(minutes=1))
+        .order_by(SupportMessage.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    duplicates = [row for row in rows if (row.body or "").strip().lower() == body.strip().lower()]
+    if len(duplicates) >= 2:
+        try:
+            record_event(
+                "support_message_spam",
+                user=user,
+                context={"repeated_body": True, "reason_code": "REPEATED_BODY"},
+                request_id=request.headers.get("X-Request-Id"),
+            )
+        except Exception:
+            db.session.rollback()
+        return jsonify({"ok": False, "error": "SPAM_THROTTLED", "message": "Repeated message blocked. Please wait before sending again."}), 429
+    return None
+
+
 @support_bp.get("/messages")
 def my_messages():
     u = _current_user()
@@ -77,12 +133,18 @@ def send_to_admin():
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
+    rl = _rate_limit_response("support_message_send", user=u, limit=20, window_seconds=60)
+    if rl is not None:
+        return rl
 
     payload = request.get_json(silent=True) or {}
     body = (payload.get("body") or "").strip()
     target_raw = payload.get("user_id") or payload.get("recipient_id") or payload.get("target_user_id")
     if not body:
         return jsonify({"message": "body required"}), 400
+    spam = _spam_body_response(u, body)
+    if spam is not None:
+        return spam
 
     # Non-admins can only chat with admin.
     if target_raw is not None and not _is_admin(u):

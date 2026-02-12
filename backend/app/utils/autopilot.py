@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import os
 
 from app.extensions import db
 from app.models import AutopilotSettings, PayoutRequest, NotificationQueue, User, Order, DriverJobOffer, PayoutRecipient
@@ -11,6 +12,7 @@ from app.integrations.messaging.factory import build_messaging_provider
 
 
 def get_settings() -> AutopilotSettings:
+    env = (os.getenv("FLIPTRYBE_ENV") or os.getenv("FLASK_ENV") or "dev").strip().lower()
     row = AutopilotSettings.query.first()
     if not row:
         row = AutopilotSettings(enabled=True)
@@ -20,6 +22,10 @@ def get_settings() -> AutopilotSettings:
         row.termii_enabled_sms = False
         row.termii_enabled_wa = False
         row.payments_mode = "mock"
+        row.search_v2_mode = "off"
+        row.payments_allow_legacy_fallback = env in ("staging", "stage")
+        row.otel_enabled = False
+        row.rate_limit_enabled = True
         db.session.add(row)
         db.session.commit()
     changed = False
@@ -40,6 +46,18 @@ def get_settings() -> AutopilotSettings:
         changed = True
     if not getattr(row, "payments_mode", None):
         row.payments_mode = "mock"
+        changed = True
+    if not getattr(row, "search_v2_mode", None):
+        row.search_v2_mode = "off"
+        changed = True
+    if getattr(row, "payments_allow_legacy_fallback", None) is None:
+        row.payments_allow_legacy_fallback = env in ("staging", "stage")
+        changed = True
+    if getattr(row, "otel_enabled", None) is None:
+        row.otel_enabled = False
+        changed = True
+    if getattr(row, "rate_limit_enabled", None) is None:
+        row.rate_limit_enabled = True
         changed = True
     if changed:
         db.session.add(row)

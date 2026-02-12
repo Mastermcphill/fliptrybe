@@ -49,6 +49,9 @@ class _MarketplaceSearchResultsScreenState
   List<Map<String, dynamic>> _filtered = const [];
   Set<int> _favorites = <int>{};
   late MarketplaceQueryState _queryState;
+  String _searchMode = 'off';
+  bool _syncingRemote = false;
+  int _shadowRemoteCount = 0;
 
   static const _categories = [
     'All',
@@ -106,10 +109,12 @@ class _MarketplaceSearchResultsScreenState
       final values = await Future.wait([
         _catalog.listAll(),
         _prefs.loadFavorites(),
+        _catalog.searchV2Mode(),
       ]);
       if (!mounted) return;
       _all = values[0] as List<Map<String, dynamic>>;
       _favorites = values[1] as Set<int>;
+      _searchMode = (values[2] as String).toLowerCase();
       _apply();
       setState(() => _loading = false);
     } catch (_) {
@@ -132,6 +137,39 @@ class _MarketplaceSearchResultsScreenState
       conditions: _queryState.conditions,
       sort: _queryState.sort,
     );
+    Future.microtask(_syncSearchV2);
+  }
+
+  Future<void> _syncSearchV2() async {
+    if (_syncingRemote) return;
+    if (_searchMode == 'off') return;
+    _syncingRemote = true;
+    try {
+      final firstCondition =
+          _queryState.conditions.isNotEmpty ? _queryState.conditions.first : '';
+      final remote = await _catalog.searchRemote(
+        query: _queryCtrl.text.trim(),
+        category: _queryState.category,
+        state: _queryState.state,
+        minPrice: _queryState.minPrice,
+        maxPrice: _queryState.maxPrice,
+        condition: firstCondition,
+        sort: _queryState.sort,
+        limit: 60,
+      );
+      if (!mounted) return;
+      if (_searchMode == 'on') {
+        setState(() {
+          _filtered = remote;
+        });
+      } else if (_searchMode == 'shadow') {
+        setState(() => _shadowRemoteCount = remote.length);
+      }
+    } catch (_) {
+      // ignore remote sync failures; local filtering remains authoritative in off/shadow mode.
+    } finally {
+      _syncingRemote = false;
+    }
   }
 
   Future<void> _toggleFavorite(Map<String, dynamic> item) async {
@@ -518,6 +556,14 @@ class _MarketplaceSearchResultsScreenState
                                 alignment: Alignment.centerLeft,
                                 child: Wrap(
                                     spacing: 8, runSpacing: 8, children: chips),
+                              ),
+                            ),
+                          if (_searchMode == 'shadow')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                'Search V2 shadow active (remote hits: $_shadowRemoteCount)',
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
                               ),
                             ),
                         ],

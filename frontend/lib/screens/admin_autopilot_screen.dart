@@ -25,6 +25,10 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   bool _paystackEnabled = false;
   bool _smsEnabled = false;
   bool _waEnabled = false;
+  String _searchV2Mode = "off";
+  bool _legacyFallback = false;
+  bool _otelEnabled = false;
+  bool _rateLimitEnabled = true;
 
   @override
   void initState() {
@@ -41,6 +45,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
         (s['settings'] ?? {}) as Map? ?? <String, dynamic>{});
     final integrations = Map<String, dynamic>.from(
         (settings['integrations'] ?? {}) as Map? ?? <String, dynamic>{});
+    final featureFlags = Map<String, dynamic>.from(
+        (settings['features'] ?? {}) as Map? ?? <String, dynamic>{});
     final health = Map<String, dynamic>.from(
         (settings['integration_health'] ?? {}) as Map? ?? <String, dynamic>{});
     final paySettings = Map<String, dynamic>.from(
@@ -71,6 +77,14 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
               settings['termii_enabled_wa'] ??
               false) ==
           true;
+      _searchV2Mode =
+          (featureFlags['search_v2_mode'] ?? settings['search_v2_mode'] ?? 'off')
+              .toString();
+      _legacyFallback =
+          (featureFlags['payments_allow_legacy_fallback'] ?? settings['payments_allow_legacy_fallback'] ?? false) == true;
+      _otelEnabled = (featureFlags['otel_enabled'] ?? settings['otel_enabled'] ?? false) == true;
+      _rateLimitEnabled =
+          (featureFlags['rate_limit_enabled'] ?? settings['rate_limit_enabled'] ?? true) == true;
       _health = health;
       _paymentsSettings = paySettings;
       _loading = false;
@@ -102,6 +116,10 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
       paystackEnabled: _paystackEnabled,
       termiiEnabledSms: _smsEnabled,
       termiiEnabledWa: _waEnabled,
+      searchV2Mode: _searchV2Mode,
+      paymentsAllowLegacyFallback: _legacyFallback,
+      otelEnabled: _otelEnabled,
+      rateLimitEnabled: _rateLimitEnabled,
     );
     if (!mounted) return;
     final ok = r['ok'] == true;
@@ -323,6 +341,33 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                   value: _waEnabled,
                   title: const Text("Termii WhatsApp enabled"),
                   onChanged: (v) => setState(() => _waEnabled = v),
+                ),
+                DropdownButtonFormField<String>(
+                  value: _searchV2Mode,
+                  items: const [
+                    DropdownMenuItem(value: "off", child: Text("search_v2 off")),
+                    DropdownMenuItem(value: "shadow", child: Text("search_v2 shadow")),
+                    DropdownMenuItem(value: "on", child: Text("search_v2 on")),
+                  ],
+                  decoration: const InputDecoration(
+                      border: OutlineInputBorder(), labelText: "Search V2 mode"),
+                  onChanged: (v) => setState(() => _searchV2Mode = (v ?? "off")),
+                ),
+                SwitchListTile(
+                  value: _legacyFallback,
+                  title: const Text("Allow legacy webhook fallback"),
+                  subtitle: const Text("Enable legacy metadata credit path when intent is missing"),
+                  onChanged: (v) => setState(() => _legacyFallback = v),
+                ),
+                SwitchListTile(
+                  value: _otelEnabled,
+                  title: const Text("OpenTelemetry enabled"),
+                  onChanged: (v) => setState(() => _otelEnabled = v),
+                ),
+                SwitchListTile(
+                  value: _rateLimitEnabled,
+                  title: const Text("Rate limiting enabled"),
+                  onChanged: (v) => setState(() => _rateLimitEnabled = v),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(

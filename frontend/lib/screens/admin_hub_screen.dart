@@ -14,6 +14,9 @@ import 'admin_marketplace_screen.dart';
 import 'leaderboards_screen.dart';
 import 'admin_support_threads_screen.dart';
 import 'not_available_yet_screen.dart';
+import 'admin_global_search_screen.dart';
+import 'admin_anomalies_screen.dart';
+import 'admin_risk_events_screen.dart';
 import '../utils/auth_navigation.dart';
 
 class AdminHubScreen extends StatefulWidget {
@@ -201,6 +204,15 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                     builder: (_) => const AdminKycReviewScreen())),
           ),
           ListTile(
+            leading: const Icon(Icons.manage_search_outlined),
+            title: const Text('Global Search'),
+            subtitle: const Text('Search users, orders, listings, intents'),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminGlobalSearchScreen())),
+          ),
+          ListTile(
             leading: const Icon(Icons.storefront_outlined),
             title: const Text('Marketplace'),
             subtitle: const Text('Browse and search listings as admin'),
@@ -215,6 +227,20 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             subtitle: const Text('Top merchants & drivers'),
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const LeaderboardsScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.rule_folder_outlined),
+            title: const Text('Anomalies'),
+            subtitle: const Text('Detect payment, escrow and webhook drifts'),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AdminAnomaliesScreen())),
+          ),
+          ListTile(
+            leading: const Icon(Icons.security_outlined),
+            title: const Text('Risk Events'),
+            subtitle: const Text('Review throttles, spam and abuse signals'),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AdminRiskEventsScreen())),
           ),
           ListTile(
             leading: const Icon(Icons.percent_outlined),

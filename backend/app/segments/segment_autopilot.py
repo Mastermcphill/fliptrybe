@@ -94,6 +94,12 @@ def _settings_payload(s):
         "payments": p_health,
         "messaging": m_health,
     }
+    base["features"] = {
+        "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
+        "payments_allow_legacy_fallback": bool(getattr(s, "payments_allow_legacy_fallback", False)),
+        "otel_enabled": bool(getattr(s, "otel_enabled", False)),
+        "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
+    }
     return base
 
 
@@ -202,12 +208,23 @@ def update_settings():
         return jsonify({"ok": False, "message": "integrations_mode must be disabled|sandbox|live"}), 400
     if provider not in ("mock", "paystack"):
         return jsonify({"ok": False, "message": "payments_provider must be mock|paystack"}), 400
+    incoming_search_mode = (data.get("search_v2_mode") or "").strip().lower()
+    if incoming_search_mode and incoming_search_mode not in ("off", "shadow", "on"):
+        return jsonify({"ok": False, "message": "search_v2_mode must be off|shadow|on"}), 400
 
     s.integrations_mode = mode
     s.payments_provider = provider
     s.paystack_enabled = _as_bool(data.get("paystack_enabled"), bool(s.paystack_enabled))
     s.termii_enabled_sms = _as_bool(data.get("termii_enabled_sms"), bool(s.termii_enabled_sms))
     s.termii_enabled_wa = _as_bool(data.get("termii_enabled_wa"), bool(s.termii_enabled_wa))
+    if incoming_search_mode:
+        s.search_v2_mode = incoming_search_mode
+    s.payments_allow_legacy_fallback = _as_bool(
+        data.get("payments_allow_legacy_fallback"),
+        bool(getattr(s, "payments_allow_legacy_fallback", False)),
+    )
+    s.otel_enabled = _as_bool(data.get("otel_enabled"), bool(getattr(s, "otel_enabled", False)))
+    s.rate_limit_enabled = _as_bool(data.get("rate_limit_enabled"), bool(getattr(s, "rate_limit_enabled", True)))
     incoming_payments_mode = (data.get("payments_mode") or "").strip().lower()
     mode_changed = False
     old_mode = _payments_mode(s)
@@ -245,6 +262,10 @@ def get_payments_settings():
         "paystack_enabled": bool(getattr(s, "paystack_enabled", False)),
         "integrations_mode": (getattr(s, "integrations_mode", "disabled") or "disabled"),
         "payments_provider": (getattr(s, "payments_provider", "mock") or "mock"),
+        "payments_allow_legacy_fallback": bool(getattr(s, "payments_allow_legacy_fallback", False)),
+        "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
+        "otel_enabled": bool(getattr(s, "otel_enabled", False)),
+        "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
         "health": _payments_health_payload(s),
         "audit": _payments_audit_payload(s),
     }
@@ -263,6 +284,9 @@ def set_payments_settings():
 
     s = get_settings()
     old_mode = _payments_mode(s)
+    search_mode = (data.get("search_v2_mode") or "").strip().lower()
+    if search_mode and search_mode not in ("off", "shadow", "on"):
+        return jsonify({"ok": False, "message": "search_v2_mode must be off|shadow|on"}), 400
     s.payments_mode = mode
     s.payments_mode_changed_at = datetime.utcnow()
     s.payments_mode_changed_by = int(u.id)
@@ -271,6 +295,17 @@ def set_payments_settings():
     elif mode == "paystack_auto" and (getattr(s, "payments_provider", "mock") or "mock").strip().lower() == "mock":
         s.payments_provider = "paystack"
     db.session.add(s)
+    if search_mode:
+        s.search_v2_mode = search_mode
+    if "payments_allow_legacy_fallback" in data:
+        s.payments_allow_legacy_fallback = _as_bool(
+            data.get("payments_allow_legacy_fallback"),
+            bool(getattr(s, "payments_allow_legacy_fallback", False)),
+        )
+    if "otel_enabled" in data:
+        s.otel_enabled = _as_bool(data.get("otel_enabled"), bool(getattr(s, "otel_enabled", False)))
+    if "rate_limit_enabled" in data:
+        s.rate_limit_enabled = _as_bool(data.get("rate_limit_enabled"), bool(getattr(s, "rate_limit_enabled", True)))
     db.session.commit()
     if old_mode != mode:
         _save_payments_mode_audit(actor_id=int(u.id), old_mode=old_mode, new_mode=mode)
@@ -280,6 +315,10 @@ def set_payments_settings():
         "paystack_enabled": bool(getattr(s, "paystack_enabled", False)),
         "integrations_mode": (getattr(s, "integrations_mode", "disabled") or "disabled"),
         "payments_provider": (getattr(s, "payments_provider", "mock") or "mock"),
+        "payments_allow_legacy_fallback": bool(getattr(s, "payments_allow_legacy_fallback", False)),
+        "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
+        "otel_enabled": bool(getattr(s, "otel_enabled", False)),
+        "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
         "health": _payments_health_payload(s),
         "audit": _payments_audit_payload(s),
     }

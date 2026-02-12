@@ -14,6 +14,10 @@ from app.models import Listing
 from app.utils.commission import compute_commission, RATES
 from app.utils.listing_caps import enforce_listing_cap
 from app.utils.jwt_utils import decode_token, get_bearer_token
+from app.utils.autopilot import get_settings
+from app.services.search_v2_service import search_listings_v2
+from app.utils.rate_limit import check_limit
+from app.services.risk_engine_service import record_event
 
 
 market_bp = Blueprint("market_bp", __name__, url_prefix="/api")
@@ -142,6 +146,67 @@ def _is_owner(u: User | None, listing: Listing) -> bool:
     return False
 
 
+def _search_args():
+    q = (request.args.get("q") or "").strip()
+    category = (request.args.get("category") or "").strip()
+    state = (request.args.get("state") or "").strip()
+    condition = (request.args.get("condition") or "").strip()
+    sort = (request.args.get("sort") or "relevance").strip().lower()
+    try:
+        min_price = float(request.args.get("min_price")) if request.args.get("min_price") not in (None, "") else None
+    except Exception:
+        min_price = None
+    try:
+        max_price = float(request.args.get("max_price")) if request.args.get("max_price") not in (None, "") else None
+    except Exception:
+        max_price = None
+    try:
+        limit = int(request.args.get("limit") or 20)
+    except Exception:
+        limit = 20
+    try:
+        offset = int(request.args.get("offset") or 0)
+    except Exception:
+        offset = 0
+    return {
+        "q": q,
+        "category": category,
+        "state": state,
+        "condition": condition,
+        "sort": sort,
+        "min_price": min_price,
+        "max_price": max_price,
+        "limit": max(1, min(limit, 100)),
+        "offset": max(0, offset),
+    }
+
+
+def _rate_limit_response(action: str, *, user: User | None, limit: int, window_seconds: int):
+    try:
+        settings = get_settings()
+        enabled = bool(getattr(settings, "rate_limit_enabled", True))
+    except Exception:
+        enabled = True
+    if not enabled:
+        return None
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "unknown").split(",")[0].strip()
+    uid = int(getattr(user, "id", 0) or 0) if user else 0
+    key = f"{action}:ip:{ip}:u:{uid}"
+    ok, retry_after = check_limit(key, limit=limit, window_seconds=window_seconds)
+    if ok:
+        return None
+    try:
+        record_event(
+            action,
+            user=user,
+            context={"rate_limited": True, "reason_code": "RATE_LIMIT_EXCEEDED", "retry_after": retry_after},
+            request_id=request.headers.get("X-Request-Id"),
+        )
+    except Exception:
+        db.session.rollback()
+    return jsonify({"ok": False, "error": "RATE_LIMITED", "message": "Too many listing actions. Retry later.", "retry_after": retry_after}), 429
+
+
 def _is_email_verified(u: User | None) -> bool:
     if not u:
         return False
@@ -241,6 +306,85 @@ def locations_compat():
     Returns a Nigeria-wide catalog: {ok:true, items:[{state, cities[]}, ...]}
     """
     return jsonify({"ok": True, "items": NIGERIA_LOCATIONS}), 200
+
+
+@market_bp.get("/public/features")
+def public_features():
+    settings = get_settings()
+    mode = (getattr(settings, "search_v2_mode", None) or "off").strip().lower()
+    if mode not in ("off", "shadow", "on"):
+        mode = "off"
+    return jsonify(
+        {
+            "ok": True,
+            "features": {
+                "search_v2_mode": mode,
+            },
+        }
+    ), 200
+
+
+@market_bp.get("/public/listings/search")
+def public_listings_search():
+    args = _search_args()
+    try:
+        payload = search_listings_v2(
+            q=args["q"],
+            category=args["category"],
+            state=args["state"],
+            min_price=args["min_price"],
+            max_price=args["max_price"],
+            condition=args["condition"],
+            sort=args["sort"],
+            limit=args["limit"],
+            offset=args["offset"],
+            include_inactive=False,
+        )
+        return jsonify(payload), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            current_app.logger.exception("public_listings_search_failed")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "items": [], "total": 0, "limit": args["limit"], "offset": args["offset"]}), 200
+
+
+@market_bp.get("/admin/listings/search")
+def admin_listings_search():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    args = _search_args()
+    try:
+        payload = search_listings_v2(
+            q=args["q"],
+            category=args["category"],
+            state=args["state"],
+            min_price=args["min_price"],
+            max_price=args["max_price"],
+            condition=args["condition"],
+            sort=args["sort"],
+            limit=args["limit"],
+            offset=args["offset"],
+            include_inactive=True,
+        )
+        return jsonify(payload), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            current_app.logger.exception("admin_listings_search_failed")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "items": [], "total": 0, "limit": args["limit"], "offset": args["offset"]}), 200
 
 
 @market_bp.get("/heatmap")
@@ -494,6 +638,9 @@ def update_listing(listing_id: int):
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
+    rl = _rate_limit_response("listing_update", user=u, limit=60, window_seconds=300)
+    if rl is not None:
+        return rl
     item = Listing.query.get(listing_id)
     if not item:
         return jsonify({"message": "Not found"}), 404
@@ -555,6 +702,15 @@ def update_listing(listing_id: int):
             item.image_path = incoming
 
     try:
+        try:
+            record_event(
+                "listing_update",
+                user=u,
+                context={"listing_id": int(item.id), "title": item.title or "", "state": item.state or ""},
+                request_id=request.headers.get("X-Request-Id"),
+            )
+        except Exception:
+            db.session.rollback()
         db.session.add(item)
         db.session.commit()
         return jsonify({"ok": True, "listing": item.to_dict(base_url=_base_url())}), 200
@@ -677,6 +833,9 @@ def create_listing():
         owner_user = User.query.get(int(user_id))
     except Exception:
         owner_user = None
+    rl = _rate_limit_response("listing_create", user=owner_user, limit=40, window_seconds=300)
+    if rl is not None:
+        return rl
     if not _is_email_verified(owner_user):
         return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
@@ -703,6 +862,15 @@ def create_listing():
     _apply_pricing_for_listing(listing, base_price=price, seller_role=seller_role)
 
     try:
+        try:
+            record_event(
+                "listing_create",
+                user=owner_user,
+                context={"title": title[:120], "state": state or "", "price": float(price or 0.0)},
+                request_id=request.headers.get("X-Request-Id"),
+            )
+        except Exception:
+            db.session.rollback()
         db.session.add(listing)
         db.session.commit()
 

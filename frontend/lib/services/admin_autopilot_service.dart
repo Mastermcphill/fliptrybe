@@ -26,16 +26,27 @@ class AdminAutopilotService {
     required bool paystackEnabled,
     required bool termiiEnabledSms,
     required bool termiiEnabledWa,
+    String? searchV2Mode,
+    bool? paymentsAllowLegacyFallback,
+    bool? otelEnabled,
+    bool? rateLimitEnabled,
   }) async {
+    final body = <String, dynamic>{
+      'payments_provider': paymentsProvider,
+      'integrations_mode': integrationsMode,
+      'paystack_enabled': paystackEnabled,
+      'termii_enabled_sms': termiiEnabledSms,
+      'termii_enabled_wa': termiiEnabledWa,
+    };
+    if (searchV2Mode != null) body['search_v2_mode'] = searchV2Mode;
+    if (paymentsAllowLegacyFallback != null) {
+      body['payments_allow_legacy_fallback'] = paymentsAllowLegacyFallback;
+    }
+    if (otelEnabled != null) body['otel_enabled'] = otelEnabled;
+    if (rateLimitEnabled != null) body['rate_limit_enabled'] = rateLimitEnabled;
     final data = await ApiClient.instance.postJson(
       ApiConfig.api('/admin/autopilot/settings'),
-      {
-        'payments_provider': paymentsProvider,
-        'integrations_mode': integrationsMode,
-        'paystack_enabled': paystackEnabled,
-        'termii_enabled_sms': termiiEnabledSms,
-        'termii_enabled_wa': termiiEnabledWa,
-      },
+      body,
     );
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }

@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request, current_app, g
 
 from app.extensions import db
 from app.models import AuditLog, User, PaymentIntent, WebhookEvent, Order
@@ -14,10 +14,16 @@ from app.utils.jwt_utils import decode_token
 from app.utils.paystack_client import verify_signature
 from app.utils.wallets import post_txn
 from app.utils.autopilot import get_settings
+from app.utils.rate_limit import check_limit
 from app.utils.idempotency import lookup_response, store_response
 from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
 from app.integrations.payments.factory import build_payments_provider
 from app.integrations.payments.mock_provider import MockPaymentsProvider
+from app.services.payment_intent_service import (
+    PaymentIntentStatus,
+    transition_intent,
+)
+from app.services.risk_engine_service import record_event
 
 payments_bp = Blueprint("payments_bp", __name__, url_prefix="/api/payments")
 admin_payments_bp = Blueprint("admin_payments_bp", __name__, url_prefix="/api/admin/payments")
@@ -98,6 +104,43 @@ def _payments_mode(settings) -> str:
     return "mock" if provider == "mock" else "paystack_auto"
 
 
+def _request_id() -> str:
+    try:
+        rid = getattr(g, "request_id", None)
+        if rid:
+            return str(rid)
+    except Exception:
+        pass
+    return (request.headers.get("X-Request-Id") or "").strip()
+
+
+def _rate_limit_or_none(action: str, *, limit: int, window_seconds: int, user_id: int | None = None):
+    try:
+        settings = get_settings()
+        enabled = bool(getattr(settings, "rate_limit_enabled", True))
+    except Exception:
+        enabled = True
+    if not enabled:
+        return None
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "unknown").split(",")[0].strip()
+    key = f"{action}:ip:{ip}"
+    if user_id is not None:
+        key = f"{key}:u:{int(user_id)}"
+    ok, retry_after = check_limit(key, limit=limit, window_seconds=window_seconds)
+    if ok:
+        return None
+    try:
+        record_event(
+            action,
+            user=None,
+            context={"rate_limited": True, "reason_code": "RATE_LIMIT_EXCEEDED", "retry_after": retry_after},
+            request_id=_request_id(),
+        )
+    except Exception:
+        db.session.rollback()
+    return jsonify({"ok": False, "error": "RATE_LIMITED", "message": "Too many requests. Please retry later.", "retry_after": retry_after}), 429
+
+
 def _manual_instructions_payload() -> dict:
     return {
         "message": "Manual payment mode is enabled. Send proof and await admin confirmation.",
@@ -172,6 +215,7 @@ def _ensure_payment_intent(*, user_id: int, provider: str, reference: str, purpo
             purpose=purpose,
             amount=amount,
             status="initialized",
+            updated_at=datetime.utcnow(),
             meta=json.dumps(meta),
         )
     else:
@@ -180,6 +224,7 @@ def _ensure_payment_intent(*, user_id: int, provider: str, reference: str, purpo
         pi.purpose = purpose
         pi.amount = amount
         pi.meta = json.dumps(meta)
+        pi.updated_at = datetime.utcnow()
         if (pi.status or "").strip().lower() == "failed":
             pi.status = "initialized"
     db.session.add(pi)
@@ -195,10 +240,14 @@ def _credit_wallet_from_reference(reference: str):
     if already_paid:
         return True
 
-    pi.status = "paid"
-    pi.paid_at = datetime.utcnow()
-    db.session.add(pi)
-    db.session.commit()
+    transition_intent(
+        pi,
+        PaymentIntentStatus.PAID,
+        actor={"type": "system"},
+        idempotency_key=f"wallet_topup:{reference}",
+        reason="topup_verified",
+        metadata={"reference": reference},
+    )
 
     post_txn(int(pi.user_id), float(pi.amount or 0.0), kind="topup", direction="credit", reference=f"pay:{reference}")
     return True
@@ -241,6 +290,7 @@ def _touch_last_paystack_webhook(settings) -> None:
 
 
 def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None, source: str = "payments") -> tuple[dict, int]:
+    webhook_row = None
     try:
         settings = get_settings()
         mode = (getattr(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
@@ -264,10 +314,12 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
         event = event_raw.strip()
         reference = str((data.get("reference") or "")).strip()
         _touch_last_paystack_webhook(settings)
+        payload_hash = hashlib.sha256(raw or b"").hexdigest()
+        request_id = _request_id() or None
 
         # Live Paystack must validate signature. Mock/disabled paths never require it.
         verified = False
-        strict_signature = mode == "live" and provider == "paystack" and enabled
+        strict_signature = mode == "live" and provider == "paystack" and enabled and not str(source or "").startswith("admin_replay")
         if strict_signature:
             secret = (os.getenv("PAYSTACK_WEBHOOK_SECRET") or os.getenv("PAYSTACK_SECRET_KEY") or "").strip()
             if not secret:
@@ -298,10 +350,23 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
 
         existing = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
         if existing:
+            if (existing.status or "").strip().lower() in ("processed", "ignored", "replayed"):
+                return {"ok": True, "replayed": True, "verified": verified}, 200
             return {"ok": True, "replayed": True, "verified": verified}, 200
 
         try:
-            db.session.add(WebhookEvent(provider="paystack", event_id=event_id, reference=reference))
+            webhook_row = WebhookEvent(
+                provider="paystack",
+                event_id=event_id,
+                reference=reference,
+                status="received",
+                request_id=request_id,
+                payload_hash=payload_hash,
+                payload_json=((raw or b"{}").decode("utf-8", errors="ignore"))[:200000],
+                processed_at=None,
+                error=None,
+            )
+            db.session.add(webhook_row)
             db.session.commit()
         except Exception:
             db.session.rollback()
@@ -309,46 +374,182 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
         _save_audit("paystack_webhook", {"verified": verified, "event": event, "reference": reference, "source": source})
 
         if event != "charge.success":
+            try:
+                if webhook_row is None:
+                    webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                if webhook_row:
+                    webhook_row.status = "ignored"
+                    webhook_row.processed_at = datetime.utcnow()
+                    webhook_row.error = None
+                    db.session.add(webhook_row)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
             return {"ok": True, "verified": verified}, 200
         if not reference:
+            try:
+                if webhook_row is None:
+                    webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                if webhook_row:
+                    webhook_row.status = "invalid_payload"
+                    webhook_row.processed_at = datetime.utcnow()
+                    webhook_row.error = "data.reference_missing"
+                    db.session.add(webhook_row)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
             return {"ok": False, "error": "INVALID_PAYLOAD", "message": "data.reference is required"}, 400
 
         pi = PaymentIntent.query.filter_by(reference=reference).first()
         if not pi:
+            try:
+                if webhook_row is None:
+                    webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                if webhook_row:
+                    webhook_row.status = "intent_not_found"
+                    webhook_row.processed_at = datetime.utcnow()
+                    webhook_row.error = "INTENT_NOT_FOUND"
+                    db.session.add(webhook_row)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
             return {"ok": True, "verified": verified, "ignored": True}, 200
 
         if not _check_webhook_amount(pi, data):
+            try:
+                if webhook_row is None:
+                    webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                if webhook_row:
+                    webhook_row.status = "amount_mismatch"
+                    webhook_row.processed_at = datetime.utcnow()
+                    webhook_row.error = "AMOUNT_MISMATCH"
+                    db.session.add(webhook_row)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+            try:
+                record_event(
+                    "webhook_success",
+                    user=None,
+                    context={"amount_mismatch": True, "reference": reference, "event_id": event_id},
+                    request_id=request_id,
+                )
+            except Exception:
+                db.session.rollback()
             return {"ok": False, "error": "AMOUNT_MISMATCH", "reference": reference}, 200
 
         if (pi.purpose or "").strip().lower() == "order":
             order_id = _extract_order_id(pi.meta)
             if not order_id:
+                try:
+                    if webhook_row is None:
+                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                    if webhook_row:
+                        webhook_row.status = "order_missing"
+                        webhook_row.processed_at = datetime.utcnow()
+                        webhook_row.error = "ORDER_ID_MISSING"
+                        db.session.add(webhook_row)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
                 return {"ok": False, "error": "ORDER_ID_MISSING", "reference": reference}, 200
             order = db.session.get(Order, int(order_id))
             if not order:
+                try:
+                    if webhook_row is None:
+                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                    if webhook_row:
+                        webhook_row.status = "order_not_found"
+                        webhook_row.processed_at = datetime.utcnow()
+                        webhook_row.error = "ORDER_NOT_FOUND"
+                        db.session.add(webhook_row)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
                 return {"ok": False, "error": "ORDER_NOT_FOUND", "reference": reference}, 200
             if _order_is_paid(order):
-                pi.status = "paid"
-                if not pi.paid_at:
-                    pi.paid_at = datetime.utcnow()
-                    db.session.add(pi)
-                    db.session.commit()
+                try:
+                    transition_intent(
+                        pi,
+                        PaymentIntentStatus.PAID,
+                        actor={"type": "webhook"},
+                        idempotency_key=f"webhook:{event_id}",
+                        reason="charge_success_replay",
+                        metadata={"reference": reference, "source": source},
+                    )
+                except Exception:
+                    db.session.rollback()
+                try:
+                    if webhook_row is None:
+                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                    if webhook_row:
+                        webhook_row.status = "processed"
+                        webhook_row.processed_at = datetime.utcnow()
+                        webhook_row.error = None
+                        db.session.add(webhook_row)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
                 return {"ok": True, "verified": verified, "already_paid": True}, 200
 
-            pi.status = "paid"
-            pi.paid_at = datetime.utcnow()
-            db.session.add(pi)
-            db.session.commit()
+            transition_intent(
+                pi,
+                PaymentIntentStatus.PAID,
+                actor={"type": "webhook"},
+                idempotency_key=f"webhook:{event_id}",
+                reason="charge_success",
+                metadata={"reference": reference, "source": source},
+            )
             _mark_order_paid(order, reference=reference)
+            try:
+                if webhook_row is None:
+                    webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                if webhook_row:
+                    webhook_row.status = "processed"
+                    webhook_row.processed_at = datetime.utcnow()
+                    webhook_row.error = None
+                    db.session.add(webhook_row)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+            try:
+                record_event(
+                    "webhook_success",
+                    user=None,
+                    context={"reference": reference, "event_id": event_id, "order_id": int(order.id)},
+                    request_id=request_id,
+                )
+            except Exception:
+                db.session.rollback()
             return {"ok": True, "verified": verified, "purpose": "order"}, 200
 
         _credit_wallet_from_reference(reference)
+        try:
+            if webhook_row is None:
+                webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+            if webhook_row:
+                webhook_row.status = "processed"
+                webhook_row.processed_at = datetime.utcnow()
+                webhook_row.error = None
+                db.session.add(webhook_row)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
         return {"ok": True, "verified": verified, "purpose": "topup"}, 200
     except Exception as e:
         try:
             db.session.rollback()
         except Exception:
             pass
+        try:
+            if webhook_row is not None:
+                webhook_row.status = "failed"
+                webhook_row.error = f"{type(e).__name__}: {e}"
+                webhook_row.processed_at = datetime.utcnow()
+                db.session.add(webhook_row)
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
         current_app.logger.exception("paystack_webhook_processing_failed source=%s", source)
         return {
             "ok": False,
@@ -362,6 +563,9 @@ def initialize_payment():
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
+    rl = _rate_limit_or_none("payment_initialize", limit=40, window_seconds=300, user_id=int(u.id))
+    if rl is not None:
+        return rl
 
     data = request.get_json(silent=True) or {}
     idem = lookup_response(int(u.id), "/api/payments/initialize", data)
@@ -408,6 +612,19 @@ def initialize_payment():
         "initiated_by": int(u.id),
         "source": "api.payments.initialize",
     }
+    try:
+        record_event(
+            "payment_initialize",
+            user=u,
+            context={
+                "purpose": purpose,
+                "order_id": int(order.id) if order is not None else None,
+                "amount": float(amount),
+            },
+            request_id=_request_id(),
+        )
+    except Exception:
+        db.session.rollback()
 
     if payments_mode == "manual_company_account":
         if purpose != "order":
@@ -431,8 +648,14 @@ def initialize_payment():
                 amount=float(amount),
                 meta={**meta, "mode": "manual_company_account"},
             )
-            pi.status = "manual_pending"
-            db.session.add(pi)
+            transition_intent(
+                pi,
+                PaymentIntentStatus.MANUAL_PENDING,
+                actor={"type": "user", "id": int(u.id)},
+                idempotency_key=f"init:{pi.reference}:manual_pending",
+                reason="manual_initialize",
+                metadata={"order_id": int(order.id), "source": "initialize"},
+            )
             order.payment_reference = pi.reference
             db.session.add(order)
             db.session.commit()
@@ -482,6 +705,17 @@ def initialize_payment():
             amount=float(amount),
             meta=meta,
         )
+        try:
+            transition_intent(
+                pi,
+                PaymentIntentStatus.INITIALIZED,
+                actor={"type": "user", "id": int(u.id)},
+                idempotency_key=f"init:{pi.reference}:initialized",
+                reason="payment_initialized",
+                metadata={"purpose": purpose, "order_id": int(order.id) if order is not None else None},
+            )
+        except Exception:
+            db.session.rollback()
         if order is not None:
             order.payment_reference = pi.reference
             db.session.add(order)
@@ -705,8 +939,6 @@ def admin_mark_manual_paid():
 
     try:
         manual_intent.reference = final_reference
-        manual_intent.status = "paid"
-        manual_intent.paid_at = datetime.utcnow()
         manual_intent.provider = "manual_company_account"
         manual_intent.purpose = "order"
         manual_intent.meta = json.dumps(
@@ -720,8 +952,25 @@ def admin_mark_manual_paid():
         )
         db.session.add(manual_intent)
         db.session.commit()
+        transition_intent(
+            manual_intent,
+            PaymentIntentStatus.PAID,
+            actor={"type": "admin", "id": int(u.id)},
+            idempotency_key=f"manual_mark_paid:{int(order.id)}",
+            reason="manual_admin_mark_paid",
+            metadata={"reference": final_reference, "order_id": int(order.id)},
+        )
 
         _mark_order_paid(order, reference=final_reference)
+        try:
+            record_event(
+                "manual_mark_paid",
+                user=u,
+                context={"order_id": int(order.id), "amount": float(_order_payment_amount(order))},
+                request_id=_request_id(),
+            )
+        except Exception:
+            db.session.rollback()
         try:
             db.session.add(
                 AuditLog(

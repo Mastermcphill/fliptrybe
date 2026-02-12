@@ -15,6 +15,8 @@ from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 from app.utils.notify import queue_email
 from app.utils.autopilot import get_settings
+from app.utils.rate_limit import check_limit
+from app.services.risk_engine_service import record_event
 
 
 def _conflict_message(email_user: User | None, phone_user: User | None) -> str | None:
@@ -211,6 +213,36 @@ def _get_request_payload(label: str) -> dict:
         pass
     return data if isinstance(data, dict) else {}
 
+
+def _rate_limit_enabled() -> bool:
+    try:
+        settings = get_settings()
+        return bool(getattr(settings, "rate_limit_enabled", True))
+    except Exception:
+        return True
+
+
+def _rate_limit_response(action: str, *, limit: int, window_seconds: int, user_id: int | None = None):
+    if not _rate_limit_enabled():
+        return None
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "unknown").split(",")[0].strip()
+    key = f"{action}:ip:{ip}"
+    if user_id is not None:
+        key = f"{key}:u:{int(user_id)}"
+    ok, retry_after = check_limit(key, limit=limit, window_seconds=window_seconds)
+    if ok:
+        return None
+    try:
+        record_event(
+            action,
+            user=None,
+            context={"rate_limited": True, "reason_code": "RATE_LIMIT_EXCEEDED", "retry_after": retry_after},
+            request_id=request.headers.get("X-Request-Id"),
+        )
+    except Exception:
+        db.session.rollback()
+    return jsonify({"ok": False, "error": "RATE_LIMITED", "message": "Too many requests. Please retry later.", "retry_after": retry_after}), 429
+
 def _create_user(*, name: str, email: str, phone: str | None, password: str, role: str = "buyer") -> tuple[User | None, str | None, tuple[dict, int] | None]:
     """Create user, return (user, token, error_response)."""
     role = (role or "buyer").strip().lower()
@@ -329,6 +361,9 @@ def _bearer_token() -> str | None:
 
 @auth_bp.post("/register")
 def register():
+    rl = _rate_limit_response("register", limit=25, window_seconds=300)
+    if rl is not None:
+        return rl
     # Backwards-compatible: treat as buyer/seller signup
     data_json = request.get_json(silent=True)
     data_form = request.form.to_dict() if request.form else {}
@@ -377,6 +412,9 @@ def register():
 
 @auth_bp.post("/login")
 def login():
+    rl = _rate_limit_response("login", limit=30, window_seconds=300)
+    if rl is not None:
+        return rl
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
     password = data.get("password") or ""
@@ -707,6 +745,9 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
 
 @auth_bp.post("/register/buyer")
 def register_buyer():
+    rl = _rate_limit_response("register", limit=25, window_seconds=300)
+    if rl is not None:
+        return rl
     data = _get_request_payload("register_buyer")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
@@ -719,6 +760,9 @@ def register_buyer():
 
 @auth_bp.post("/register/merchant")
 def register_merchant():
+    rl = _rate_limit_response("register", limit=25, window_seconds=300)
+    if rl is not None:
+        return rl
     data = _get_request_payload("register_merchant")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
@@ -890,6 +934,9 @@ def register_merchant():
 
 @auth_bp.post("/register/driver")
 def register_driver():
+    rl = _rate_limit_response("register", limit=25, window_seconds=300)
+    if rl is not None:
+        return rl
     data = _get_request_payload("register_driver")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":
@@ -971,6 +1018,9 @@ def register_driver():
 
 @auth_bp.post("/register/inspector")
 def register_inspector():
+    rl = _rate_limit_response("register", limit=25, window_seconds=300)
+    if rl is not None:
+        return rl
     data = _get_request_payload("register_inspector")
     role = (data.get("role") or "").strip().lower()
     if role == "admin":

@@ -1,7 +1,7 @@
 import os
 import subprocess
 import click
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, g
 from sqlalchemy import text
 
 from app.extensions import db, migrate, cors
@@ -50,11 +50,15 @@ from app.segments.segment_inspector_bonds_admin import inspector_bonds_admin_bp
 from app.segments.segment_role_change import role_change_bp
 from app.segments.segment_moneybox import moneybox_bp, moneybox_system_bp
 from app.segments.segment_public_feed import public_bp
+from app.segments.segment_admin_ops import admin_ops_bp
 from app.utils.jwt_utils import decode_token, get_bearer_token
+from app.utils.autopilot import get_settings
+from app.utils.observability import init_sentry, init_otel, install_request_observers
 
 
 def create_app():
     app = Flask(__name__)
+    init_sentry(app)
 
     env = (os.getenv("FLIPTRYBE_ENV", "dev") or "dev").strip().lower()
 
@@ -105,6 +109,15 @@ def create_app():
     # Init extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    install_request_observers(app)
+    with app.app_context():
+        otel_env = (os.getenv("OTEL_ENABLED") or "").strip() == "1"
+        otel_setting = False
+        try:
+            otel_setting = bool(getattr(get_settings(), "otel_enabled", False))
+        except Exception:
+            otel_setting = False
+        init_otel(app, enabled=bool(otel_env or otel_setting))
 
     # Register API routes
     app.register_blueprint(auth_bp)
@@ -145,6 +158,7 @@ def create_app():
     app.register_blueprint(moneybox_bp)
     app.register_blueprint(moneybox_system_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(admin_ops_bp)
 
     # Health check
     @app.get("/api/health")
@@ -296,6 +310,35 @@ def create_app():
                 "methods": methods,
             })
         return jsonify({"ok": True, "count": len(items), "items": items}), 200
+
+    @app.before_request
+    def _capture_auth_context():
+        g.auth_user_id = None
+        g.auth_role = None
+        header = request.headers.get("Authorization", "")
+        token = get_bearer_token(header)
+        if not token and header.lower().startswith("token "):
+            token = header.replace("Token ", "", 1).strip()
+        if not token:
+            return
+        payload = decode_token(token)
+        if not payload:
+            return
+        sub = payload.get("sub")
+        try:
+            uid = int(sub)
+        except Exception:
+            return
+        g.auth_user_id = uid
+        try:
+            user = db.session.get(User, uid)
+            if user:
+                g.auth_role = (getattr(user, "role", None) or "buyer").strip().lower()
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     @app.before_request
     def _log_client_fingerprint():

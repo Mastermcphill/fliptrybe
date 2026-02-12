@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'screens/landing_screen.dart';
 import 'screens/login_screen.dart';
@@ -13,9 +14,28 @@ import 'services/api_service.dart';
 import 'services/api_config.dart';
 import 'services/token_storage.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   ApiConfig.logStartup();
-  runApp(const FlipTrybeApp());
+  const sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
+  const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: 'dev');
+  if (sentryDsn.trim().isEmpty) {
+    runApp(const FlipTrybeApp());
+    return;
+  }
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = sentryDsn;
+      options.environment =
+          const String.fromEnvironment('SENTRY_ENVIRONMENT', defaultValue: 'dev');
+      options.release = 'fliptrybe@${ApiConfig.appVersion}+$gitSha';
+      options.tracesSampleRate =
+          double.tryParse(const String.fromEnvironment('SENTRY_TRACES_SAMPLE_RATE', defaultValue: '0.0')) ?? 0.0;
+      options.attachStacktrace = true;
+      options.sendDefaultPii = false;
+    },
+    appRunner: () => runApp(const FlipTrybeApp()),
+  );
 }
 
 class FlipTrybeApp extends StatelessWidget {
@@ -26,6 +46,7 @@ class FlipTrybeApp extends StatelessWidget {
     return MaterialApp(
       title: 'FlipTrybe',
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [SentryNavigatorObserver()],
       theme: ThemeData(
         primarySwatch: Colors.blue,
         scaffoldBackgroundColor: Colors.white,

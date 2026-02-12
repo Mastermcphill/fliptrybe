@@ -47,6 +47,10 @@ from .payout_recipient import PayoutRecipient  # noqa: F401
 from .idempotency_key import IdempotencyKey  # noqa: F401
 
 from .webhook_event import WebhookEvent  # noqa: F401
+from .payment_intent_transition import PaymentIntentTransition  # noqa: F401
+from .escrow_transition import EscrowTransition  # noqa: F401
+from .risk_event import RiskEvent  # noqa: F401
+from .reconciliation_report import ReconciliationReport  # noqa: F401
 
 # Inspector Agent Mode + Reputation
 from .inspection_reputation import InspectorProfile, InspectionReview, InspectionAudit  # noqa: F401

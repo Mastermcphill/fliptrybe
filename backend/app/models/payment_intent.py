@@ -17,6 +17,7 @@ class PaymentIntent(db.Model):
     status = db.Column(db.String(32), nullable=False, default="initialized")  # initialized|paid|failed
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     paid_at = db.Column(db.DateTime, nullable=True)
 
     meta = db.Column(db.Text, nullable=True)
@@ -31,6 +32,7 @@ class PaymentIntent(db.Model):
             "amount": float(self.amount or 0.0),
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "paid_at": self.paid_at.isoformat() if self.paid_at else None,
             "meta": self.meta or "",
         }

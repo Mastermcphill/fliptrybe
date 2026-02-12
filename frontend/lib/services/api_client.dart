@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:dio/dio.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'api_config.dart';
 
 class ApiClient {
@@ -7,6 +9,13 @@ class ApiClient {
   static final ApiClient instance = ApiClient._internal();
   String? _authToken;
   final Set<CancelToken> _activeCancelTokens = <CancelToken>{};
+  final Random _rand = Random();
+
+  String _newRequestId() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final nonce = _rand.nextInt(1 << 32).toRadixString(16);
+    return "ft-$now-$nonce";
+  }
 
   late final Dio dio = Dio(
     BaseOptions(
@@ -37,7 +46,17 @@ class ApiClient {
           } else {
             options.headers.remove('Authorization');
           }
+          options.headers['X-Request-Id'] = _newRequestId();
           options.headers['X-Fliptrybe-Client'] = ApiConfig.clientFingerprint;
+          Sentry.addBreadcrumb(Breadcrumb(
+            category: 'http.request',
+            type: 'http',
+            level: SentryLevel.info,
+            data: {
+              'method': options.method,
+              'url': options.uri.toString(),
+            },
+          ));
           // ignore: avoid_print
           print('*** Request ***');
           // ignore: avoid_print
@@ -83,6 +102,16 @@ class ApiClient {
           print(response.data);
           // ignore: avoid_print
           print('');
+          Sentry.addBreadcrumb(Breadcrumb(
+            category: 'http.response',
+            type: 'http',
+            level: SentryLevel.info,
+            data: {
+              'method': response.requestOptions.method,
+              'url': response.realUri.toString(),
+              'status': response.statusCode,
+            },
+          ));
 
           return handler.next(response);
         },
@@ -104,6 +133,17 @@ class ApiClient {
           }
           // ignore: avoid_print
           print('');
+          Sentry.addBreadcrumb(Breadcrumb(
+            category: 'http.error',
+            type: 'http',
+            level: SentryLevel.warning,
+            data: {
+              'method': e.requestOptions.method,
+              'url': e.requestOptions.uri.toString(),
+              'status': e.response?.statusCode,
+            },
+          ));
+          Sentry.captureException(e);
 
           return handler.next(e);
         },
