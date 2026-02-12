@@ -45,7 +45,7 @@ class _AdminRiskEventsScreenState extends State<AdminRiskEventsScreen> {
       setState(() {
         _items = rows
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _loading = false;
       });

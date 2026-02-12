@@ -50,7 +50,7 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
       setState(() {
         _items = rows
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _loading = false;
       });

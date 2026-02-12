@@ -45,7 +45,7 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
             itemBuilder: (_, i) {
               final raw = items[i];
               if (raw is! Map) return const SizedBox.shrink();
-              final m = Map<String, dynamic>.from(raw as Map);
+              final m = Map<String, dynamic>.from(raw);
 
               return Card(
                 margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),

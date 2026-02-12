@@ -42,6 +42,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
     try {
       final me = await _auth.me();
       final role = (me?['role'] ?? '').toString().toLowerCase();
+      if (!mounted) return;
       if (role != 'admin') {
         setState(() {
           _guardError = 'Admin access required.';
@@ -51,6 +52,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
       }
       setState(() => _checking = false);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _guardError = 'Unable to verify admin access.';
         _checking = false;
@@ -82,7 +84,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
   Future<void> _handleSignOut() async {
     if (_signingOut) return;
     final confirmed = await _confirmSignOut();
-    if (!confirmed) return;
+    if (!confirmed || !mounted) return;
     setState(() => _signingOut = true);
     try {
       await logoutToLanding(context);

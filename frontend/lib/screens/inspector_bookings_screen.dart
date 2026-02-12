@@ -39,7 +39,7 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
         _info = _inspectorService.lastInfo;
         _items = items
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _loading = false;
       });

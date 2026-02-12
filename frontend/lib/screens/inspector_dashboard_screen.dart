@@ -76,7 +76,7 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
   Future<void> _handleSignOut() async {
     if (_signingOut) return;
     final confirmed = await _confirmSignOut();
-    if (!confirmed) return;
+    if (!confirmed || !mounted) return;
     setState(() => _signingOut = true);
     try {
       await logoutToLanding(context);
@@ -85,7 +85,7 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
     }
   }
 
-  Future<void> _submit(BuildContext context, Map<String, dynamic> item) async {
+  Future<void> _submit(Map<String, dynamic> item) async {
     final reportCtrl = TextEditingController();
     String verdict = 'pass';
     final ok = await showDialog<bool>(
@@ -96,7 +96,7 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<String>(
-              value: verdict,
+              initialValue: verdict,
               decoration: const InputDecoration(labelText: 'Verdict'),
               items: const [
                 DropdownMenuItem(value: 'pass', child: Text('Pass')),
@@ -126,7 +126,7 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
       ),
     );
 
-    if (ok != true) return;
+    if (ok != true || !mounted) return;
     final assignmentId = item['id'];
     if (assignmentId is! int) return;
 
@@ -202,7 +202,7 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
                 ))
               else
                 ...items.map((raw) {
-                  final item = Map<String, dynamic>.from(raw as Map);
+                  final item = Map<String, dynamic>.from(raw);
                   final title = (item['listing_title'] ?? 'Order').toString();
                   final status = (item['status'] ?? 'assigned').toString();
                   final orderId = item['order_id']?.toString() ?? '-';
@@ -216,12 +216,12 @@ class _InspectorDashboardScreenState extends State<InspectorDashboardScreen> {
                                 .toLowerCase()
                                 .contains('not available'))
                             ? null
-                            : () => _submit(context, item),
+                            : () => _submit(item),
                         child: const Text('Submit'),
                       ),
                     ),
                   );
-                }).toList(),
+                }),
             ],
           );
         },

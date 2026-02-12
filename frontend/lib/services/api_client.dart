@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'api_config.dart';
 
@@ -58,32 +59,9 @@ class ApiClient {
             },
           ));
           // ignore: avoid_print
-          print('*** Request ***');
-          // ignore: avoid_print
-          print('uri: ${options.uri}');
-          // ignore: avoid_print
-          print('method: ${options.method}');
-          // ignore: avoid_print
-          print('responseType: ${options.responseType}');
-          // ignore: avoid_print
-          print('followRedirects: ${options.followRedirects}');
-          // ignore: avoid_print
-          print('persistentConnection: ${options.persistentConnection}');
-          // ignore: avoid_print
-          print('connectTimeout: ${options.connectTimeout}');
-          // ignore: avoid_print
-          print('sendTimeout: ${options.sendTimeout}');
-          // ignore: avoid_print
-          print('receiveTimeout: ${options.receiveTimeout}');
-          // ignore: avoid_print
-          print(
-              'receiveDataWhenStatusError: ${options.receiveDataWhenStatusError}');
-          // ignore: avoid_print
-          print('extra: ${options.extra}');
-          // ignore: avoid_print
-          print('data: ${options.data}');
-          // ignore: avoid_print
-          print('');
+          if (kDebugMode) {
+            debugPrint('[ApiClient] ${options.method} ${options.uri}');
+          }
 
           return handler.next(options);
         },
@@ -91,17 +69,9 @@ class ApiClient {
           final token = response.requestOptions.cancelToken;
           if (token != null) _activeCancelTokens.remove(token);
           // ignore: avoid_print
-          print('*** Response ***');
-          // ignore: avoid_print
-          print('uri: ${response.realUri}');
-          // ignore: avoid_print
-          print('statusCode: ${response.statusCode}');
-          // ignore: avoid_print
-          print('Response Text:');
-          // ignore: avoid_print
-          print(response.data);
-          // ignore: avoid_print
-          print('');
+          if (kDebugMode) {
+            debugPrint('[ApiClient] ${response.requestOptions.method} ${response.realUri} -> ${response.statusCode}');
+          }
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.response',
             type: 'http',
@@ -120,19 +90,9 @@ class ApiClient {
           if (token != null) _activeCancelTokens.remove(token);
           // Mostly for network errors/timeouts now (5xx won't throw either).
           // ignore: avoid_print
-          print('*** DioException ***:');
-          // ignore: avoid_print
-          print('uri: ${e.requestOptions.uri}');
-          // ignore: avoid_print
-          print(e);
-          // ignore: avoid_print
-          if (e.response != null) {
-            print('*** Error Response ***');
-            print('statusCode: ${e.response?.statusCode}');
-            print(e.response?.data);
+          if (kDebugMode) {
+            debugPrint('[ApiClient] ERROR ${e.requestOptions.method} ${e.requestOptions.uri} -> ${e.response?.statusCode} ${e.message}');
           }
-          // ignore: avoid_print
-          print('');
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.error',
             type: 'http',

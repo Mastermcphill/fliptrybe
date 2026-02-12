@@ -48,7 +48,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            value: _channel,
+            initialValue: _channel,
             decoration: const InputDecoration(labelText: "Channel", border: OutlineInputBorder()),
             items: const [
               DropdownMenuItem(value: "in_app", child: Text("In-app")),
@@ -87,7 +87,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                         state: _stateCtrl.text.trim(),
                         city: _cityCtrl.text.trim(),
                       );
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       setState(() => _busy = false);
 
                       if (ok) {
@@ -112,10 +112,10 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                       try {
                         // process queued notifications (admin)
                         await _svc.processQueue();
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Queue processed (stub).")));
                       } catch (_) {
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Process failed.")));
                       } finally {
                         if (mounted) setState(() => _busy = false);

@@ -48,7 +48,7 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
             itemBuilder: (_, i) {
               final raw = items[i];
               if (raw is! Map) return const SizedBox.shrink();
-              final m = Map<String, dynamic>.from(raw as Map);
+              final m = Map<String, dynamic>.from(raw);
               final title = (m['title'] ?? '').toString();
               final description = (m['description'] ?? '').toString();
               final price = m['price'];

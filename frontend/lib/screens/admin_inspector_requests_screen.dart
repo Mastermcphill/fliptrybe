@@ -49,12 +49,12 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
         final created = (data is Map && data['created'] != null) ? data['created'].toString() : '';
         final user = (data is Map && data['user'] is Map) ? data['user'] as Map : null;
         final userId = user != null ? user['id'] : null;
-        if (mounted) {
-          final msg = userId != null ? 'Approved as user #$userId (created: $created)' : 'Approved';
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        }
+        if (!mounted) return;
+        final msg = userId != null ? 'Approved as user #$userId (created: $created)' : 'Approved';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
         _load();
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approve failed')));
       }
     } catch (e) {
@@ -69,6 +69,7 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
       if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
         _load();
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reject failed')));
       }
     } catch (e) {
@@ -122,7 +123,7 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
               itemBuilder: (context, i) {
                 final raw = _items[i];
                 if (raw is! Map) return const SizedBox.shrink();
-                final m = Map<String, dynamic>.from(raw as Map);
+                final m = Map<String, dynamic>.from(raw);
                 final id = m['id'];
                 final name = (m['name'] ?? '').toString();
                 final email = (m['email'] ?? '').toString();
@@ -134,7 +135,7 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
                   margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: ListTile(
                     title: Text(name.isEmpty ? email : name, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text('$email\n$phone\n$notes\nstatus: $status${decidedBy.isNotEmpty ? " · decided_by: $decidedBy" : ""}'),
+                    subtitle: Text('$email\n$phone\n$notes\nstatus: $status${decidedBy.isNotEmpty ? " • decided_by: $decidedBy" : ""}'),
                     isThreeLine: true,
                     trailing: Wrap(
                       spacing: 8,

@@ -35,7 +35,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 : () async {
                     setState(() => _busy = true);
                     final ok = await _svc.flushDemo();
-                    if (!mounted) return;
+                    if (!context.mounted) return;
                     setState(() => _busy = false);
                     if (ok) {
                       ScaffoldMessenger.of(context)
@@ -78,7 +78,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               itemBuilder: (_, i) {
                 final raw = items[i];
                 if (raw is! Map) return const SizedBox.shrink();
-                final m = Map<String, dynamic>.from(raw as Map);
+                final m = Map<String, dynamic>.from(raw);
                 final title = (m['title'] ?? '').toString();
                 final msg = (m['message'] ?? '').toString();
                 final channel = (m['channel'] ?? '').toString();

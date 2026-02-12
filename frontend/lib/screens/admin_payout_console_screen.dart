@@ -97,7 +97,7 @@ class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
                         itemBuilder: (_, i) {
                           final raw = _rows[i];
                           if (raw is! Map) return const SizedBox.shrink();
-                          final m = Map<String, dynamic>.from(raw as Map);
+                          final m = Map<String, dynamic>.from(raw);
                           final id = int.tryParse((m["id"] ?? "").toString()) ?? 0;
                           final userId = m["user_id"] ?? "";
                           final amount = m["amount"] ?? 0;

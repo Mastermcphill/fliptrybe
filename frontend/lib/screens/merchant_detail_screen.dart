@@ -163,7 +163,7 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                                       } else {
                                         await _svc.followMerchant(widget.userId);
                                       }
-                                      if (!mounted) return;
+                                      if (!context.mounted) return;
                                       setState(() => _followBusy = false);
                                       _reload();
                                     },
@@ -204,11 +204,11 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
 
                                     setState(() => _busy = true);
                                     final ok2 = await _svc.simulateSale(userId: widget.userId, amount: amt);
-                                    if (!mounted) return;
+                                    if (!context.mounted) return;
                                     setState(() => _busy = false);
 
                                     if (ok2) {
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sale simulated ✅ Merchant wallet credited")));
+                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sale simulated. Merchant wallet credited.")));
                                       _reload();
                                     } else {
                                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Simulation failed.")));
@@ -232,7 +232,7 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                         const Text("Leave a review (demo)", style: TextStyle(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<int>(
-                          value: _rating,
+                          initialValue: _rating,
                           decoration: const InputDecoration(labelText: "Rating", border: OutlineInputBorder()),
                           items: const [5,4,3,2,1].map((v) => DropdownMenuItem(value: v, child: Text("$v stars"))).toList(),
                           onChanged: (v) => setState(() => _rating = v ?? 5),
@@ -251,10 +251,10 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                             onPressed: () async {
                               final res = await _svc.addReview(userId: widget.userId, rating: _rating, comment: _reviewCtrl.text.trim());
                               final ok3 = res['ok'] == true;
-                              if (!mounted) return;
+                              if (!context.mounted) return;
                               if (ok3) {
                                 _reviewCtrl.clear();
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Review added ✅")));
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Review added.")));
                                 _reload();
                               } else {
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Review failed.")));
@@ -285,7 +285,7 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                         subtitle: Text(comment),
                       ),
                     );
-                  }).toList(),
+                  }),
               ],
             );
           },

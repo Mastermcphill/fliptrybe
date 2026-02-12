@@ -173,7 +173,7 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
 
           final ticketCards = items.map((raw) {
             if (raw is! Map) return const SizedBox.shrink();
-            final m = Map<String, dynamic>.from(raw as Map);
+            final m = Map<String, dynamic>.from(raw);
             return Card(
               margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
               child: ListTile(

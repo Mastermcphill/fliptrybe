@@ -133,8 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final roleForNav = (profile?['role'] ?? 'buyer').toString();
-      final roleStatus = (profile?['role_status'] ?? 'approved').toString();
+      final roleForNav = (profile['role'] ?? 'buyer').toString();
+      final roleStatus = (profile['role_status'] ?? 'approved').toString();
 
       if (!mounted) return;
       if (roleStatus.toLowerCase() == 'pending') {

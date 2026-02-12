@@ -34,7 +34,7 @@ class _InspectorEarningsScreenState extends State<InspectorEarningsScreen> {
       _wallet = values[0] as Map<String, dynamic>?;
       _ledger = (values[1] as List<dynamic>)
           .whereType<Map>()
-          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .map((raw) => Map<String, dynamic>.from(raw))
           .toList();
       _loading = false;
     });

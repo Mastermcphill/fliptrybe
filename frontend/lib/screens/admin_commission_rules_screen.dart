@@ -109,7 +109,7 @@ class _AdminCommissionRulesScreenState extends State<AdminCommissionRulesScreen>
                         itemBuilder: (_, i) {
                           final raw = _rows[i];
                           if (raw is! Map) return const SizedBox.shrink();
-                          final m = Map<String, dynamic>.from(raw as Map);
+                          final m = Map<String, dynamic>.from(raw);
                           final id = int.tryParse((m["id"] ?? "").toString()) ?? 0;
                           return Card(
                             margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),

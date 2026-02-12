@@ -15,7 +15,7 @@ class MerchantService {
           : <dynamic>[];
       return items.map((raw) {
         if (raw is! Map) return <String, dynamic>{};
-        final m = Map<String, dynamic>.from(raw as Map);
+        final m = Map<String, dynamic>.from(raw);
         return <String, dynamic>{
           'user_id': m['user_id'],
           'name': (m['shop_name'] ?? '').toString().trim().isEmpty
@@ -125,13 +125,13 @@ class MerchantService {
       if (data is Map && data['items'] is List) {
         return (data['items'] as List)
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
       }
       if (data is List) {
         return data
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
       }
       return <Map<String, dynamic>>[];
@@ -149,7 +149,7 @@ class MerchantService {
       if (data is Map && data['items'] is List) {
         return (data['items'] as List)
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
       }
       return <Map<String, dynamic>>[];

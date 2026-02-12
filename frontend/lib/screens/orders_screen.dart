@@ -60,7 +60,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     final out = <Map<String, dynamic>>[];
     for (final raw in _rows) {
       if (raw is! Map) continue;
-      final map = Map<String, dynamic>.from(raw as Map);
+      final map = Map<String, dynamic>.from(raw);
       final value = (map['status'] ?? '').toString().toLowerCase();
       if (status == 'all') {
         out.add(map);

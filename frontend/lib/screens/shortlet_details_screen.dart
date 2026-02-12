@@ -73,7 +73,7 @@ class _ShortletDetailsScreenState extends State<ShortletDetailsScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text("â­ $rating ($reviews reviews)", style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text("★ $rating ($reviews reviews)", style: const TextStyle(fontWeight: FontWeight.w700)),
           const Divider(height: 24),
 
           if (amenities.isNotEmpty) ...[
@@ -90,7 +90,7 @@ class _ShortletDetailsScreenState extends State<ShortletDetailsScreen> {
           if (rules.isNotEmpty) ...[
             const Text("House Rules", style: TextStyle(fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
-            ...rules.take(10).map((x) => ListTile(leading: const Icon(Icons.rule), title: Text(x))).toList(),
+            ...rules.take(10).map((x) => ListTile(leading: const Icon(Icons.rule), title: Text(x))),
             const Divider(height: 24),
           ],
 
@@ -123,12 +123,12 @@ class _ShortletDetailsScreenState extends State<ShortletDetailsScreen> {
                         guestPhone: _guestPhoneCtrl.text.trim(),
                       );
 
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       setState(() => _loading = false);
 
                       final ok = res['ok'] == true;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(ok ? "Booking requested âœ…" : "Booking failed âŒ")),
+                        SnackBar(content: Text(ok ? "Booking requested." : "Booking failed.")),
                       );
                     },
               icon: const Icon(Icons.calendar_month_outlined),
@@ -155,9 +155,9 @@ class _ShortletDetailsScreenState extends State<ShortletDetailsScreen> {
                         final rating = double.tryParse(_ratingCtrl.text.trim()) ?? 5;
                         ok = await _svc.submitReview(shortletId: id, rating: rating);
                       } catch (_) {}
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       setState(() => _loading = false);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Review submitted âœ…" : "Review failed âŒ")));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Review submitted." : "Review failed.")));
                     },
               icon: const Icon(Icons.star_rate_outlined),
               label: const Text("Submit rating"),

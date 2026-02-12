@@ -44,7 +44,7 @@ class _TransactionTimelineScreenState extends State<TransactionTimelineScreen> {
       _delivery = Map<String, dynamic>.from(widget.initialDelivery ?? const {});
       _events = (widget.initialEvents ?? const [])
           .whereType<Map>()
-          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .map((raw) => Map<String, dynamic>.from(raw))
           .toList();
       _loading = false;
     }
@@ -77,7 +77,7 @@ class _TransactionTimelineScreenState extends State<TransactionTimelineScreen> {
       final timelineAny = values[2];
       final events = (timelineAny is List ? timelineAny : const <dynamic>[])
           .whereType<Map>()
-          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .map((raw) => Map<String, dynamic>.from(raw))
           .toList();
       setState(() {
         _order = order;

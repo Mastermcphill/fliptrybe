@@ -100,7 +100,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         _kpis = values[2] as Map<String, dynamic>;
         _myListings = (values[4] as List)
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _rank = rank;
         _merchantName = meName;

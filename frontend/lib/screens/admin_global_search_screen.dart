@@ -65,7 +65,7 @@ class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
           : Column(
               children: rows
                   .whereType<Map>()
-                  .map((raw) => tileBuilder(Map<String, dynamic>.from(raw as Map)))
+                  .map((raw) => tileBuilder(Map<String, dynamic>.from(raw)))
                   .toList(),
             ),
     );

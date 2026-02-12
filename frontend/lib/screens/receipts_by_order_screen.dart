@@ -46,17 +46,17 @@ class _ReceiptsByOrderScreenState extends State<ReceiptsByOrderScreen> {
             itemBuilder: (_, i) {
               final raw = rows[i];
               if (raw is! Map) return const SizedBox.shrink();
-              final m = Map<String, dynamic>.from(raw as Map);
+              final m = Map<String, dynamic>.from(raw);
               return Card(
                 margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: ListTile(
                   title: Text((m['kind'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.w900)),
-                  subtitle: Text("Total: ₦${m['total'] ?? 0}"),
+                  subtitle: Text("Total: ?${m['total'] ?? 0}"),
                   trailing: IconButton(
                     icon: const Icon(Icons.picture_as_pdf),
                     onPressed: () async {
                       final url = await _svc.getPdfUrl(int.parse((m['id'] ?? 0).toString()));
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("PDF URL: $url")));
                     },
                   ),

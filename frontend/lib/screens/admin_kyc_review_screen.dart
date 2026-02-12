@@ -81,7 +81,7 @@ class _AdminKycReviewScreenState extends State<AdminKycReviewScreen> {
             itemBuilder: (_, i) {
               final raw = items[i];
               if (raw is! Map) return const SizedBox.shrink();
-              final item = Map<String, dynamic>.from(raw as Map);
+              final item = Map<String, dynamic>.from(raw);
               final email = (item['email'] ?? '').toString();
               final name = (item['name'] ?? '').toString();
               final idType = (item['id_type'] ?? '').toString();

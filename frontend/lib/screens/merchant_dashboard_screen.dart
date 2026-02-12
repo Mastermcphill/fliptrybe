@@ -51,7 +51,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   Future<void> _handleSignOut() async {
     if (_signingOut) return;
     final confirmed = await _confirmSignOut();
-    if (!confirmed) return;
+    if (!confirmed || !mounted) return;
 
     setState(() => _signingOut = true);
     try {

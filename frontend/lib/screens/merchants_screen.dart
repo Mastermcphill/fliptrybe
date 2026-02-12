@@ -67,7 +67,7 @@ class _MerchantsScreenState extends State<MerchantsScreen> {
               itemBuilder: (_, i) {
                 final raw = items[i];
                 if (raw is! Map) return const SizedBox.shrink();
-                final m = Map<String, dynamic>.from(raw as Map);
+                final m = Map<String, dynamic>.from(raw);
                 final name = (m['shop_name'] ?? '').toString().trim().isEmpty ? "Merchant ${m['user_id']}" : (m['shop_name'] ?? '').toString();
                 final city = (m['city'] ?? '').toString();
                 final state = (m['state'] ?? '').toString();

@@ -160,7 +160,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       final state = (_detail['state'] ?? '').toString().toLowerCase();
       final rows = all
           .whereType<Map>()
-          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .map((raw) => Map<String, dynamic>.from(raw))
           .where((row) => (_asInt(row['id']) ?? 0) != selfId)
           .toList();
       rows.sort((a, b) {

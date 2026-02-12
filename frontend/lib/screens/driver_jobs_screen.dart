@@ -37,7 +37,7 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
       setState(() {
         _jobs = jobs
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _loading = false;
       });

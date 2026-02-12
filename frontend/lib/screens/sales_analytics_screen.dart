@@ -100,7 +100,7 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
                     else
                       ...recent.map((raw) {
                         if (raw is! Map) return const SizedBox.shrink();
-                        final m = Map<String, dynamic>.from(raw as Map);
+                        final m = Map<String, dynamic>.from(raw);
                         final orderId = m['order_id'];
                         final amount = _asDouble(m['amount']);
                         final status = (m['status'] ?? '').toString();
