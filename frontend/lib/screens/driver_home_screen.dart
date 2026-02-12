@@ -5,10 +5,13 @@ import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
 import 'driver_jobs_screen.dart';
 import 'moneybox_dashboard_screen.dart';
+import 'not_available_yet_screen.dart';
 import 'support_chat_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
-  const DriverHomeScreen({super.key});
+  const DriverHomeScreen({super.key, this.onSelectTab});
+
+  final ValueChanged<int>? onSelectTab;
 
   @override
   State<DriverHomeScreen> createState() => _DriverHomeScreenState();
@@ -57,8 +60,30 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final activeJobs = _jobs.length;
+    final activeJobs = _jobs.whereType<Map>().where((j) {
+      final status = (j['status'] ?? '').toString().toLowerCase();
+      return status == 'assigned' ||
+          status == 'accepted' ||
+          status == 'picked_up';
+    }).length;
+    final completedJobs = _jobs.whereType<Map>().where((j) {
+      final status = (j['status'] ?? '').toString().toLowerCase();
+      return status == 'delivered' || status == 'completed';
+    }).length;
     final moneyboxLocked = _moneybox['principal_balance'] ?? 0;
+    final today = DateTime.now();
+    final todayJobs = _jobs.whereType<Map>().where((j) {
+      final createdRaw = (j['created_at'] ?? '').toString();
+      if (createdRaw.isEmpty) return false;
+      try {
+        final dt = DateTime.parse(createdRaw).toLocal();
+        return dt.year == today.year &&
+            dt.month == today.month &&
+            dt.day == today.day;
+      } catch (_) {
+        return false;
+      }
+    }).length;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Driver Home'),
@@ -83,7 +108,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         Text(
                             'Available Balance: NGN ${_money(_wallet?['balance'])}'),
                         Text('MoneyBox Locked: NGN ${_money(moneyboxLocked)}'),
-                        Text('Active Jobs: $activeJobs'),
+                        Text("Today's Jobs: $todayJobs"),
+                        Text('Pending Pickups: $activeJobs'),
+                        Text('Completed Deliveries: $completedJobs'),
                       ],
                     ),
                   ),
@@ -108,10 +135,14 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const DriverJobsScreen()),
-                    );
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(1);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const DriverJobsScreen()),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.local_shipping_outlined),
                   label: const Text('Go to Jobs'),
@@ -119,10 +150,14 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const MoneyBoxDashboardScreen()),
-                    );
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(3);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const MoneyBoxDashboardScreen()),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.savings_outlined),
                   label: const Text('MoneyBox'),
@@ -132,8 +167,28 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (_) => const SupportChatScreen()),
+                        builder: (_) => const NotAvailableYetScreen(
+                          title: 'Update Availability',
+                          reason:
+                              'Driver availability updates are not enabled yet in this release.',
+                        ),
+                      ),
                     );
+                  },
+                  icon: const Icon(Icons.power_settings_new_outlined),
+                  label: const Text('Update Availability'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(4);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const SupportChatScreen()),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.support_agent_outlined),
                   label: const Text('Chat Admin'),

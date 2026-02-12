@@ -5,10 +5,13 @@ import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
 import 'inspector_bookings_screen.dart';
 import 'moneybox_dashboard_screen.dart';
+import 'not_available_yet_screen.dart';
 import 'support_chat_screen.dart';
 
 class InspectorHomeScreen extends StatefulWidget {
-  const InspectorHomeScreen({super.key});
+  const InspectorHomeScreen({super.key, this.onSelectTab});
+
+  final ValueChanged<int>? onSelectTab;
 
   @override
   State<InspectorHomeScreen> createState() => _InspectorHomeScreenState();
@@ -57,6 +60,24 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pending = _assignments.whereType<Map>().where((a) {
+      final status = (a['status'] ?? '').toString().toLowerCase();
+      return status == 'assigned' || status == 'pending';
+    }).length;
+    final completed = _assignments.whereType<Map>().where((a) {
+      final status = (a['status'] ?? '').toString().toLowerCase();
+      return status == 'completed' || status == 'submitted';
+    }).length;
+    final rating = _assignments.whereType<Map>().fold<double>(0.0, (sum, a) {
+      final raw = double.tryParse((a['rating'] ?? 0).toString()) ?? 0;
+      return sum + raw;
+    });
+    final ratedCount = _assignments.whereType<Map>().where((a) {
+      final raw = double.tryParse((a['rating'] ?? 0).toString()) ?? 0;
+      return raw > 0;
+    }).length;
+    final avgRating =
+        ratedCount == 0 ? '-' : (rating / ratedCount).toStringAsFixed(1);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inspector Home'),
@@ -82,7 +103,9 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                             'Available Balance: NGN ${_money(_wallet?['balance'])}'),
                         Text(
                             'MoneyBox Locked: NGN ${_money(_moneybox['principal_balance'])}'),
-                        Text('Pending Bookings: ${_assignments.length}'),
+                        Text('Pending Bookings: $pending'),
+                        Text('Completed Inspections: $completed'),
+                        Text('Rating Snapshot: $avgRating'),
                       ],
                     ),
                   ),
@@ -107,21 +130,45 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const InspectorBookingsScreen()),
-                    );
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(1);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const InspectorBookingsScreen()),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.assignment_outlined),
-                  label: const Text('Bookings'),
+                  label: const Text('View Bookings'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (_) => const MoneyBoxDashboardScreen()),
+                        builder: (_) => const NotAvailableYetScreen(
+                          title: 'Update Availability',
+                          reason:
+                              'Inspector availability updates are not enabled yet in this release.',
+                        ),
+                      ),
                     );
+                  },
+                  icon: const Icon(Icons.power_settings_new_outlined),
+                  label: const Text('Update Availability'),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(3);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const MoneyBoxDashboardScreen()),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.savings_outlined),
                   label: const Text('MoneyBox'),
@@ -129,10 +176,14 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const SupportChatScreen()),
-                    );
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(4);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const SupportChatScreen()),
+                      );
+                    }
                   },
                   icon: const Icon(Icons.support_agent_outlined),
                   label: const Text('Chat Admin'),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../screens/inspector_bookings_screen.dart';
-import '../screens/inspector_growth_screen.dart';
+import '../screens/inspector_earnings_screen.dart';
 import '../screens/inspector_home_screen.dart';
-import '../screens/profile_screen.dart';
-import '../screens/wallet_screen.dart';
+import '../screens/moneybox_dashboard_screen.dart';
+import '../screens/support_chat_screen.dart';
 
 class InspectorShell extends StatefulWidget {
   const InspectorShell({super.key, this.debugUseLightweightTabs = false});
@@ -23,17 +23,18 @@ class _InspectorShellState extends State<InspectorShell> {
       return const [
         SizedBox.expand(child: Center(child: Text('Inspector Home'))),
         SizedBox.expand(child: Center(child: Text('Inspector Bookings'))),
-        SizedBox.expand(child: Center(child: Text('Inspector Wallet'))),
-        SizedBox.expand(child: Center(child: Text('Inspector Growth'))),
-        SizedBox.expand(child: Center(child: Text('Inspector Profile'))),
+        SizedBox.expand(child: Center(child: Text('Inspector Earnings'))),
+        SizedBox.expand(child: Center(child: Text('Inspector MoneyBox'))),
+        SizedBox.expand(child: Center(child: Text('Inspector Support'))),
       ];
     }
-    return const [
-      InspectorHomeScreen(),
+    return [
+      InspectorHomeScreen(
+          onSelectTab: (index) => setState(() => _currentIndex = index)),
       InspectorBookingsScreen(),
-      WalletScreen(),
-      InspectorGrowthScreen(),
-      ProfileScreen(),
+      const InspectorEarningsScreen(),
+      const MoneyBoxDashboardScreen(),
+      const SupportChatScreen(),
     ];
   }
 
@@ -63,12 +64,11 @@ class _InspectorShellState extends State<InspectorShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.assignment_outlined), label: 'Bookings'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.account_balance_wallet_outlined),
-                label: 'Wallet'),
+                icon: Icon(Icons.paid_outlined), label: 'Earnings'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
+                icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.person_outline), label: 'Profile'),
+                icon: Icon(Icons.support_agent_outlined), label: 'Support'),
           ],
         ),
       ),

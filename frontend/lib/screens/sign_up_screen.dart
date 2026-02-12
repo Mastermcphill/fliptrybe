@@ -8,6 +8,7 @@ import 'login_screen.dart';
 import '../constants/ng_states.dart';
 import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
+import '../shells/inspector_shell.dart';
 import '../shells/merchant_shell.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -50,6 +51,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final r = role.trim().toLowerCase();
     if (r == 'driver') return const DriverShell();
     if (r == 'merchant') return const MerchantShell();
+    if (r == 'inspector') return const InspectorShell();
     return const BuyerShell();
   }
 

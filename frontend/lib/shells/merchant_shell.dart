@@ -5,7 +5,7 @@ import '../screens/merchant_growth_screen.dart';
 import '../screens/merchant_home_screen.dart';
 import '../screens/merchant_listings_screen.dart';
 import '../screens/merchant_orders_screen.dart';
-import '../screens/wallet_screen.dart';
+import '../screens/support_chat_screen.dart';
 
 class MerchantShell extends StatefulWidget {
   const MerchantShell({super.key, this.debugUseLightweightTabs = false});
@@ -25,17 +25,17 @@ class _MerchantShellState extends State<MerchantShell> {
         SizedBox.expand(child: Center(child: Text('Merchant Home'))),
         SizedBox.expand(child: Center(child: Text('Merchant Listings'))),
         SizedBox.expand(child: Center(child: Text('Merchant Orders'))),
-        SizedBox.expand(child: Center(child: Text('Merchant Wallet'))),
         SizedBox.expand(child: Center(child: Text('Merchant Growth'))),
+        SizedBox.expand(child: Center(child: Text('Merchant Support'))),
       ];
     }
     return [
       MerchantHomeScreen(onSelectTab: (i) => setState(() => _currentIndex = i)),
       const MerchantListingsScreen(),
       const MerchantOrdersScreen(),
-      const WalletScreen(),
       MerchantGrowthScreen(
           onSelectTab: (i) => setState(() => _currentIndex = i)),
+      const SupportChatScreen(),
     ];
   }
 
@@ -83,10 +83,9 @@ class _MerchantShellState extends State<MerchantShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.account_balance_wallet_outlined),
-                label: 'Wallet'),
-            BottomNavigationBarItem(
                 icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.support_agent_outlined), label: 'Support'),
           ],
         ),
       ),

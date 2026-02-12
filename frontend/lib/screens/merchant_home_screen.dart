@@ -37,6 +37,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   Map<String, dynamic> _wallet = const {};
   Map<String, dynamic> _moneyBox = const {};
   Map<String, dynamic> _kpis = const {};
+  Map<String, dynamic> _profile = const {};
   int _rank = 0;
   String _merchantName = '';
 
@@ -80,6 +81,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
       if (!mounted) return;
       setState(() {
+        _profile = Map<String, dynamic>.from(me);
         _wallet = wallet;
         _moneyBox = moneyBox;
         _kpis = kpis;
@@ -205,6 +207,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             _moneyBox['projected_bonus_percent'] ??
             '-')
         .toString();
+    final emailVerified = (_profile['email_verified'] == true) ||
+        (_profile['email_verified_at'] ?? '').toString().trim().isNotEmpty;
+    final kycRaw = (_profile['kyc_status'] ?? _profile['kyc'] ?? '').toString();
+    final kycStatus = kycRaw.trim().isEmpty ? 'unknown' : kycRaw;
 
     return Scaffold(
       appBar: AppBar(
@@ -272,7 +278,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   _actionButton(
                     icon: Icons.support_agent_outlined,
                     label: 'Chat Admin',
-                    onTap: () => _safePush(const SupportChatScreen()),
+                    onTap: () {
+                      if (widget.onSelectTab != null) {
+                        widget.onSelectTab!(4);
+                      } else {
+                        _safePush(const SupportChatScreen());
+                      }
+                    },
                   ),
                   const SizedBox(height: 8),
                   _actionButton(
@@ -290,7 +302,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   _actionButton(
                     icon: Icons.emoji_events_outlined,
                     label: 'Leaderboards',
-                    onTap: () => widget.onSelectTab?.call(4),
+                    onTap: () => widget.onSelectTab?.call(3),
                   ),
                   const SizedBox(height: 16),
                   const Text('KPI Quick Stats',
@@ -323,6 +335,36 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                                       'Platform Fees: NGN ${_kpis['platform_fees'] ?? 0}')),
                             ],
                           ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Trust & Compliance',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'Email verification: ${emailVerified ? 'Verified' : 'Not verified'}'),
+                          Text('KYC status: $kycStatus'),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Listing creation, withdrawals, and tier upgrades require verified email.',
+                          ),
+                          if (!emailVerified) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton(
+                              onPressed: () =>
+                                  _safePush(const EmailVerifyScreen()),
+                              child: const Text('Verify Email'),
+                            ),
+                          ],
                         ],
                       ),
                     ),

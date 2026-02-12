@@ -10,6 +10,8 @@ import 'package:fliptrybe/screens/buyer_home_screen.dart';
 import 'package:fliptrybe/screens/merchant_home_screen.dart';
 import 'package:fliptrybe/shells/admin_shell.dart';
 import 'package:fliptrybe/shells/buyer_shell.dart';
+import 'package:fliptrybe/shells/driver_shell.dart';
+import 'package:fliptrybe/shells/inspector_shell.dart';
 import 'package:fliptrybe/shells/merchant_shell.dart';
 
 void main() {
@@ -89,8 +91,8 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Listings'), findsOneWidget);
     expect(find.text('Orders'), findsOneWidget);
-    expect(find.text('Wallet'), findsOneWidget);
     expect(find.text('Growth'), findsOneWidget);
+    expect(find.text('Support'), findsOneWidget);
   });
 
   testWidgets('Merchant home shows action buttons',
@@ -154,6 +156,36 @@ void main() {
     expect(find.text('Queue'), findsOneWidget);
     expect(find.text('Support'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
+  });
+
+  testWidgets('Driver shell renders 5 tabs', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DriverShell(debugUseLightweightTabs: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Jobs'), findsOneWidget);
+    expect(find.text('Earnings'), findsOneWidget);
+    expect(find.text('MoneyBox'), findsOneWidget);
+    expect(find.text('Support'), findsOneWidget);
+  });
+
+  testWidgets('Inspector shell renders 5 tabs', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: InspectorShell(debugUseLightweightTabs: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Bookings'), findsOneWidget);
+    expect(find.text('Earnings'), findsOneWidget);
+    expect(find.text('MoneyBox'), findsOneWidget);
+    expect(find.text('Support'), findsOneWidget);
   });
 
   testWidgets('Admin overview renders quick actions',

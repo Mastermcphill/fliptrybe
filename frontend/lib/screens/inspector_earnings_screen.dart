@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 import '../services/wallet_service.dart';
 import 'merchant_withdraw_screen.dart';
 
-class DriverEarningsScreen extends StatefulWidget {
-  const DriverEarningsScreen({super.key});
+class InspectorEarningsScreen extends StatefulWidget {
+  const InspectorEarningsScreen({super.key});
 
   @override
-  State<DriverEarningsScreen> createState() => _DriverEarningsScreenState();
+  State<InspectorEarningsScreen> createState() =>
+      _InspectorEarningsScreenState();
 }
 
-class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
+class _InspectorEarningsScreenState extends State<InspectorEarningsScreen> {
   final WalletService _walletService = WalletService();
   bool _loading = true;
   Map<String, dynamic>? _wallet;
@@ -24,14 +25,14 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final results = await Future.wait([
+    final values = await Future.wait([
       _walletService.getWallet(),
       _walletService.ledger(),
     ]);
     if (!mounted) return;
     setState(() {
-      _wallet = results[0] as Map<String, dynamic>?;
-      _ledger = (results[1] as List<dynamic>)
+      _wallet = values[0] as Map<String, dynamic>?;
+      _ledger = (values[1] as List<dynamic>)
           .whereType<Map>()
           .map((raw) => Map<String, dynamic>.from(raw as Map))
           .toList();
@@ -57,7 +58,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
     final latest = _ledger.take(5).toList();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Driver Earnings'),
+        title: const Text('Inspector Earnings'),
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
