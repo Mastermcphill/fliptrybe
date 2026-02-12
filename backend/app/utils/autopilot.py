@@ -22,6 +22,11 @@ def get_settings() -> AutopilotSettings:
         row.termii_enabled_sms = False
         row.termii_enabled_wa = False
         row.payments_mode = "mock"
+        row.manual_payment_bank_name = ""
+        row.manual_payment_account_number = ""
+        row.manual_payment_account_name = ""
+        row.manual_payment_note = ""
+        row.manual_payment_sla_minutes = 360
         row.search_v2_mode = "off"
         row.payments_allow_legacy_fallback = env in ("staging", "stage")
         row.otel_enabled = False
@@ -46,6 +51,21 @@ def get_settings() -> AutopilotSettings:
         changed = True
     if not getattr(row, "payments_mode", None):
         row.payments_mode = "mock"
+        changed = True
+    if getattr(row, "manual_payment_bank_name", None) is None:
+        row.manual_payment_bank_name = ""
+        changed = True
+    if getattr(row, "manual_payment_account_number", None) is None:
+        row.manual_payment_account_number = ""
+        changed = True
+    if getattr(row, "manual_payment_account_name", None) is None:
+        row.manual_payment_account_name = ""
+        changed = True
+    if getattr(row, "manual_payment_note", None) is None:
+        row.manual_payment_note = ""
+        changed = True
+    if getattr(row, "manual_payment_sla_minutes", None) is None:
+        row.manual_payment_sla_minutes = 360
         changed = True
     if not getattr(row, "search_v2_mode", None):
         row.search_v2_mode = "off"

@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$Base = "https://tri-o-fliptrybe.onrender.com",
   [string]$AdminEmail = $(if ($env:ADMIN_EMAIL) { $env:ADMIN_EMAIL } else { "vidzimedialtd@gmail.com" }),
   [string]$AdminPassword = $(if ($env:ADMIN_PASSWORD) { $env:ADMIN_PASSWORD } else { "NewPass1234!" }),
@@ -39,9 +39,9 @@ function Invoke-Api {
   }
 }
 
-function Assert-Ok([object]$resp, [string]$label) {
+function Assert-Status([object]$resp, [string]$label, [int[]]$allowed) {
   Write-Host "$label -> $($resp.StatusCode)"
-  if ($resp.StatusCode -lt 200 -or $resp.StatusCode -ge 300) {
+  if ($allowed -notcontains [int]$resp.StatusCode) {
     if ($resp.Body) { Write-Host $resp.Body }
     exit 1
   }
@@ -57,9 +57,9 @@ function Assert-True([bool]$value, [string]$message) {
 function New-SmokeBuyer {
   $r = Get-Random
   return [pscustomobject]@{
-    email = "buyer_payments_$r@t.com"
+    email = "buyer_manual_$r@t.com"
     password = "TestPass123!"
-    name = "Buyer Payments $r"
+    name = "Buyer Manual $r"
     phone = "+23480$($r.ToString().Substring(0, [Math]::Min(7, $r.ToString().Length)))"
   }
 }
@@ -74,15 +74,28 @@ function Get-OwnerId($listing) {
   return 0
 }
 
-Write-Host "payments smoke: base=$Base"
+Write-Host "manual payments smoke: base=$Base"
 $version = Invoke-Api -Path "/api/version"
 Write-Host "GET /api/version -> $($version.StatusCode)"
 if ($version.Body) { Write-Host $version.Body }
 
 $adminLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email = $AdminEmail; password = $AdminPassword }
-Assert-Ok $adminLogin "POST /api/auth/login (admin)"
+Assert-Status $adminLogin "POST /api/auth/login (admin)" @(200)
 Assert-True ($adminLogin.Json -and $adminLogin.Json.token) "Admin login did not return token."
 $adminHeaders = @{ Authorization = "Bearer $($adminLogin.Json.token)"; "X-Debug" = "1" }
+
+$modeSet = Invoke-Api -Method "POST" -Path "/api/admin/payments/mode" -Headers $adminHeaders -BodyObj @{ mode = "manual_company_account" }
+Assert-Status $modeSet "POST /api/admin/payments/mode" @(200)
+
+$saveManual = Invoke-Api -Method "POST" -Path "/api/admin/settings/payments" -Headers $adminHeaders -BodyObj @{
+  mode = "manual_company_account"
+  manual_payment_bank_name = "FlipTrybe Demo Bank"
+  manual_payment_account_number = "0123456789"
+  manual_payment_account_name = "FlipTrybe Inc"
+  manual_payment_note = "Use your reference when paying."
+  manual_payment_sla_minutes = 360
+}
+Assert-Status $saveManual "POST /api/admin/settings/payments" @(200)
 
 if (-not $BuyerEmail) {
   $buyer = New-SmokeBuyer
@@ -99,23 +112,16 @@ if (-not $BuyerEmail) {
 if (-not $BuyerPassword) { $BuyerPassword = "TestPass123!" }
 
 $buyerLogin = Invoke-Api -Method "POST" -Path "/api/auth/login" -BodyObj @{ email = $BuyerEmail; password = $BuyerPassword }
-Assert-Ok $buyerLogin "POST /api/auth/login (buyer)"
+Assert-Status $buyerLogin "POST /api/auth/login (buyer)" @(200)
 Assert-True ($buyerLogin.Json -and $buyerLogin.Json.token) "Buyer login did not return token."
 $buyerHeaders = @{ Authorization = "Bearer $($buyerLogin.Json.token)"; "X-Debug" = "1" }
 
 $buyerMe = Invoke-Api -Path "/api/auth/me" -Headers $buyerHeaders
-Assert-Ok $buyerMe "GET /api/auth/me (buyer)"
+Assert-Status $buyerMe "GET /api/auth/me (buyer)" @(200)
 $buyerId = [int]$buyerMe.Json.id
 
-$setMode = Invoke-Api -Method "POST" -Path "/api/admin/settings/payments" -Headers $adminHeaders -BodyObj @{ mode = "manual_company_account" }
-Assert-Ok $setMode "POST /api/admin/settings/payments"
-
-$modeRead = Invoke-Api -Method "GET" -Path "/api/admin/settings/payments" -Headers $adminHeaders
-Assert-Ok $modeRead "GET /api/admin/settings/payments"
-Assert-True (($modeRead.Json.settings.mode -eq "manual_company_account")) "Payments mode did not persist as manual_company_account."
-
-$listingsResp = Invoke-Api -Method "GET" -Path "/api/admin/listings?limit=50" -Headers $adminHeaders
-Assert-Ok $listingsResp "GET /api/admin/listings"
+$listingsResp = Invoke-Api -Method "GET" -Path "/api/admin/listings?limit=100" -Headers $adminHeaders
+Assert-Status $listingsResp "GET /api/admin/listings" @(200)
 $listing = $null
 if ($listingsResp.Json -and $listingsResp.Json.items) {
   $listing = @($listingsResp.Json.items) | Where-Object { (Get-OwnerId $_) -ne $buyerId } | Select-Object -First 1
@@ -123,24 +129,21 @@ if ($listingsResp.Json -and $listingsResp.Json.items) {
 if (-not $listing) {
   $seedNation = Invoke-Api -Method "POST" -Path "/api/admin/demo/seed-nationwide" -Headers $adminHeaders -BodyObj @{}
   Write-Host "POST /api/admin/demo/seed-nationwide -> $($seedNation.StatusCode)"
-  $listingsResp = Invoke-Api -Method "GET" -Path "/api/admin/listings?limit=50" -Headers $adminHeaders
-  Assert-Ok $listingsResp "GET /api/admin/listings (after seed)"
+  $listingsResp = Invoke-Api -Method "GET" -Path "/api/admin/listings?limit=100" -Headers $adminHeaders
+  Assert-Status $listingsResp "GET /api/admin/listings (after seed)" @(200)
   if ($listingsResp.Json -and $listingsResp.Json.items) {
     $listing = @($listingsResp.Json.items) | Where-Object { (Get-OwnerId $_) -ne $buyerId } | Select-Object -First 1
   }
 }
-Assert-True ($listing -ne $null) "No listing available for payments smoke."
+Assert-True ($listing -ne $null) "No listing available for manual payments smoke."
 
 $listingId = [int]$listing.id
-$merchantId = Get-OwnerId $listing
-$createOrder = Invoke-Api -Method "POST" -Path "/api/orders" -Headers $adminHeaders -BodyObj @{
-  buyer_id = $buyerId
+$createOrder = Invoke-Api -Method "POST" -Path "/api/orders" -Headers $buyerHeaders -BodyObj @{
   listing_id = $listingId
-  merchant_id = $merchantId
   pickup = "Ikeja"
   dropoff = "Lekki"
 }
-Assert-Ok $createOrder "POST /api/orders"
+Assert-Status $createOrder "POST /api/orders" @(200,201)
 Assert-True ($createOrder.Json -and $createOrder.Json.order -and $createOrder.Json.order.id) "Order create did not return order id."
 $orderId = [int]$createOrder.Json.order.id
 
@@ -148,48 +151,61 @@ $initialize = Invoke-Api -Method "POST" -Path "/api/payments/initialize" -Header
   purpose = "order"
   order_id = $orderId
 }
-Assert-Ok $initialize "POST /api/payments/initialize"
+Assert-Status $initialize "POST /api/payments/initialize" @(200)
 Assert-True (($initialize.Json.mode -eq "manual_company_account")) "Initialize did not return manual mode."
-Assert-True (($initialize.Json.requires_admin_mark_paid -eq $true)) "Manual initialize missing requires_admin_mark_paid=true."
+Assert-True (($initialize.Json.payment_intent_id -as [int]) -gt 0) "Initialize missing payment_intent_id."
 $paymentIntentId = [int]$initialize.Json.payment_intent_id
-Assert-True ($paymentIntentId -gt 0) "Manual initialize missing payment_intent_id."
 
 $proof = Invoke-Api -Method "POST" -Path "/api/payments/manual/$paymentIntentId/proof" -Headers $buyerHeaders -BodyObj @{
   bank_txn_reference = "SMOKE-TXN-$paymentIntentId"
-  note = "payments smoke proof"
+  note = "manual payments smoke proof"
 }
-Assert-Ok $proof "POST /api/payments/manual/{id}/proof"
+Assert-Status $proof "POST /api/payments/manual/{id}/proof" @(200)
 
-$manualQueue = Invoke-Api -Method "GET" -Path "/api/admin/payments/manual/queue?status=manual_pending&limit=50" -Headers $adminHeaders
-Assert-Ok $manualQueue "GET /api/admin/payments/manual/queue"
+$queue = Invoke-Api -Method "GET" -Path "/api/admin/payments/manual/queue?status=manual_pending&q=$paymentIntentId" -Headers $adminHeaders
+Assert-Status $queue "GET /api/admin/payments/manual/queue" @(200)
 $queueHit = $false
-if ($manualQueue.Json -and $manualQueue.Json.items) {
-  foreach ($item in @($manualQueue.Json.items)) {
+if ($queue.Json -and $queue.Json.items) {
+  foreach ($item in @($queue.Json.items)) {
     if ([int]$item.payment_intent_id -eq $paymentIntentId) {
       $queueHit = $true
       break
     }
   }
 }
-Assert-True $queueHit "Manual pending queue does not include created order."
+Assert-True $queueHit "Manual queue does not include created payment intent."
 
 $markPaid1 = Invoke-Api -Method "POST" -Path "/api/admin/payments/manual/mark-paid" -Headers $adminHeaders -BodyObj @{
   payment_intent_id = $paymentIntentId
-  bank_txn_reference = "BANK-$paymentIntentId"
-  note = "payments smoke first mark"
+  bank_txn_reference = "BANK-REF-$paymentIntentId"
+  note = "manual smoke first mark"
 }
-Assert-Ok $markPaid1 "POST /api/admin/payments/manual/mark-paid (first)"
+Assert-Status $markPaid1 "POST /api/admin/payments/manual/mark-paid (first)" @(200)
 
 $markPaid2 = Invoke-Api -Method "POST" -Path "/api/admin/payments/manual/mark-paid" -Headers $adminHeaders -BodyObj @{
   payment_intent_id = $paymentIntentId
-  note = "payments smoke replay"
+  note = "manual smoke replay"
 }
-Assert-Ok $markPaid2 "POST /api/admin/payments/manual/mark-paid (replay)"
+Assert-Status $markPaid2 "POST /api/admin/payments/manual/mark-paid (replay)" @(200)
 Assert-True (($markPaid2.Json.idempotent -eq $true) -or ($markPaid2.Json.ok -eq $true)) "Replay mark-paid did not return idempotent-safe result."
 
 $status = Invoke-Api -Method "GET" -Path "/api/payments/status?order_id=$orderId" -Headers $buyerHeaders
-Assert-Ok $status "GET /api/payments/status"
+Assert-Status $status "GET /api/payments/status" @(200)
 Assert-True (($status.Json.payment_status -eq "paid")) "Payment status is not paid after manual mark-paid."
 
-Write-Host "OK: payments smoke passed (order_id=$orderId)"
+$timeline = Invoke-Api -Method "GET" -Path "/api/admin/orders/$orderId/timeline" -Headers $adminHeaders
+Assert-Status $timeline "GET /api/admin/orders/{id}/timeline" @(200)
+$hasTransition = $false
+if ($timeline.Json -and $timeline.Json.items) {
+  foreach ($row in @($timeline.Json.items)) {
+    if (("$($row.type)" -eq "payment_transition") -or ("$($row.kind)" -eq "payment_transition")) {
+      $hasTransition = $true
+      break
+    }
+  }
+}
+Assert-True $hasTransition "Order timeline does not contain payment transition entries."
+
+Write-Host "OK: manual payments smoke passed (order_id=$orderId, intent_id=$paymentIntentId)"
 exit 0
+

@@ -25,6 +25,32 @@ class PaymentService {
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
+  Future<Map<String, dynamic>> manualInstructions() async {
+    final data = await ApiClient.instance.getJson(
+      ApiConfig.api('/public/manual-payment-instructions'),
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> submitManualProof({
+    required int paymentIntentId,
+    String bankTxnReference = '',
+    String note = '',
+  }) async {
+    final payload = <String, dynamic>{};
+    if (bankTxnReference.trim().isNotEmpty) {
+      payload['bank_txn_reference'] = bankTxnReference.trim();
+    }
+    if (note.trim().isNotEmpty) {
+      payload['note'] = note.trim();
+    }
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/payments/manual/$paymentIntentId/proof'),
+      payload,
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> confirmSim({required String reference}) async {
     // Backend route `/api/payments/confirm` is not available in current inventory.
     // Return a deterministic, explicit response instead of generating avoidable 404s.

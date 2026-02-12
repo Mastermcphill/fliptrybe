@@ -6,11 +6,13 @@ import '../services/listing_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/merchant_service.dart';
 import '../services/order_service.dart';
+import '../services/payment_service.dart';
 import '../utils/formatters.dart';
 import '../ui/components/ft_components.dart';
 import '../widgets/email_verification_dialog.dart';
 import '../widgets/listing/listing_card.dart';
 import '../widgets/safe_image.dart';
+import 'manual_payment_instructions_screen.dart';
 import 'order_detail_screen.dart';
 import 'support_chat_screen.dart';
 
@@ -26,6 +28,7 @@ class ListingDetailScreen extends StatefulWidget {
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final _listings = ListingService();
   final _orders = OrderService();
+  final _payments = PaymentService();
   final _auth = AuthService();
   final _merchantSvc = MerchantService();
   final _prefs = MarketplacePrefsService();
@@ -263,7 +266,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         deliveryFee: deliveryFee,
         pickup: _pickupCtrl.text.trim(),
         dropoff: _dropoffCtrl.text.trim(),
-        paymentReference: 'demo',
+        paymentReference: '',
       );
 
       if (result['ok'] != true) {
@@ -293,11 +296,56 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           : Map<String, dynamic>.from(result);
       final orderId = _asInt(orderRaw['id']);
       if (orderId == null || !mounted) return;
+      final orderTotal = _asDouble(orderRaw['total_price']) > 0
+          ? _asDouble(orderRaw['total_price'])
+          : amount + deliveryFee;
+
+      final paymentInit = await _payments.initialize(
+        amount: orderTotal,
+        purpose: 'order',
+        orderId: orderId,
+      );
+      if (!mounted) return;
+      if (paymentInit['ok'] != true) {
+        final initMsg = (paymentInit['message'] ??
+                paymentInit['error'] ??
+                'Payment initialization failed')
+            .toString();
+        _toast(initMsg);
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
+        );
+        return;
+      }
+
+      final initMode = (paymentInit['mode'] ?? '').toString().toLowerCase();
 
       _toast('Order created successfully.');
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
-      );
+      if (initMode == 'manual_company_account') {
+        final instructions = paymentInit['manual_instructions'] is Map
+            ? Map<String, dynamic>.from(paymentInit['manual_instructions'] as Map)
+            : <String, dynamic>{};
+        final paymentIntentRaw = paymentInit['payment_intent_id'];
+        final paymentIntentId = paymentIntentRaw is int
+            ? paymentIntentRaw
+            : int.tryParse((paymentIntentRaw ?? '').toString());
+        final reference = (paymentInit['reference'] ?? '').toString();
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ManualPaymentInstructionsScreen(
+              orderId: orderId,
+              amount: orderTotal,
+              reference: reference,
+              paymentIntentId: paymentIntentId,
+              initialInstructions: instructions,
+            ),
+          ),
+        );
+      } else {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
+        );
+      }
     } catch (e) {
       _toast('Failed: $e');
     } finally {

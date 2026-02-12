@@ -12,6 +12,11 @@ class AdminAutopilotScreen extends StatefulWidget {
 
 class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   final _svc = AdminAutopilotService();
+  final _manualBankNameCtrl = TextEditingController();
+  final _manualAccountNumberCtrl = TextEditingController();
+  final _manualAccountNameCtrl = TextEditingController();
+  final _manualNoteCtrl = TextEditingController();
+  final _manualSlaCtrl = TextEditingController(text: '360');
   bool _loading = true;
   bool _enabled = true;
   String _lastRun = "-";
@@ -36,9 +41,20 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _manualBankNameCtrl.dispose();
+    _manualAccountNumberCtrl.dispose();
+    _manualAccountNameCtrl.dispose();
+    _manualNoteCtrl.dispose();
+    _manualSlaCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     final s = await _svc.status();
+    final payMode = await _svc.getPaymentsMode();
     final pay = await _svc.getPaymentsSettings();
     if (!mounted) return;
     final settings = Map<String, dynamic>.from(
@@ -51,6 +67,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
         (settings['integration_health'] ?? {}) as Map? ?? <String, dynamic>{});
     final paySettings = Map<String, dynamic>.from(
         (pay['settings'] ?? {}) as Map? ?? <String, dynamic>{});
+    final payModeSettings = Map<String, dynamic>.from(
+        (payMode['settings'] ?? {}) as Map? ?? <String, dynamic>{});
     setState(() {
       _enabled = (settings['enabled'] ?? true) == true;
       _lastRun = (settings['last_run_at'] ?? '-')?.toString() ?? '-';
@@ -63,7 +81,7 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
               "disabled")
           .toString();
       _paymentsMode =
-          (paySettings['mode'] ?? settings['payments_mode'] ?? "mock")
+          (payModeSettings['mode'] ?? paySettings['mode'] ?? settings['payments_mode'] ?? "mock")
               .toString();
       _paystackEnabled = (integrations['paystack_enabled'] ??
               settings['paystack_enabled'] ??
@@ -87,6 +105,16 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
           (featureFlags['rate_limit_enabled'] ?? settings['rate_limit_enabled'] ?? true) == true;
       _health = health;
       _paymentsSettings = paySettings;
+      _manualBankNameCtrl.text =
+          (paySettings['manual_payment_bank_name'] ?? '').toString();
+      _manualAccountNumberCtrl.text =
+          (paySettings['manual_payment_account_number'] ?? '').toString();
+      _manualAccountNameCtrl.text =
+          (paySettings['manual_payment_account_name'] ?? '').toString();
+      _manualNoteCtrl.text =
+          (paySettings['manual_payment_note'] ?? '').toString();
+      _manualSlaCtrl.text =
+          (paySettings['manual_payment_sla_minutes'] ?? 360).toString();
       _loading = false;
     });
   }
@@ -142,6 +170,29 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
           content: Text(ok
               ? 'Payments mode updated'
               : (r['message'] ?? 'Failed to update payments mode').toString())),
+    );
+    await _load();
+  }
+
+  Future<void> _saveManualPaymentSettings() async {
+    final parsedSla = int.tryParse(_manualSlaCtrl.text.trim()) ?? 360;
+    setState(() => _loading = true);
+    final r = await _svc.savePaymentsSettings(
+      mode: _paymentsMode,
+      manualPaymentBankName: _manualBankNameCtrl.text.trim(),
+      manualPaymentAccountNumber: _manualAccountNumberCtrl.text.trim(),
+      manualPaymentAccountName: _manualAccountNameCtrl.text.trim(),
+      manualPaymentNote: _manualNoteCtrl.text.trim(),
+      manualPaymentSlaMinutes: parsedSla,
+    );
+    if (!mounted) return;
+    final ok = r['ok'] == true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text(ok
+              ? 'Manual payment settings updated'
+              : (r['message'] ?? 'Failed to update manual payment settings')
+                  .toString())),
     );
     await _load();
   }
@@ -263,6 +314,58 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                             child: const Text(
                                 "Manual payment enabled. Paystack is bypassed and admin must mark orders as paid."),
                           ),
+                        const SizedBox(height: 10),
+                        const Text("Manual Payment Account Details",
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _manualBankNameCtrl,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: "Bank name",
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _manualAccountNumberCtrl,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: "Account number",
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _manualAccountNameCtrl,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: "Account name",
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _manualNoteCtrl,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: "Manual payment note",
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _manualSlaCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: "Manual payment SLA (minutes)",
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _saveManualPaymentSettings,
+                          icon: const Icon(Icons.save_as_outlined),
+                          label: const Text("Save manual payment details"),
+                        ),
                         const SizedBox(height: 8),
                         Text(
                             "Paystack key present: ${paymentsHealthSignals['paystack_secret_present'] == true}"),

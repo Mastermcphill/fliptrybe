@@ -8,7 +8,7 @@ from app.extensions import db, migrate, cors
 from app.models import User
 from app.segments.segment_09_users_auth_routes import auth_bp
 from app.segments.segment_20_rides_routes import ride_bp
-from app.segments.segment_payments import payments_bp, admin_payments_bp
+from app.segments.segment_payments import payments_bp, admin_payments_bp, public_payments_bp
 from app.segments.segment_payout_recipient import recipient_bp
 from app.segments.segment_audit_admin import audit_bp
 from app.segments.segment_reconciliation_admin import recon_bp
@@ -158,6 +158,7 @@ def create_app():
     app.register_blueprint(moneybox_bp)
     app.register_blueprint(moneybox_system_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(public_payments_bp)
     app.register_blueprint(admin_ops_bp)
 
     # Health check

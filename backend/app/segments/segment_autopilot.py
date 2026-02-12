@@ -89,6 +89,11 @@ def _settings_payload(s):
         "termii_enabled_sms": base.get("termii_enabled_sms"),
         "termii_enabled_wa": base.get("termii_enabled_wa"),
         "integrations_mode": base.get("integrations_mode"),
+        "manual_payment_bank_name": base.get("manual_payment_bank_name") or "",
+        "manual_payment_account_number": base.get("manual_payment_account_number") or "",
+        "manual_payment_account_name": base.get("manual_payment_account_name") or "",
+        "manual_payment_note": base.get("manual_payment_note") or "",
+        "manual_payment_sla_minutes": int(base.get("manual_payment_sla_minutes") or 360),
     }
     base["integration_health"] = {
         "payments": p_health,
@@ -101,6 +106,20 @@ def _settings_payload(s):
         "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
     }
     return base
+
+
+def _coerce_sla_minutes(value, default_value: int) -> int:
+    if value is None:
+        return int(default_value)
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = int(default_value)
+    if parsed < 5:
+        parsed = 5
+    if parsed > 10080:
+        parsed = 10080
+    return parsed
 
 
 def _payments_mode(s) -> str:
@@ -225,6 +244,19 @@ def update_settings():
     )
     s.otel_enabled = _as_bool(data.get("otel_enabled"), bool(getattr(s, "otel_enabled", False)))
     s.rate_limit_enabled = _as_bool(data.get("rate_limit_enabled"), bool(getattr(s, "rate_limit_enabled", True)))
+    if "manual_payment_bank_name" in data:
+        s.manual_payment_bank_name = str(data.get("manual_payment_bank_name") or "").strip()[:120]
+    if "manual_payment_account_number" in data:
+        s.manual_payment_account_number = str(data.get("manual_payment_account_number") or "").strip()[:64]
+    if "manual_payment_account_name" in data:
+        s.manual_payment_account_name = str(data.get("manual_payment_account_name") or "").strip()[:120]
+    if "manual_payment_note" in data:
+        s.manual_payment_note = str(data.get("manual_payment_note") or "").strip()[:240]
+    if "manual_payment_sla_minutes" in data:
+        s.manual_payment_sla_minutes = _coerce_sla_minutes(
+            data.get("manual_payment_sla_minutes"),
+            int(getattr(s, "manual_payment_sla_minutes", 360) or 360),
+        )
     incoming_payments_mode = (data.get("payments_mode") or "").strip().lower()
     mode_changed = False
     old_mode = _payments_mode(s)
@@ -266,6 +298,11 @@ def get_payments_settings():
         "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
         "otel_enabled": bool(getattr(s, "otel_enabled", False)),
         "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
+        "manual_payment_bank_name": (getattr(s, "manual_payment_bank_name", "") or ""),
+        "manual_payment_account_number": (getattr(s, "manual_payment_account_number", "") or ""),
+        "manual_payment_account_name": (getattr(s, "manual_payment_account_name", "") or ""),
+        "manual_payment_note": (getattr(s, "manual_payment_note", "") or ""),
+        "manual_payment_sla_minutes": int(getattr(s, "manual_payment_sla_minutes", 360) or 360),
         "health": _payments_health_payload(s),
         "audit": _payments_audit_payload(s),
     }
@@ -306,6 +343,19 @@ def set_payments_settings():
         s.otel_enabled = _as_bool(data.get("otel_enabled"), bool(getattr(s, "otel_enabled", False)))
     if "rate_limit_enabled" in data:
         s.rate_limit_enabled = _as_bool(data.get("rate_limit_enabled"), bool(getattr(s, "rate_limit_enabled", True)))
+    if "manual_payment_bank_name" in data:
+        s.manual_payment_bank_name = str(data.get("manual_payment_bank_name") or "").strip()[:120]
+    if "manual_payment_account_number" in data:
+        s.manual_payment_account_number = str(data.get("manual_payment_account_number") or "").strip()[:64]
+    if "manual_payment_account_name" in data:
+        s.manual_payment_account_name = str(data.get("manual_payment_account_name") or "").strip()[:120]
+    if "manual_payment_note" in data:
+        s.manual_payment_note = str(data.get("manual_payment_note") or "").strip()[:240]
+    if "manual_payment_sla_minutes" in data:
+        s.manual_payment_sla_minutes = _coerce_sla_minutes(
+            data.get("manual_payment_sla_minutes"),
+            int(getattr(s, "manual_payment_sla_minutes", 360) or 360),
+        )
     db.session.commit()
     if old_mode != mode:
         _save_payments_mode_audit(actor_id=int(u.id), old_mode=old_mode, new_mode=mode)
@@ -319,6 +369,11 @@ def set_payments_settings():
         "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
         "otel_enabled": bool(getattr(s, "otel_enabled", False)),
         "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
+        "manual_payment_bank_name": (getattr(s, "manual_payment_bank_name", "") or ""),
+        "manual_payment_account_number": (getattr(s, "manual_payment_account_number", "") or ""),
+        "manual_payment_account_name": (getattr(s, "manual_payment_account_name", "") or ""),
+        "manual_payment_note": (getattr(s, "manual_payment_note", "") or ""),
+        "manual_payment_sla_minutes": int(getattr(s, "manual_payment_sla_minutes", 360) or 360),
         "health": _payments_health_payload(s),
         "audit": _payments_audit_payload(s),
     }

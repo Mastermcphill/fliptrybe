@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../services/order_service.dart';
+import '../services/payment_service.dart';
 import '../services/driver_directory_service.dart';
 import '../services/auth_service.dart';
+import '../utils/formatters.dart';
+import 'manual_payment_instructions_screen.dart';
 import 'receipts_screen.dart';
 import 'support_chat_screen.dart';
 import 'transaction/transaction_timeline_screen.dart';
@@ -17,6 +20,7 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final _svc = OrderService();
+  final _payments = PaymentService();
   final _driversSvc = DriverDirectoryService();
   final _auth = AuthService();
 
@@ -43,6 +47,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Map<String, dynamic>? _order;
   Map<String, dynamic>? _delivery;
   List<dynamic> _events = const [];
+  String _paymentStatus = 'unknown';
+  int? _paymentIntentId;
+  String _paymentReference = '';
 
   String _role = 'buyer';
   int? _viewerId;
@@ -73,6 +80,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final detail = await _svc.getOrder(widget.orderId);
       final tl = await _svc.timeline(widget.orderId);
       final delivery = await _svc.getDelivery(widget.orderId);
+      final payment = await _payments.status(orderId: widget.orderId);
       final drivers = await _driversSvc.listDrivers(
         state: _driverFilterState.text,
         city: _driverFilterCity.text,
@@ -86,6 +94,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             : null;
         _events = tl;
         _drivers = drivers;
+        _paymentStatus = (payment['payment_status'] ?? 'unknown').toString();
+        final paymentIntentRaw = payment['payment_intent_id'];
+        _paymentIntentId = paymentIntentRaw is int
+            ? paymentIntentRaw
+            : int.tryParse((paymentIntentRaw ?? '').toString());
+        _paymentReference = (payment['payment_reference'] ?? '').toString();
         _loading = false;
       });
     } catch (e) {
@@ -98,11 +112,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _refreshDelivery() async {
     final delivery = await _svc.getDelivery(widget.orderId);
+    final payment = await _payments.status(orderId: widget.orderId);
     if (!mounted) return;
     setState(() {
       _delivery = (delivery['delivery'] is Map)
           ? Map<String, dynamic>.from(delivery['delivery'] as Map)
           : _delivery;
+      _paymentStatus = (payment['payment_status'] ?? _paymentStatus).toString();
+      final paymentIntentRaw = payment['payment_intent_id'];
+      _paymentIntentId = paymentIntentRaw is int
+          ? paymentIntentRaw
+          : int.tryParse((paymentIntentRaw ?? '').toString());
+      _paymentReference = (payment['payment_reference'] ?? _paymentReference).toString();
     });
   }
 
@@ -284,6 +305,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final delivery = _delivery ?? const <String, dynamic>{};
     final status = (delivery['status'] ?? _order?['status'] ?? '').toString();
+    final paymentStatus = _paymentStatus.trim().isEmpty ? 'unknown' : _paymentStatus;
     final role = _role.toLowerCase();
     final isAdmin = role == 'admin';
     final isMerchant = role == 'merchant';
@@ -319,6 +341,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             .contains(statusLower);
     final canConfirmDelivery =
         (isDriver || isAdmin) && statusLower == 'picked_up';
+    final canOpenManualInstructions =
+        paymentStatus.toLowerCase() == 'manual_pending' && _paymentIntentId != null;
+    final orderAmount = (_order?['amount'] ?? 0);
+    final deliveryAmount = (_order?['delivery_fee'] ?? 0);
 
     return Scaffold(
       appBar: AppBar(
@@ -337,6 +363,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   padding: const EdgeInsets.all(16),
                   children: [
                     _pill("Status: $status"),
+                    const SizedBox(height: 8),
+                    _pill("Payment: $paymentStatus"),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () {
@@ -362,13 +390,43 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      "Amount: ₦${_order?['amount'] ?? 0}",
+                      "Amount: ${formatNaira(orderAmount)}",
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
-                    Text("Delivery Fee: ₦${_order?['delivery_fee'] ?? 0}",
+                    Text("Delivery Fee: ${formatNaira(deliveryAmount)}",
                         style: const TextStyle(fontWeight: FontWeight.w700)),
+                    if (_paymentReference.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text("Payment Reference: $_paymentReference"),
+                    ],
+                    if (canOpenManualInstructions) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          final amountValue = (orderAmount is num)
+                              ? orderAmount.toDouble()
+                              : double.tryParse(orderAmount.toString()) ?? 0.0;
+                          final deliveryValue = (deliveryAmount is num)
+                              ? deliveryAmount.toDouble()
+                              : double.tryParse(deliveryAmount.toString()) ?? 0.0;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ManualPaymentInstructionsScreen(
+                                orderId: widget.orderId,
+                                amount: amountValue + deliveryValue,
+                                reference: _paymentReference,
+                                paymentIntentId: _paymentIntentId,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.account_balance_outlined),
+                        label: const Text("View payment instructions"),
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     if ((_order?['pickup'] ?? '').toString().isNotEmpty)
                       Text("Pickup: ${_order?['pickup']}"),

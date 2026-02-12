@@ -57,18 +57,58 @@ class AdminAutopilotService {
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
-  Future<Map<String, dynamic>> setPaymentsMode({required String mode}) async {
+  Future<Map<String, dynamic>> getPaymentsMode() async {
+    final data = await ApiClient.instance.getJson(ApiConfig.api('/admin/payments/mode'));
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> setPaymentsMode({
+    required String mode,
+    String? manualPaymentBankName,
+    String? manualPaymentAccountNumber,
+    String? manualPaymentAccountName,
+    String? manualPaymentNote,
+    int? manualPaymentSlaMinutes,
+  }) async {
+    final body = <String, dynamic>{'mode': mode};
+    if (manualPaymentBankName != null) body['manual_payment_bank_name'] = manualPaymentBankName;
+    if (manualPaymentAccountNumber != null) body['manual_payment_account_number'] = manualPaymentAccountNumber;
+    if (manualPaymentAccountName != null) body['manual_payment_account_name'] = manualPaymentAccountName;
+    if (manualPaymentNote != null) body['manual_payment_note'] = manualPaymentNote;
+    if (manualPaymentSlaMinutes != null) body['manual_payment_sla_minutes'] = manualPaymentSlaMinutes;
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/admin/payments/mode'),
+      body,
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> savePaymentsSettings({
+    required String mode,
+    required String manualPaymentBankName,
+    required String manualPaymentAccountNumber,
+    required String manualPaymentAccountName,
+    required String manualPaymentNote,
+    required int manualPaymentSlaMinutes,
+  }) async {
     final data = await ApiClient.instance.postJson(
       ApiConfig.api('/admin/settings/payments'),
-      {'mode': mode},
+      {
+        'mode': mode,
+        'manual_payment_bank_name': manualPaymentBankName,
+        'manual_payment_account_number': manualPaymentAccountNumber,
+        'manual_payment_account_name': manualPaymentAccountName,
+        'manual_payment_note': manualPaymentNote,
+        'manual_payment_sla_minutes': manualPaymentSlaMinutes,
+      },
     );
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
   Future<List<dynamic>> listManualPayments(
-      {String q = '', int limit = 50, int offset = 0}) async {
+      {String q = '', String status = 'manual_pending', int limit = 50, int offset = 0}) async {
     final query = StringBuffer(
-        '/admin/payments/manual/pending?limit=$limit&offset=$offset');
+        '/admin/payments/manual/queue?limit=$limit&offset=$offset&status=${Uri.encodeQueryComponent(status)}');
     if (q.trim().isNotEmpty) {
       query.write('&q=${Uri.encodeQueryComponent(q.trim())}');
     }
@@ -79,20 +119,45 @@ class AdminAutopilotService {
     return <dynamic>[];
   }
 
+  Future<Map<String, dynamic>> getManualPaymentDetails({
+    required int paymentIntentId,
+  }) async {
+    final data = await ApiClient.instance.getJson(
+      ApiConfig.api('/admin/payments/manual/$paymentIntentId'),
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
   Future<Map<String, dynamic>> markManualPaid({
-    required int orderId,
+    required int paymentIntentId,
     int? amountMinor,
-    String reference = '',
+    String bankTxnReference = '',
     String note = '',
   }) async {
     final body = <String, dynamic>{
-      'order_id': orderId,
+      'payment_intent_id': paymentIntentId,
     };
     if (amountMinor != null) body['amount_minor'] = amountMinor;
-    if (reference.trim().isNotEmpty) body['reference'] = reference.trim();
+    if (bankTxnReference.trim().isNotEmpty) {
+      body['bank_txn_reference'] = bankTxnReference.trim();
+    }
     if (note.trim().isNotEmpty) body['note'] = note.trim();
     final data = await ApiClient.instance
         .postJson(ApiConfig.api('/admin/payments/manual/mark-paid'), body);
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> rejectManualPayment({
+    required int paymentIntentId,
+    required String reason,
+  }) async {
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/admin/payments/manual/reject'),
+      {
+        'payment_intent_id': paymentIntentId,
+        'reason': reason.trim(),
+      },
+    );
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 }

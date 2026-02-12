@@ -21,6 +21,7 @@ from app.models import (
     WebhookEvent,
 )
 from app.utils.jwt_utils import decode_token, get_bearer_token
+from app.utils.autopilot import get_settings
 
 admin_ops_bp = Blueprint("admin_ops_bp", __name__, url_prefix="/api/admin")
 
@@ -96,6 +97,19 @@ def _extract_order_id(meta_raw) -> int | None:
         return int(raw) if raw is not None else None
     except Exception:
         return None
+
+
+def _parse_manual_proof(meta_raw) -> dict:
+    if not meta_raw:
+        return {}
+    try:
+        parsed = json.loads(meta_raw) if isinstance(meta_raw, str) else dict(meta_raw)
+    except Exception:
+        return {}
+    proof = parsed.get("manual_proof")
+    if isinstance(proof, dict):
+        return proof
+    return {}
 
 
 @admin_ops_bp.get("/search")
@@ -424,6 +438,13 @@ def admin_anomalies():
     if err:
         return err
     now = datetime.utcnow()
+    try:
+        settings = get_settings()
+        sla_minutes = int(getattr(settings, "manual_payment_sla_minutes", 360) or 360)
+    except Exception:
+        sla_minutes = 360
+    if sla_minutes < 5:
+        sla_minutes = 5
     items = []
 
     intents = PaymentIntent.query.filter_by(status="paid", purpose="order").order_by(PaymentIntent.created_at.desc()).limit(500).all()
@@ -443,13 +464,33 @@ def admin_anomalies():
 
     stale_manual = (
         PaymentIntent.query.filter_by(provider="manual_company_account", purpose="order", status="manual_pending")
-        .filter(PaymentIntent.created_at <= now - timedelta(hours=6))
+        .filter(PaymentIntent.created_at <= now - timedelta(minutes=sla_minutes))
         .order_by(PaymentIntent.created_at.asc())
         .limit(200)
         .all()
     )
     for row in stale_manual:
-        items.append({"type": "MANUAL_PENDING_STALE", "intent_id": int(row.id), "reference": row.reference or "", "created_at": row.created_at.isoformat() if row.created_at else None})
+        proof = _parse_manual_proof(row.meta)
+        has_proof = bool((proof.get("bank_txn_reference") or "").strip() or (proof.get("note") or "").strip())
+        if has_proof:
+            items.append(
+                {
+                    "type": "MANUAL_PROOF_STALE",
+                    "intent_id": int(row.id),
+                    "reference": row.reference or "",
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "proof_submitted_at": proof.get("submitted_at"),
+                }
+            )
+        else:
+            items.append(
+                {
+                    "type": "MANUAL_PENDING_STALE",
+                    "intent_id": int(row.id),
+                    "reference": row.reference or "",
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                }
+            )
 
     held_orders = (
         Order.query.filter_by(escrow_status="HELD")
