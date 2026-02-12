@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../screens/inspector_bookings_screen.dart';
-import '../screens/inspector_earnings_screen.dart';
 import '../screens/inspector_home_screen.dart';
+import '../screens/growth/growth_analytics_screen.dart';
 import '../screens/moneybox_dashboard_screen.dart';
 import '../screens/support_chat_screen.dart';
 
@@ -32,7 +32,7 @@ class _InspectorShellState extends State<InspectorShell> {
       InspectorHomeScreen(
           onSelectTab: (index) => setState(() => _currentIndex = index)),
       InspectorBookingsScreen(),
-      const InspectorEarningsScreen(),
+      const GrowthAnalyticsScreen(role: 'inspector'),
       const MoneyBoxDashboardScreen(),
       const SupportChatScreen(),
     ];
@@ -64,7 +64,7 @@ class _InspectorShellState extends State<InspectorShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.assignment_outlined), label: 'Bookings'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.paid_outlined), label: 'Earnings'),
+                icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
             BottomNavigationBarItem(

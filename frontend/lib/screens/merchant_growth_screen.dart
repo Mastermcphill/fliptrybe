@@ -87,7 +87,7 @@ class _MerchantGrowthScreenState extends State<MerchantGrowthScreen> {
                         const SizedBox(height: 8),
                         Text('Total Orders: $totalOrders'),
                         Text('Completed Orders: $completed'),
-                        Text('Gross Revenue: ₦$grossRevenue'),
+                        Text('Gross Revenue: ?$grossRevenue'),
                         Text(
                             'Top leaderboard rank: ${_topRank() > 0 ? '#${_topRank()}' : 'Unranked'}'),
                       ],

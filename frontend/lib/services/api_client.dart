@@ -6,6 +6,7 @@ class ApiClient {
   ApiClient._internal();
   static final ApiClient instance = ApiClient._internal();
   String? _authToken;
+  final Set<CancelToken> _activeCancelTokens = <CancelToken>{};
 
   late final Dio dio = Dio(
     BaseOptions(
@@ -27,6 +28,9 @@ class ApiClient {
   )..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          final cancelToken = options.cancelToken ?? CancelToken();
+          options.cancelToken = cancelToken;
+          _activeCancelTokens.add(cancelToken);
           final token = _authToken;
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -53,7 +57,8 @@ class ApiClient {
           // ignore: avoid_print
           print('receiveTimeout: ${options.receiveTimeout}');
           // ignore: avoid_print
-          print('receiveDataWhenStatusError: ${options.receiveDataWhenStatusError}');
+          print(
+              'receiveDataWhenStatusError: ${options.receiveDataWhenStatusError}');
           // ignore: avoid_print
           print('extra: ${options.extra}');
           // ignore: avoid_print
@@ -64,6 +69,8 @@ class ApiClient {
           return handler.next(options);
         },
         onResponse: (response, handler) {
+          final token = response.requestOptions.cancelToken;
+          if (token != null) _activeCancelTokens.remove(token);
           // ignore: avoid_print
           print('*** Response ***');
           // ignore: avoid_print
@@ -80,6 +87,8 @@ class ApiClient {
           return handler.next(response);
         },
         onError: (e, handler) {
+          final token = e.requestOptions.cancelToken;
+          if (token != null) _activeCancelTokens.remove(token);
           // Mostly for network errors/timeouts now (5xx won't throw either).
           // ignore: avoid_print
           print('*** DioException ***:');
@@ -114,6 +123,19 @@ class ApiClient {
   void clearAuthToken() {
     _authToken = null;
     dio.options.headers.remove('Authorization');
+  }
+
+  void cancelAllRequests([String reason = 'session_reset']) {
+    final copy = _activeCancelTokens.toList(growable: false);
+    for (final token in copy) {
+      if (!token.isCancelled) token.cancel(reason);
+    }
+    _activeCancelTokens.clear();
+  }
+
+  void resetSession() {
+    cancelAllRequests('logout');
+    clearAuthToken();
   }
 
   dynamic jsonDecodeSafe(String s) {
@@ -170,5 +192,4 @@ class ApiClient {
       return <String, dynamic>{};
     }
   }
-
 }

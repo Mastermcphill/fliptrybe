@@ -4,20 +4,19 @@ import '../services/api_service.dart';
 import '../services/kpi_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/moneybox_service.dart';
-import '../services/token_storage.dart';
 import '../services/wallet_service.dart';
 import 'create_listing_screen.dart';
 import 'email_verify_screen.dart';
-import 'landing_screen.dart';
-import 'login_screen.dart';
 import 'moneybox_autosave_screen.dart';
 import 'moneybox_tier_screen.dart';
 import 'moneybox_withdraw_screen.dart';
-import 'role_signup_screen.dart';
+import 'leaderboards_screen.dart';
 import 'support_chat_screen.dart';
 import '../widgets/email_verification_dialog.dart';
 import 'not_available_yet_screen.dart';
+import 'growth/growth_analytics_screen.dart';
 import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
+import '../utils/auth_navigation.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
   final ValueChanged<int>? onSelectTab;
@@ -115,26 +114,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     if (_signingOut) return;
     setState(() => _signingOut = true);
     try {
-      await TokenStorage().clear();
-      ApiService.setToken(null);
-      ApiService.lastMeStatusCode = null;
-      ApiService.lastMeAt = null;
-      ApiService.lastAuthError = null;
+      await logoutToLanding(context);
     } finally {
       if (mounted) setState(() => _signingOut = false);
     }
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
-          onLogin: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => const LoginScreen())),
-          onSignup: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoleSignupScreen())),
-        ),
-      ),
-      (_) => false,
-    );
   }
 
   Future<void> _openMoneyBoxGateAware(
@@ -240,7 +223,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   Row(
                     children: [
                       _snapCard('Available Balance',
-                          '₦${_money(_wallet['balance'])}'),
+                          '?${_money(_wallet['balance'])}'),
                       const SizedBox(width: 8),
                       _snapCard('Escrow Pending', '$pendingOrders orders'),
                     ],
@@ -248,7 +231,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   Row(
                     children: [
                       _snapCard(
-                          'MoneyBox Locked', '₦${_money(moneyboxLocked)}'),
+                          'MoneyBox Locked', '?${_money(moneyboxLocked)}'),
                       const SizedBox(width: 8),
                       _snapCard('Leaderboard Rank',
                           _rank > 0 ? '#$_rank' : 'Unranked'),
@@ -303,7 +286,20 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   _actionButton(
                     icon: Icons.emoji_events_outlined,
                     label: 'Leaderboards',
-                    onTap: () => widget.onSelectTab?.call(3),
+                    onTap: () => _safePush(const LeaderboardsScreen()),
+                  ),
+                  const SizedBox(height: 8),
+                  _actionButton(
+                    icon: Icons.calculate_outlined,
+                    label: 'Estimate Earnings',
+                    onTap: () {
+                      if (widget.onSelectTab != null) {
+                        widget.onSelectTab!(3);
+                      } else {
+                        _safePush(
+                            const GrowthAnalyticsScreen(role: 'merchant'));
+                      }
+                    },
                   ),
                   const SizedBox(height: 16),
                   const RoleHowItWorksEntryCard(role: 'merchant'),
@@ -332,10 +328,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                             children: [
                               Expanded(
                                   child: Text(
-                                      'Gross Revenue: ₦${_kpis['gross_revenue'] ?? 0}')),
+                                      'Gross Revenue: ?${_kpis['gross_revenue'] ?? 0}')),
                               Expanded(
                                   child: Text(
-                                      'Platform Fees: ₦${_kpis['platform_fees'] ?? 0}')),
+                                      'Platform Fees: ?${_kpis['platform_fees'] ?? 0}')),
                             ],
                           ),
                         ],

@@ -23,6 +23,15 @@ class ApiService {
     }
   }
 
+  static Future<void> resetAuthSession() async {
+    await TokenStorage().clear();
+    setToken(null);
+    _client.resetSession();
+    lastMeStatusCode = null;
+    lastMeAt = null;
+    lastAuthError = null;
+  }
+
   static void _recordMeStatus(int? statusCode, dynamic data, {String? error}) {
     lastMeStatusCode = statusCode;
     lastMeAt = DateTime.now();
@@ -50,13 +59,15 @@ class ApiService {
       final err = (data['error'] ?? '').toString().toLowerCase();
       if (err == 'email_not_verified') return true;
       final msg = (data['message'] ?? '').toString().toLowerCase();
-      if (msg.contains('verify your email') || msg.contains('email verification required')) {
+      if (msg.contains('verify your email') ||
+          msg.contains('email verification required')) {
         return true;
       }
     }
     if (data is String) {
       final msg = data.toLowerCase();
-      if (msg.contains('verify your email') || msg.contains('email verification required')) {
+      if (msg.contains('verify your email') ||
+          msg.contains('email verification required')) {
         return true;
       }
     }
@@ -68,13 +79,15 @@ class ApiService {
       final err = (data['error'] ?? '').toString().toLowerCase();
       if (err == 'chat_not_allowed') return true;
       final msg = (data['message'] ?? '').toString().toLowerCase();
-      if (msg.contains('chat with admin') || msg.contains('only chat with admin')) {
+      if (msg.contains('chat with admin') ||
+          msg.contains('only chat with admin')) {
         return true;
       }
     }
     if (data is String) {
       final msg = data.toLowerCase();
-      if (msg.contains('chat with admin') || msg.contains('only chat with admin')) {
+      if (msg.contains('chat with admin') ||
+          msg.contains('only chat with admin')) {
         return true;
       }
     }
@@ -98,13 +111,19 @@ class ApiService {
   static bool isTierOrKycRestriction(dynamic data) {
     if (data is Map) {
       final err = (data['error'] ?? '').toString().toLowerCase();
-      if (err.contains('kyc') || err.contains('tier') || err.contains('not_eligible')) return true;
+      if (err.contains('kyc') ||
+          err.contains('tier') ||
+          err.contains('not_eligible')) return true;
       final msg = (data['message'] ?? '').toString().toLowerCase();
-      if (msg.contains('kyc') || msg.contains('tier') || msg.contains('not eligible')) return true;
+      if (msg.contains('kyc') ||
+          msg.contains('tier') ||
+          msg.contains('not eligible')) return true;
     }
     if (data is String) {
       final msg = data.toLowerCase();
-      if (msg.contains('kyc') || msg.contains('tier') || msg.contains('not eligible')) return true;
+      if (msg.contains('kyc') ||
+          msg.contains('tier') ||
+          msg.contains('not eligible')) return true;
     }
     return false;
   }
@@ -188,7 +207,8 @@ class ApiService {
     required String token,
   }) async {
     final url = ApiConfig.api('/auth/verify-email');
-    final res = await _client.dio.get(url, queryParameters: {'token': token.trim()});
+    final res =
+        await _client.dio.get(url, queryParameters: {'token': token.trim()});
     return _asMap(res.data);
   }
 
@@ -222,7 +242,8 @@ class ApiService {
       _recordMeStatus(res.statusCode, res.data);
       return res;
     } on DioException catch (e) {
-      _recordMeStatus(e.response?.statusCode, e.response?.data, error: e.message);
+      _recordMeStatus(e.response?.statusCode, e.response?.data,
+          error: e.message);
       rethrow;
     }
   }

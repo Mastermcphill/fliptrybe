@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/inspector_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
+import 'growth/growth_analytics_screen.dart';
 import 'inspector_bookings_screen.dart';
 import 'moneybox_dashboard_screen.dart';
 import 'not_available_yet_screen.dart';
@@ -101,9 +102,9 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
+                            'Available Balance: ?${_money(_wallet?['balance'])}'),
                         Text(
-                            'MoneyBox Locked: ₦${_money(_moneybox['principal_balance'])}'),
+                            'MoneyBox Locked: ?${_money(_moneybox['principal_balance'])}'),
                         Text('Pending Bookings: $pending'),
                         Text('Completed Inspections: $completed'),
                         Text('Rating Snapshot: $avgRating'),
@@ -131,6 +132,23 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(2);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const GrowthAnalyticsScreen(role: 'inspector'),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.calculate_outlined),
+                  label: const Text('Estimate Earnings'),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
                     if (widget.onSelectTab != null) {

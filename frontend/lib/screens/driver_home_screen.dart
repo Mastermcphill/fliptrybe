@@ -4,6 +4,7 @@ import '../services/driver_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
 import 'driver_jobs_screen.dart';
+import 'growth/growth_analytics_screen.dart';
 import 'moneybox_dashboard_screen.dart';
 import 'not_available_yet_screen.dart';
 import 'support_chat_screen.dart';
@@ -107,8 +108,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
-                        Text('MoneyBox Locked: ₦${_money(moneyboxLocked)}'),
+                            'Available Balance: ?${_money(_wallet?['balance'])}'),
+                        Text('MoneyBox Locked: ?${_money(moneyboxLocked)}'),
                         Text("Today's Jobs: $todayJobs"),
                         Text('Pending Pickups: $activeJobs'),
                         Text('Completed Deliveries: $completedJobs'),
@@ -136,6 +137,23 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    if (widget.onSelectTab != null) {
+                      widget.onSelectTab!(2);
+                    } else {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const GrowthAnalyticsScreen(role: 'driver'),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.calculate_outlined),
+                  label: const Text('Estimate Earnings'),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
                     if (widget.onSelectTab != null) {

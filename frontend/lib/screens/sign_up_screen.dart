@@ -60,7 +60,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _log(String message) {
+    debugPrint('[SignUpScreen] $message');
+  }
+
   Future<void> _signup() async {
+    _log('tap received');
     if (_loading) return;
 
     final name = _nameCtrl.text.trim();
@@ -88,6 +93,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     }
 
     setState(() => _loading = true);
+    _log('request started');
 
     try {
       final backendRole = _roleToBackend(_role);
@@ -142,12 +148,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final res =
           await ApiClient.instance.postJson(ApiConfig.api(path), payload);
       if (res is! Map) {
+        _log('request failed: non-map response');
         _toast('Signup failed.');
         return;
       }
 
       final token = (res['token'] ?? res['access_token'])?.toString() ?? '';
       if (token.isEmpty) {
+        _log('request failed: empty token');
         _toast(res['message']?.toString() ?? 'Signup failed.');
         return;
       }
@@ -160,10 +168,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => _screenForRole(backendRole)),
       );
+      _log('response received');
     } catch (e) {
+      _log('request failed: $e');
       _toast('Signup error: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
+      _log('loading reset');
     }
   }
 

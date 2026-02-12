@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../screens/driver_earnings_screen.dart';
 import '../screens/driver_home_screen.dart';
 import '../screens/driver_jobs_screen.dart';
+import '../screens/growth/growth_analytics_screen.dart';
 import '../screens/moneybox_dashboard_screen.dart';
 import '../screens/support_chat_screen.dart';
 
@@ -32,7 +32,7 @@ class _DriverShellState extends State<DriverShell> {
       DriverHomeScreen(
           onSelectTab: (index) => setState(() => _currentIndex = index)),
       DriverJobsScreen(),
-      const DriverEarningsScreen(),
+      const GrowthAnalyticsScreen(role: 'driver'),
       const MoneyBoxDashboardScreen(),
       const SupportChatScreen(),
     ];
@@ -64,7 +64,7 @@ class _DriverShellState extends State<DriverShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.local_shipping_outlined), label: 'Jobs'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.paid_outlined), label: 'Earnings'),
+                icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
             BottomNavigationBarItem(

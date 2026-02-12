@@ -1,12 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/driver_directory_service.dart';
-
-import '../services/api_service.dart';
-import '../services/token_storage.dart';
-import 'landing_screen.dart';
-import 'login_screen.dart';
-import 'role_signup_screen.dart';
+import '../utils/auth_navigation.dart';
 
 class DriverProfileScreen extends StatefulWidget {
   const DriverProfileScreen({super.key});
@@ -19,30 +14,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   final _svc = DriverDirectoryService();
 
   Future<void> _handleLogout() async {
-    await TokenStorage().clear();
-    ApiService.setToken(null);
-    ApiService.lastMeStatusCode = null;
-    ApiService.lastMeAt = null;
-    ApiService.lastAuthError = null;
-
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
-          onLogin: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-          },
-          onSignup: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
-            );
-          },
-        ),
-      ),
-      (route) => false,
-    );
+    await logoutToLanding(context);
   }
 
   final _phone = TextEditingController();
@@ -111,7 +83,10 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         title: const Text("Driver Profile"),
         actions: [
           IconButton(onPressed: _save, icon: const Icon(Icons.save)),
-          IconButton(icon: const Icon(Icons.logout, color: Colors.redAccent), onPressed: _handleLogout, tooltip: 'Sign out'),
+          IconButton(
+              icon: const Icon(Icons.logout, color: Colors.redAccent),
+              onPressed: _handleLogout,
+              tooltip: 'Sign out'),
         ],
       ),
       body: _loading
@@ -119,19 +94,41 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text("This sets your delivery coverage so merchants can assign you.", style: TextStyle(fontWeight: FontWeight.w700)),
+                const Text(
+                    "This sets your delivery coverage so merchants can assign you.",
+                    style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
-                TextField(controller: _phone, decoration: const InputDecoration(labelText: "Phone", border: OutlineInputBorder())),
+                TextField(
+                    controller: _phone,
+                    decoration: const InputDecoration(
+                        labelText: "Phone", border: OutlineInputBorder())),
                 const SizedBox(height: 10),
-                TextField(controller: _vehicle, decoration: const InputDecoration(labelText: "Vehicle type (bike/car/van)", border: OutlineInputBorder())),
+                TextField(
+                    controller: _vehicle,
+                    decoration: const InputDecoration(
+                        labelText: "Vehicle type (bike/car/van)",
+                        border: OutlineInputBorder())),
                 const SizedBox(height: 10),
-                TextField(controller: _plate, decoration: const InputDecoration(labelText: "Plate number", border: OutlineInputBorder())),
+                TextField(
+                    controller: _plate,
+                    decoration: const InputDecoration(
+                        labelText: "Plate number",
+                        border: OutlineInputBorder())),
                 const SizedBox(height: 10),
-                TextField(controller: _state, decoration: const InputDecoration(labelText: "State", border: OutlineInputBorder())),
+                TextField(
+                    controller: _state,
+                    decoration: const InputDecoration(
+                        labelText: "State", border: OutlineInputBorder())),
                 const SizedBox(height: 10),
-                TextField(controller: _city, decoration: const InputDecoration(labelText: "City", border: OutlineInputBorder())),
+                TextField(
+                    controller: _city,
+                    decoration: const InputDecoration(
+                        labelText: "City", border: OutlineInputBorder())),
                 const SizedBox(height: 10),
-                TextField(controller: _locality, decoration: const InputDecoration(labelText: "Locality", border: OutlineInputBorder())),
+                TextField(
+                    controller: _locality,
+                    decoration: const InputDecoration(
+                        labelText: "Locality", border: OutlineInputBorder())),
                 const SizedBox(height: 10),
                 SwitchListTile(
                   value: _active,

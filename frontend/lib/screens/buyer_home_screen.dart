@@ -107,7 +107,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       title: Text(kind.isEmpty ? 'Transaction' : kind),
       subtitle: Text(direction.isEmpty ? '-' : direction),
       trailing: Text(
-        'NGN $amount',
+        '?$amount',
         style: const TextStyle(fontWeight: FontWeight.w700),
       ),
     );
@@ -208,7 +208,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Current balance: NGN ${_money(_wallet?['balance'])}',
+                          'Current balance: ?${_money(_wallet?['balance'])}',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         if (_error != null) ...[

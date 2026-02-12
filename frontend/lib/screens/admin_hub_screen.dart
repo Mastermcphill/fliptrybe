@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_service.dart';
 import '../services/auth_service.dart';
-import '../services/token_storage.dart';
 import 'admin_payout_console_screen.dart';
 import 'admin_commission_rules_screen.dart';
 import 'admin_notify_queue_screen.dart';
@@ -11,12 +9,10 @@ import 'admin_audit_screen.dart';
 import 'admin_kyc_review_screen.dart';
 import 'admin_role_approvals_screen.dart';
 import 'admin_inspector_requests_screen.dart';
-import 'landing_screen.dart';
 import 'leaderboards_screen.dart';
-import 'login_screen.dart';
-import 'role_signup_screen.dart';
 import 'admin_support_threads_screen.dart';
 import 'not_available_yet_screen.dart';
+import '../utils/auth_navigation.dart';
 
 class AdminHubScreen extends StatefulWidget {
   const AdminHubScreen({super.key});
@@ -78,44 +74,18 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
     return res ?? false;
   }
 
-  void _goToLanding() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
-          onLogin: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-          },
-          onSignup: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
-            );
-          },
-        ),
-      ),
-      (_) => false,
-    );
-  }
-
   Future<void> _handleSignOut() async {
     if (_signingOut) return;
     final confirmed = await _confirmSignOut();
     if (!confirmed) return;
     setState(() => _signingOut = true);
     try {
-      await TokenStorage().clear();
-      ApiService.setToken(null);
-      ApiService.lastMeStatusCode = null;
-      ApiService.lastMeAt = null;
-      ApiService.lastAuthError = null;
+      await logoutToLanding(context);
     } finally {
       if (mounted) {
         setState(() => _signingOut = false);
       }
     }
-    if (!mounted) return;
-    _goToLanding();
   }
 
   @override

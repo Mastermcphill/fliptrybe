@@ -14,7 +14,15 @@ import '../shells/merchant_shell.dart';
 import '../shells/inspector_shell.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({
+    super.key,
+    this.loginAction,
+    this.meAction,
+  });
+
+  final Future<Map<String, dynamic>> Function(String email, String password)?
+      loginAction;
+  final Future<Map<String, dynamic>?> Function()? meAction;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -42,7 +50,12 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  void _log(String message) {
+    debugPrint('[LoginScreen] $message');
+  }
+
   Future<void> _handleLogin() async {
+    _log('tap received');
     if (_isLoading) return;
 
     final email = _emailController.text.trim();
@@ -54,9 +67,13 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
+    _log('request started');
 
     try {
-      final res = await ApiService.login(email: email, password: password);
+      final res = widget.loginAction != null
+          ? await widget.loginAction!(email, password)
+          : await ApiService.login(email: email, password: password);
+      _log('response received');
       final token = (res['token'] ?? res['access_token'])?.toString() ?? '';
       if (token.isEmpty) {
         _toast(res['message']?.toString() ?? 'Login failed.');
@@ -65,7 +82,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       String roleForNav = 'buyer';
       String roleStatus = 'approved';
-      final profile = await _auth.me();
+      final profile =
+          widget.meAction != null ? await widget.meAction!() : await _auth.me();
       roleForNav = (profile?['role'] ?? 'buyer').toString();
       roleStatus = (profile?['role_status'] ?? 'approved').toString();
 
@@ -81,9 +99,13 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
+      _log('request failed: $e');
       _toast('Login error: $e');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      _log('loading reset');
     }
   }
 
@@ -105,8 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (profile == null) {
-        await TokenStorage().clear();
-        ApiService.setToken(null);
+        await ApiService.resetAuthSession();
         if (!mounted) return;
         _toast('Token invalid or expired.');
         return;

@@ -79,7 +79,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '₦${_money(_wallet?['balance'])}',
+                          '?${_money(_wallet?['balance'])}',
                           style: const TextStyle(
                               fontSize: 22, fontWeight: FontWeight.w900),
                         ),
@@ -133,7 +133,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
                       return Card(
                         child: ListTile(
                           title: Text(
-                            '$direction ₦$amount',
+                            '$direction ?$amount',
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           subtitle: Text('$kind\n$note'),

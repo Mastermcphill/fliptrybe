@@ -5,9 +5,7 @@ import 'driver_profile_screen.dart';
 import '../services/api_service.dart';
 import '../services/api_config.dart';
 import '../services/token_storage.dart';
-import 'landing_screen.dart';
 import 'login_screen.dart';
-import 'role_signup_screen.dart';
 import 'heatmap_screen.dart';
 import 'shortlets_screen.dart';
 import 'fees_demo_screen.dart';
@@ -29,6 +27,7 @@ import 'orders_screen.dart';
 import 'investor_metrics_screen.dart';
 import 'sales_analytics_screen.dart';
 import 'email_verify_screen.dart';
+import '../utils/auth_navigation.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -94,31 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleLogout() async {
-    // Clear token + auth header
-    await TokenStorage().clear();
-    ApiService.setToken(null);
-    ApiService.lastMeStatusCode = null;
-    ApiService.lastMeAt = null;
-    ApiService.lastAuthError = null;
-
-    // Go back to landing screen without relying on named routes
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
-          onLogin: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-          },
-          onSignup: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
-            );
-          },
-        ),
-      ),
-      (route) => false,
-    );
+    await logoutToLanding(context);
   }
 
   Future<void> _resendVerify() async {
@@ -581,8 +556,7 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
   Future<void> _clearToken() async {
     if (_checking) return;
     setState(() => _checking = true);
-    await TokenStorage().clear();
-    ApiService.setToken(null);
+    await ApiService.resetAuthSession();
     if (!mounted) return;
     setState(() {
       _tokenPresent = false;
@@ -612,8 +586,7 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     try {
       final res = await ApiService.getProfileResponse();
       if (res.statusCode == 401) {
-        await TokenStorage().clear();
-        ApiService.setToken(null);
+        await ApiService.resetAuthSession();
         if (!mounted) return;
         setState(() {
           _tokenPresent = false;

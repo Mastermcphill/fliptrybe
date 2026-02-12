@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/admin_service.dart';
-import '../services/api_service.dart';
-import '../services/token_storage.dart';
-import 'landing_screen.dart';
-import 'login_screen.dart';
-import 'role_signup_screen.dart';
 import 'admin_lists_screen.dart';
+import '../utils/auth_navigation.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -18,30 +14,7 @@ class _AdminScreenState extends State<AdminScreen> {
   final _svc = AdminService();
 
   Future<void> _handleLogout() async {
-    await TokenStorage().clear();
-    ApiService.setToken(null);
-    ApiService.lastMeStatusCode = null;
-    ApiService.lastMeAt = null;
-    ApiService.lastAuthError = null;
-
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
-          onLogin: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-          },
-          onSignup: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
-            );
-          },
-        ),
-      ),
-      (route) => false,
-    );
+    await logoutToLanding(context);
   }
 
   bool _loading = true;
@@ -113,7 +86,11 @@ class _AdminScreenState extends State<AdminScreen> {
       _actionMsg = null;
     });
     try {
-      final res = await _svc.disableUser(userId: id, reason: _reasonCtrl.text.trim().isEmpty ? "disabled by admin" : _reasonCtrl.text.trim());
+      final res = await _svc.disableUser(
+          userId: id,
+          reason: _reasonCtrl.text.trim().isEmpty
+              ? "disabled by admin"
+              : _reasonCtrl.text.trim());
       final ok = res["ok"] == true;
       final msg = ok ? "User #$id disabled" : "Failed to disable user";
       if (!mounted) return;
@@ -146,9 +123,15 @@ class _AdminScreenState extends State<AdminScreen> {
       _actionMsg = null;
     });
     try {
-      final res = await _svc.disableListing(listingId: id, reason: _reasonCtrl.text.trim().isEmpty ? "disabled by admin" : _reasonCtrl.text.trim());
+      final res = await _svc.disableListing(
+          listingId: id,
+          reason: _reasonCtrl.text.trim().isEmpty
+              ? "disabled by admin"
+              : _reasonCtrl.text.trim());
       final ok = res["ok"] == true;
-      final msg = ok ? "Listing #$id disabled (hidden from feed)" : "Failed to disable listing";
+      final msg = ok
+          ? "Listing #$id disabled (hidden from feed)"
+          : "Failed to disable listing";
       if (!mounted) return;
       setState(() {
         _actionMsg = msg;
@@ -199,31 +182,35 @@ class _AdminScreenState extends State<AdminScreen> {
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
-                    ElevatedButton(onPressed: _load, child: const Text("Retry")),
+                    ElevatedButton(
+                        onPressed: _load, child: const Text("Retry")),
                   ],
                 )
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Text("Users: ${counts?['users'] ?? 0}", style: const TextStyle(fontSize: 16)),
+                    Text("Users: ${counts?['users'] ?? 0}",
+                        style: const TextStyle(fontSize: 16)),
                     const SizedBox(height: 6),
-                    Text("Listings: ${counts?['listings'] ?? 0}", style: const TextStyle(fontSize: 16)),
+                    Text("Listings: ${counts?['listings'] ?? 0}",
+                        style: const TextStyle(fontSize: 16)),
                     const Divider(height: 28),
-
-                    const Text("Disable Controls", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    const Text("Disable Controls",
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 10),
                     ElevatedButton(
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const AdminListsScreen()),
+                          MaterialPageRoute(
+                              builder: (_) => const AdminListsScreen()),
                         );
                       },
                       child: const Text("Admin Lists"),
                     ),
                     const SizedBox(height: 10),
                     const SizedBox(height: 10),
-
                     TextField(
                       controller: _reasonCtrl,
                       decoration: const InputDecoration(
@@ -233,7 +220,6 @@ class _AdminScreenState extends State<AdminScreen> {
                       textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: 12),
-
                     Row(
                       children: [
                         Expanded(
@@ -254,7 +240,6 @@ class _AdminScreenState extends State<AdminScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-
                     Row(
                       children: [
                         Expanded(
@@ -274,12 +259,11 @@ class _AdminScreenState extends State<AdminScreen> {
                         ),
                       ],
                     ),
-
                     if (_actionMsg != null) ...[
                       const SizedBox(height: 14),
-                      Text(_actionMsg!, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(_actionMsg!,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
                     ],
-
                     const SizedBox(height: 18),
                     const Text(
                       "Note: disabling a listing hides it from the feed immediately (backend filter).",

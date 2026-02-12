@@ -195,7 +195,7 @@ void main() {
 
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Jobs'), findsOneWidget);
-    expect(find.text('Earnings'), findsOneWidget);
+    expect(find.text('Growth'), findsOneWidget);
     expect(find.text('MoneyBox'), findsOneWidget);
     expect(find.text('Support'), findsOneWidget);
   });
@@ -210,7 +210,7 @@ void main() {
 
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Bookings'), findsOneWidget);
-    expect(find.text('Earnings'), findsOneWidget);
+    expect(find.text('Growth'), findsOneWidget);
     expect(find.text('MoneyBox'), findsOneWidget);
     expect(find.text('Support'), findsOneWidget);
   });
