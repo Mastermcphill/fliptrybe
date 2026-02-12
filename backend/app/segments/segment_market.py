@@ -219,6 +219,90 @@ def _search_args():
     }
 
 
+def _normalize_ranking_reason(value) -> list[str]:
+    if isinstance(value, list):
+        return [str(x) for x in value if str(x).strip()]
+    if isinstance(value, tuple):
+        return [str(x) for x in list(value) if str(x).strip()]
+    if value:
+        return [str(value)]
+    return []
+
+
+def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_reason=None) -> dict:
+    row = dict(raw or {})
+    image_path = str(row.get("image_path") or "").strip()
+    image = str(row.get("image") or "").strip() or image_path
+    created_at = row.get("created_at")
+    if created_at is not None:
+        created_at = str(created_at)
+    reasons = _normalize_ranking_reason(ranking_reason if ranking_reason is not None else row.get("ranking_reason"))
+    if not reasons:
+        reasons = ["BASELINE"]
+    return {
+        "id": int(row.get("id") or 0),
+        "user_id": int(row.get("user_id") or row.get("owner_id") or 0),
+        "owner_id": int(row.get("owner_id") or row.get("user_id") or 0),
+        "title": str(row.get("title") or ""),
+        "description": str(row.get("description") or ""),
+        "category": str(row.get("category") or ""),
+        "state": str(row.get("state") or ""),
+        "city": str(row.get("city") or ""),
+        "locality": str(row.get("locality") or ""),
+        "condition": str(row.get("condition") or ""),
+        "image": image,
+        "image_path": image_path,
+        "image_filename": str(row.get("image_filename") or ""),
+        "price": float(row.get("price") or row.get("final_price") or 0.0),
+        "base_price": float(row.get("base_price") or row.get("price") or 0.0),
+        "platform_fee": float(row.get("platform_fee") or 0.0),
+        "final_price": float(row.get("final_price") or row.get("price") or 0.0),
+        "is_active": bool(row.get("is_active", True)),
+        "views_count": int(row.get("views_count") or 0),
+        "favorites_count": int(row.get("favorites_count") or 0),
+        "heat_level": str(row.get("heat_level") or "normal"),
+        "heat_score": int(row.get("heat_score") or 0),
+        "created_at": created_at,
+        "ranking_score": int(ranking_score if ranking_score is not None else row.get("ranking_score") or 0),
+        "ranking_reason": reasons,
+    }
+
+
+def _normalize_search_payload(
+    payload: dict | None,
+    *,
+    city: str = "",
+    state: str = "",
+    limit: int = 20,
+    offset: int = 0,
+    sort: str = "relevance",
+    q: str = "",
+) -> dict:
+    src = payload if isinstance(payload, dict) else {}
+    raw_items = src.get("items")
+    if not isinstance(raw_items, list):
+        raw_items = []
+    items = [_listing_item_from_raw(item) for item in raw_items if isinstance(item, dict)]
+    supported = src.get("supported_filters")
+    if not isinstance(supported, dict):
+        supported = {}
+    return {
+        "ok": bool(src.get("ok", True)),
+        "city": city,
+        "state": state,
+        "items": items,
+        "total": int(src.get("total") or len(items)),
+        "limit": int(src.get("limit") or limit),
+        "offset": int(src.get("offset") or offset),
+        "sort": str(src.get("sort") or sort),
+        "q": str(src.get("q") or q),
+        "supported_filters": {
+            "delivery_available": bool(supported.get("delivery_available", False)),
+            "inspection_required": bool(supported.get("inspection_required", False)),
+        },
+    }
+
+
 def _rate_limit_response(action: str, *, user: User | None, limit: int, window_seconds: int):
     try:
         settings = get_settings()
@@ -378,7 +462,7 @@ def public_listings_search():
         pref_city = user_city or pref_city
         pref_state = user_state or pref_state
     try:
-        payload = search_listings_v2(
+        raw_payload = search_listings_v2(
             q=args["q"],
             category=args["category"],
             state=args["state"],
@@ -395,6 +479,15 @@ def public_listings_search():
             preferred_city=pref_city,
             preferred_state=pref_state,
         )
+        payload = _normalize_search_payload(
+            raw_payload,
+            city=pref_city,
+            state=pref_state,
+            limit=args["limit"],
+            offset=args["offset"],
+            sort=args["sort"],
+            q=args["q"],
+        )
         return jsonify(payload), 200
     except Exception:
         try:
@@ -405,7 +498,16 @@ def public_listings_search():
             current_app.logger.exception("public_listings_search_failed")
         except Exception:
             pass
-        return jsonify({"ok": True, "items": [], "total": 0, "limit": args["limit"], "offset": args["offset"]}), 200
+        payload = _normalize_search_payload(
+            {},
+            city=pref_city,
+            state=pref_state,
+            limit=args["limit"],
+            offset=args["offset"],
+            sort=args["sort"],
+            q=args["q"],
+        )
+        return jsonify(payload), 200
 
 
 @market_bp.get("/admin/listings/search")
@@ -419,7 +521,7 @@ def admin_listings_search():
     pref_city = (request.args.get("city") or "").strip()
     pref_state = (request.args.get("state") or "").strip()
     try:
-        payload = search_listings_v2(
+        raw_payload = search_listings_v2(
             q=args["q"],
             category=args["category"],
             state=args["state"],
@@ -436,6 +538,15 @@ def admin_listings_search():
             preferred_city=pref_city,
             preferred_state=pref_state,
         )
+        payload = _normalize_search_payload(
+            raw_payload,
+            city=pref_city,
+            state=pref_state,
+            limit=args["limit"],
+            offset=args["offset"],
+            sort=args["sort"],
+            q=args["q"],
+        )
         return jsonify(payload), 200
     except Exception:
         try:
@@ -446,7 +557,16 @@ def admin_listings_search():
             current_app.logger.exception("admin_listings_search_failed")
         except Exception:
             pass
-        return jsonify({"ok": True, "items": [], "total": 0, "limit": args["limit"], "offset": args["offset"]}), 200
+        payload = _normalize_search_payload(
+            {},
+            city=pref_city,
+            state=pref_state,
+            limit=args["limit"],
+            offset=args["offset"],
+            sort=args["sort"],
+            q=args["q"],
+        )
+        return jsonify(payload), 200
 
 
 @market_bp.get("/public/listings/recommended")
@@ -467,12 +587,10 @@ def public_listings_recommended():
     ranked = []
     for row in rows:
         score, reasons = ranking_for_listing(row, preferred_city=city, preferred_state=state)
-        payload = row.to_dict(base_url=_base_url())
-        payload["ranking_score"] = int(score)
-        payload["ranking_reason"] = reasons
+        payload = _listing_item_from_raw(row.to_dict(base_url=_base_url()), ranking_score=int(score), ranking_reason=reasons)
         ranked.append(payload)
     ranked.sort(key=lambda item: (int(item.get("ranking_score", 0)), item.get("created_at") or ""), reverse=True)
-    return jsonify({"ok": True, "items": ranked[:limit], "city": city, "state": state, "limit": limit}), 200
+    return jsonify({"ok": True, "city": city, "state": state, "items": ranked[:limit], "limit": limit}), 200
 
 
 @market_bp.get("/public/listings/title-suggestions")

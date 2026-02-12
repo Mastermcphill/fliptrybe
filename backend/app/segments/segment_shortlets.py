@@ -119,6 +119,50 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return r * c
 
 
+def _normalize_ranking_reason(value) -> list[str]:
+    if isinstance(value, list):
+        return [str(x) for x in value if str(x).strip()]
+    if isinstance(value, tuple):
+        return [str(x) for x in list(value) if str(x).strip()]
+    if value:
+        return [str(value)]
+    return []
+
+
+def _shortlet_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_reason=None) -> dict:
+    row = dict(raw or {})
+    image = str(row.get("image") or row.get("image_path") or "").strip()
+    reasons = _normalize_ranking_reason(ranking_reason if ranking_reason is not None else row.get("ranking_reason"))
+    if not reasons:
+        reasons = ["BASELINE"]
+    created_at = row.get("created_at")
+    if created_at is not None:
+        created_at = str(created_at)
+    return {
+        "id": int(row.get("id") or 0),
+        "owner_id": int(row.get("owner_id") or 0) if row.get("owner_id") is not None else None,
+        "title": str(row.get("title") or ""),
+        "description": str(row.get("description") or ""),
+        "state": str(row.get("state") or ""),
+        "city": str(row.get("city") or ""),
+        "locality": str(row.get("locality") or ""),
+        "lga": str(row.get("lga") or ""),
+        "nightly_price": float(row.get("nightly_price") or row.get("final_price") or 0.0),
+        "base_price": float(row.get("base_price") or row.get("nightly_price") or 0.0),
+        "platform_fee": float(row.get("platform_fee") or 0.0),
+        "final_price": float(row.get("final_price") or row.get("nightly_price") or 0.0),
+        "image": image,
+        "image_path": str(row.get("image_path") or ""),
+        "views_count": int(row.get("views_count") or 0),
+        "favorites_count": int(row.get("favorites_count") or 0),
+        "heat_level": str(row.get("heat_level") or "normal"),
+        "heat_score": int(row.get("heat_score") or 0),
+        "created_at": created_at,
+        "ranking_score": int(ranking_score if ranking_score is not None else row.get("ranking_score") or 0),
+        "ranking_reason": reasons,
+    }
+
+
 @shortlets_bp.get("/shortlet_uploads/<path:filename>")
 def get_shortlet_upload(filename):
     return send_from_directory(UPLOAD_DIR, filename)
@@ -233,12 +277,14 @@ def recommended_shortlets():
     items = []
     for row in rows:
         score, reasons = ranking_for_shortlet(row, preferred_city=city, preferred_state=state)
-        payload = row.to_dict(base_url=base)
-        payload["ranking_score"] = int(score)
-        payload["ranking_reason"] = reasons
+        payload = _shortlet_item_from_raw(
+            row.to_dict(base_url=base),
+            ranking_score=int(score),
+            ranking_reason=reasons,
+        )
         items.append(payload)
     items.sort(key=lambda row: (int(row.get("ranking_score", 0)), row.get("created_at") or ""), reverse=True)
-    return jsonify({"ok": True, "items": items[:limit], "city": city, "state": state, "limit": limit}), 200
+    return jsonify({"ok": True, "city": city, "state": state, "items": items[:limit], "limit": limit}), 200
 
 
 @shortlets_bp.get("/shortlets/<int:shortlet_id>")
