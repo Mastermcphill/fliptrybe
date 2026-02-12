@@ -4,9 +4,9 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
 import '../services/token_storage.dart';
-import 'home_screen.dart';
 import 'login_screen.dart';
 import '../constants/ng_states.dart';
+import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
 import '../shells/merchant_shell.dart';
 
@@ -50,7 +50,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final r = role.trim().toLowerCase();
     if (r == 'driver') return const DriverShell();
     if (r == 'merchant') return const MerchantShell();
-    return const HomeScreen();
+    return const BuyerShell();
   }
 
   void _toast(String msg) {

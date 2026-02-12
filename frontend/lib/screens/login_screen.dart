@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../services/token_storage.dart';
-import 'admin_hub_screen.dart';
-import 'home_screen.dart';
 import 'pending_approval_screen.dart';
 import 'role_signup_screen.dart';
 import 'forgot_password_screen.dart';
+import '../shells/admin_shell.dart';
+import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
 import '../shells/merchant_shell.dart';
 import '../shells/inspector_shell.dart';
@@ -30,11 +30,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
-    if (r == 'admin') return const AdminHubScreen();
+    if (r == 'admin') return const AdminShell();
     if (r == 'driver') return const DriverShell();
     if (r == 'merchant') return const MerchantShell();
     if (r == 'inspector') return const InspectorShell();
-    return const HomeScreen();
+    return const BuyerShell();
   }
 
   void _toast(String msg) {

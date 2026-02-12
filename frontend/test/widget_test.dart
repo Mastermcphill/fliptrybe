@@ -5,7 +5,11 @@ import 'package:fliptrybe/screens/role_signup_screen.dart';
 import 'package:fliptrybe/screens/marketplace_screen.dart';
 import 'package:fliptrybe/screens/marketplace_filters_screen.dart';
 import 'package:fliptrybe/screens/listing_detail_screen.dart';
+import 'package:fliptrybe/screens/admin_overview_screen.dart';
+import 'package:fliptrybe/screens/buyer_home_screen.dart';
 import 'package:fliptrybe/screens/merchant_home_screen.dart';
+import 'package:fliptrybe/shells/admin_shell.dart';
+import 'package:fliptrybe/shells/buyer_shell.dart';
 import 'package:fliptrybe/shells/merchant_shell.dart';
 
 void main() {
@@ -103,5 +107,69 @@ void main() {
     expect(find.text('View Orders'), findsOneWidget);
     expect(find.text('Chat Admin'), findsOneWidget);
     expect(find.text('Leaderboards'), findsOneWidget);
+  });
+
+  testWidgets('Buyer shell renders 5 tabs', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: BuyerShell(debugUseLightweightTabs: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Marketplace'), findsOneWidget);
+    expect(find.text('Orders'), findsOneWidget);
+    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+  });
+
+  testWidgets('Buyer home shows quick actions', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: BuyerHomeScreen(autoLoad: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Browse Marketplace'), findsOneWidget);
+    expect(find.text('My Orders'), findsOneWidget);
+    expect(find.text('Chat Admin'), findsOneWidget);
+    expect(find.text('Track Order'), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+    expect(find.text('Apply for Role'), findsOneWidget);
+  });
+
+  testWidgets('Admin shell renders 5 tabs', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AdminShell(debugUseLightweightTabs: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('Operations'), findsOneWidget);
+    expect(find.text('Queue'), findsOneWidget);
+    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+  });
+
+  testWidgets('Admin overview renders quick actions',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AdminOverviewScreen(autoLoad: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    expect(find.text('Seed Nationwide'), findsOneWidget);
+    expect(find.text('Seed Leaderboards'), findsOneWidget);
+    expect(find.text('Run Notify Queue Demo'), findsOneWidget);
+    expect(find.text('Toggle Autopilot'), findsOneWidget);
   });
 }
