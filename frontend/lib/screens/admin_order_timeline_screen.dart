@@ -37,7 +37,7 @@ class _AdminOrderTimelineScreenState extends State<AdminOrderTimelineScreen> {
       setState(() {
         _items = rows
             .whereType<Map>()
-            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .map((raw) => Map<String, dynamic>.from(raw))
             .toList();
         _loading = false;
       });
@@ -90,9 +90,10 @@ class _AdminOrderTimelineScreenState extends State<AdminOrderTimelineScreen> {
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (_, index) {
             final row = _items[index];
-            final kind = (row['kind'] ?? '').toString();
-            final title = (row['title'] ?? '').toString();
+            final kind = (row['type'] ?? row['kind'] ?? '').toString();
+            final title = (row['label'] ?? row['title'] ?? '').toString();
             final timestamp = (row['timestamp'] ?? '').toString();
+            final metadata = row['metadata'] ?? row['meta'] ?? const {};
             return FTCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +115,7 @@ class _AdminOrderTimelineScreenState extends State<AdminOrderTimelineScreen> {
                   const SizedBox(height: 8),
                   Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
-                  Text((row['meta'] ?? {}).toString(), style: const TextStyle(fontSize: 12)),
+                  Text(metadata.toString(), style: const TextStyle(fontSize: 12)),
                 ],
               ),
             );

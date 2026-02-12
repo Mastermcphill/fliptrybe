@@ -228,12 +228,17 @@ def admin_order_timeline(order_id: int):
     def _push(ts, kind: str, title: str, meta=None):
         if ts is None:
             ts = datetime.utcnow()
+        stamp = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        payload = meta or {}
         events.append(
             {
-                "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                "timestamp": stamp,
+                "type": kind,
                 "kind": kind,
+                "label": title,
                 "title": title,
-                "meta": meta or {},
+                "metadata": payload,
+                "meta": payload,
             }
         )
 

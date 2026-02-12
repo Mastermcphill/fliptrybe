@@ -473,7 +473,7 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
                         pi,
                         PaymentIntentStatus.PAID,
                         actor={"type": "webhook"},
-                        idempotency_key=f"webhook:{event_id}",
+                        idempotency_key=f"webhook:paystack:{event_id}",
                         reason="charge_success_replay",
                         metadata={"reference": reference, "source": source},
                     )
@@ -496,7 +496,7 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
                 pi,
                 PaymentIntentStatus.PAID,
                 actor={"type": "webhook"},
-                idempotency_key=f"webhook:{event_id}",
+                idempotency_key=f"webhook:paystack:{event_id}",
                 reason="charge_success",
                 metadata={"reference": reference, "source": source},
             )
@@ -956,7 +956,7 @@ def admin_mark_manual_paid():
             manual_intent,
             PaymentIntentStatus.PAID,
             actor={"type": "admin", "id": int(u.id)},
-            idempotency_key=f"manual_mark_paid:{int(order.id)}",
+            idempotency_key=f"admin:manual_mark_paid:{int(manual_intent.id)}",
             reason="manual_admin_mark_paid",
             metadata={"reference": final_reference, "order_id": int(order.id)},
         )
