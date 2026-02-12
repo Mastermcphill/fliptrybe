@@ -81,7 +81,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                       );
                     }
                   },
-                  title: Text('Order #${o['id']} | ?${o['amount']}'),
+                  title: Text('Order #${o['id']} | ₦${o['amount']}'),
                   subtitle: Text('${o['status']}'),
                 );
               },

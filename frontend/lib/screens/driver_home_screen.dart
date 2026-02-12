@@ -108,8 +108,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: ?${_money(_wallet?['balance'])}'),
-                        Text('MoneyBox Locked: ?${_money(moneyboxLocked)}'),
+                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
+                        Text('MoneyBox Locked: ₦${_money(moneyboxLocked)}'),
                         Text("Today's Jobs: $todayJobs"),
                         Text('Pending Pickups: $activeJobs'),
                         Text('Completed Deliveries: $completedJobs'),

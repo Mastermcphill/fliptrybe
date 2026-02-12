@@ -37,6 +37,7 @@ dependencies:
   intl: ^0.17.0
                    # For formatting Currency (₦) and Dates
   shimmer: ^3.0.0                 # For the "Loading..." skeleton effect
+  fl_chart: ^0.68.0
 
 dev_dependencies:
   flutter_test:

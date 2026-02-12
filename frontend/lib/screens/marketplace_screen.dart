@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../services/marketplace_catalog_service.dart';
+import '../services/marketplace_prefs_service.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/theme/ft_tokens.dart';
+import '../widgets/listing/listing_card.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
-import 'marketplace_filters_screen.dart';
-import '../constants/ng_states.dart';
+import 'marketplace/favorites_screen.dart';
+import 'marketplace/marketplace_search_results_screen.dart';
+import 'marketplace/saved_searches_screen.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key});
@@ -13,176 +19,19 @@ class MarketplaceScreen extends StatefulWidget {
 }
 
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
+  final _catalog = MarketplaceCatalogService();
+  final _prefs = MarketplacePrefsService();
   final _searchCtrl = TextEditingController();
-  String _category = 'All';
-  String _stateFilter = allNigeriaLabel;
-  double? _minPrice;
-  double? _maxPrice;
 
-  final List<String> _categories = const [
-    'All',
-    'Phones',
-    'Fashion',
-    'Furniture',
-    'Electronics',
-    'Home',
-    'Sports',
-  ];
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _all = const [];
+  Set<int> _favorites = <int>{};
 
-  final List<Map<String, dynamic>> _items = [
-    {
-      'id': 1001,
-      'title': 'iPhone 12 128GB',
-      'price': 450000,
-      'condition': 'Used - Like New',
-      'category': 'Phones',
-      'description': 'Clean device, factory reset, battery health 92%.',
-      'is_demo': true,
-      'state': 'Lagos',
-    },
-    {
-      'id': 1002,
-      'title': 'Samsung Galaxy S21',
-      'price': 380000,
-      'condition': 'Used - Good',
-      'category': 'Phones',
-      'description': 'Great condition, minor scratches on frame.',
-      'is_demo': true,
-      'state': 'Lagos',
-    },
-    {
-      'id': 1003,
-      'title': 'Leather Sofa Set',
-      'price': 250000,
-      'condition': 'Used - Good',
-      'category': 'Furniture',
-      'description': '3-seater + 2 chairs. Pickup only.',
-      'is_demo': true,
-      'state': 'Rivers',
-    },
-    {
-      'id': 1004,
-      'title': 'Wooden Dining Table',
-      'price': 180000,
-      'condition': 'Used - Fair',
-      'category': 'Furniture',
-      'description': 'Solid wood with 6 chairs.',
-      'is_demo': true,
-      'state': 'Oyo',
-    },
-    {
-      'id': 1005,
-      'title': 'Nike Air Max',
-      'price': 65000,
-      'condition': 'Used - Like New',
-      'category': 'Fashion',
-      'description': 'Size 42, worn twice.',
-      'is_demo': true,
-      'state': 'Federal Capital Territory',
-    },
-    {
-      'id': 1006,
-      'title': 'Designer Handbag',
-      'price': 120000,
-      'condition': 'Used - Like New',
-      'category': 'Fashion',
-      'description': 'Comes with dust bag and receipt.',
-      'is_demo': true,
-      'state': 'Lagos',
-    },
-    {
-      'id': 1007,
-      'title': 'LG 55" Smart TV',
-      'price': 320000,
-      'condition': 'Used - Good',
-      'category': 'Electronics',
-      'description': '4K UHD with HDR. Remote included.',
-      'is_demo': true,
-      'state': 'Ogun',
-    },
-    {
-      'id': 1008,
-      'title': 'PlayStation 5',
-      'price': 520000,
-      'condition': 'Used - Like New',
-      'category': 'Electronics',
-      'description': '1 controller + 2 games.',
-      'is_demo': true,
-      'state': 'Lagos',
-    },
-    {
-      'id': 1009,
-      'title': 'Blender + Toaster Set',
-      'price': 35000,
-      'condition': 'Used - Good',
-      'category': 'Home',
-      'description': 'Both in working condition.',
-      'is_demo': true,
-      'state': 'Anambra',
-    },
-    {
-      'id': 1010,
-      'title': 'Mountain Bike',
-      'price': 95000,
-      'condition': 'Used - Good',
-      'category': 'Sports',
-      'description': '26-inch wheels, recently serviced.',
-      'is_demo': true,
-      'state': 'Kaduna',
-    },
-  ];
-
-  List<Map<String, dynamic>> _filteredItems() {
-    final q = _searchCtrl.text.trim().toLowerCase();
-    return _items.where((item) {
-      final title = item['title']?.toString().toLowerCase() ?? '';
-      final condition = item['condition']?.toString().toLowerCase() ?? '';
-      final category = item['category']?.toString() ?? '';
-      final state = item['state']?.toString() ?? '';
-      final price = (item['price'] is num) ? (item['price'] as num).toDouble() : double.tryParse(item['price']?.toString() ?? '');
-      final matchesCategory = _category == 'All' || _category == category;
-      final matchesState = _stateFilter == allNigeriaLabel || _stateFilter == state;
-      final matchesQuery = q.isEmpty || title.contains(q) || condition.contains(q);
-      final matchesMin = _minPrice == null || (price != null && price >= _minPrice!);
-      final matchesMax = _maxPrice == null || (price != null && price <= _maxPrice!);
-      return matchesCategory && matchesState && matchesQuery && matchesMin && matchesMax;
-    }).toList();
-  }
-
-  Future<void> _openFilters() async {
-    final res = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MarketplaceFiltersScreen(
-          categories: _categories,
-          selectedCategory: _category,
-          initialState: _stateFilter,
-          initialQuery: _searchCtrl.text.trim(),
-          initialMinPrice: _minPrice,
-          initialMaxPrice: _maxPrice,
-        ),
-      ),
-    );
-    if (!mounted || res == null) return;
-    setState(() {
-      _category = (res['category'] ?? _category).toString();
-      _stateFilter = (res['state'] ?? _stateFilter).toString();
-      _searchCtrl.text = (res['query'] ?? '').toString();
-      _minPrice = res['minPrice'] is num ? (res['minPrice'] as num).toDouble() : null;
-      _maxPrice = res['maxPrice'] is num ? (res['maxPrice'] as num).toDouble() : null;
-    });
-  }
-
-  Widget _buildImageCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Center(
-        child: Icon(Icons.image_outlined, size: 36, color: Color(0xFF94A3B8)),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
   @override
@@ -191,148 +40,272 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final items = _filteredItems();
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final values = await Future.wait([
+        _catalog.listAll(),
+        _prefs.loadFavorites(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _all = values[0] as List<Map<String, dynamic>>;
+        _favorites = values[1] as Set<int>;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Unable to load marketplace. Pull to retry.';
+      });
+    }
+  }
 
-    return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateListingScreen()));
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Sell Item'),
+  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+    final id = item['id'] is int ? item['id'] as int : int.tryParse('${item['id']}') ?? -1;
+    if (id <= 0) return;
+    final next = <int>{..._favorites};
+    if (next.contains(id)) {
+      next.remove(id);
+    } else {
+      next.add(id);
+    }
+    setState(() => _favorites = next);
+    await _prefs.saveFavorites(next);
+  }
+
+  void _openResults({
+    String query = '',
+    String sort = 'relevance',
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MarketplaceSearchResultsScreen(
+          initialQuery: query,
+          initialSort: sort,
+        ),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Flip Trybe Market',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchCtrl,
-                      onChanged: (_) => setState(() {}),
-                      decoration: InputDecoration(
-                        hintText: 'Search items',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(
-                    onPressed: _openFilters,
-                    tooltip: 'Filters',
-                    icon: const Icon(Icons.tune),
-                  )
-                ],
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                height: 38,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemBuilder: (_, i) {
-                    final c = _categories[i];
-                    return ChoiceChip(
-                      label: Text(c),
-                      selected: _category == c,
-                      onSelected: (_) => setState(() => _category = c),
-                    );
-                  },
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemCount: _categories.length,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: GridView.builder(
-                  itemCount: items.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemBuilder: (context, i) {
-                    final item = items[i];
-                    final title = item['title']?.toString() ?? '';
-                    final price = item['price'] ?? 0;
-                    final condition = item['condition']?.toString() ?? '';
-                    final state = item['state']?.toString() ?? '';
+    );
+  }
 
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ListingDetailScreen(listing: Map<String, dynamic>.from(item)),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: _buildImageCard()),
-                              const SizedBox(height: 8),
-                              Text(
-                                title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '₦${price.toString()}',
-                                style: const TextStyle(fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                condition,
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                              ),
-                              if (state.isNotEmpty)
-                                Text(
-                                  displayState(state),
-                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
-                                ),
-                            ],
+  Widget _section(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required List<Map<String, dynamic>> items,
+    required String seeAllSort,
+  }) {
+    return Column(
+      children: [
+        FTSectionHeader(
+          title: title,
+          subtitle: subtitle,
+          trailing: TextButton(
+            onPressed: () => _openResults(
+              query: _searchCtrl.text.trim(),
+              sort: seeAllSort,
+            ),
+            child: const Text('See all'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 280,
+          child: items.isEmpty
+              ? const FTCard(
+                  child: Center(child: Text('No items in this section yet.')),
+                )
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (_, index) {
+                    final item = items[index];
+                    final id = item['id'] as int;
+                    return SizedBox(
+                      width: 210,
+                      child: ListingCard(
+                        item: item,
+                        isFavorite: _favorites.contains(id),
+                        onToggleFavorite: () => _toggleFavorite(item),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ListingDetailScreen(listing: item),
                           ),
                         ),
                       ),
                     );
                   },
                 ),
-              ),
-            ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recommended = _catalog.recommended(_all, limit: 10);
+    final trending = _catalog.trending(_all, limit: 10);
+    final newest = _catalog.newest(_all, limit: 10);
+    final bestValue = _catalog.bestValue(_all, limit: 10);
+
+    return FTScaffold(
+      title: 'FlipTrybe Marketplace',
+      actions: [
+        IconButton(
+          tooltip: 'Saved searches',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SavedSearchesScreen()),
+          ),
+          icon: const Icon(Icons.bookmarks_outlined),
+        ),
+        IconButton(
+          tooltip: 'Favorites',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+          ),
+          icon: const Icon(Icons.favorite_border),
+        ),
+      ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const CreateListingScreen()),
+        ),
+        icon: const Icon(Icons.add),
+        label: const Text('Sell Item'),
+      ),
+      child: _loading
+          ? const _MarketplaceSkeleton()
+          : _error != null
+              ? FTErrorState(message: _error!, onRetry: _load)
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: CustomScrollView(
+                    slivers: [
+                      SliverAppBar(
+                        pinned: true,
+                        floating: true,
+                        toolbarHeight: 72,
+                        backgroundColor: FTTokens.bg,
+                        surfaceTintColor: FTTokens.bg,
+                        elevation: 0,
+                        titleSpacing: 16,
+                        title: TextField(
+                          controller: _searchCtrl,
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (value) => _openResults(query: value),
+                          decoration: InputDecoration(
+                            hintText: 'Search marketplace',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.tune),
+                              tooltip: 'Open filters',
+                              onPressed: () => _openResults(query: _searchCtrl.text),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                          child: Column(
+                            children: [
+                              _section(
+                                context,
+                                title: 'Recommended for you',
+                                subtitle: 'Based on active listings and quality score',
+                                items: recommended,
+                                seeAllSort: 'relevance',
+                              ),
+                              const SizedBox(height: 18),
+                              _section(
+                                context,
+                                title: 'Trending near you',
+                                subtitle: 'Fast-moving listings with strong demand',
+                                items: trending,
+                                seeAllSort: 'distance',
+                              ),
+                              const SizedBox(height: 18),
+                              _section(
+                                context,
+                                title: 'Newly listed',
+                                subtitle: 'Fresh listings from across Nigeria',
+                                items: newest,
+                                seeAllSort: 'newest',
+                              ),
+                              const SizedBox(height: 18),
+                              _section(
+                                context,
+                                title: 'Best value',
+                                subtitle: 'Low-price options with solid condition tags',
+                                items: bestValue,
+                                seeAllSort: 'price_low',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+    );
+  }
+}
+
+class _MarketplaceSkeleton extends StatelessWidget {
+  const _MarketplaceSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const FTSkeleton(height: 48),
+        const SizedBox(height: 14),
+        ...List.generate(
+          3,
+          (section) => Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const FTSkeleton(height: 18, width: 180),
+                const SizedBox(height: 8),
+                const FTSkeleton(height: 12, width: 240),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 240,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: 3,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (_, __) => const SizedBox(
+                      width: 210,
+                      child: FTCard(
+                        padding: EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: FTSkeleton(height: double.infinity)),
+                            SizedBox(height: 8),
+                            FTSkeleton(height: 16, width: 100),
+                            SizedBox(height: 6),
+                            FTSkeleton(height: 14),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

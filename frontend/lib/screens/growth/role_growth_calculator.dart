@@ -54,13 +54,13 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
       out.add(chars[i]);
     }
     final grouped = out.reversed.join();
-    return '?$grouped.${parts[1]}';
+    return '₦$grouped.${parts[1]}';
   }
 
   String _amountLabel() {
-    if (_isMerchant) return 'Avg item price (?)';
-    if (_isDriver) return 'Avg delivery fee (?)';
-    return 'Avg inspection fee (?)';
+    if (_isMerchant) return 'Avg item price (₦)';
+    if (_isDriver) return 'Avg delivery fee (₦)';
+    return 'Avg inspection fee (₦)';
   }
 
   String _countLabel() {

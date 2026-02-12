@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../services/inspector_service.dart';
+import '../ui/components/ft_components.dart';
 import 'not_available_yet_screen.dart';
 import 'transaction/transaction_timeline_screen.dart';
 
@@ -38,6 +40,39 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
     });
   }
 
+  DateTime _dateOf(Map<String, dynamic> item) {
+    final candidates = [
+      item['appointment_at'],
+      item['scheduled_at'],
+      item['created_at'],
+    ];
+    for (final raw in candidates) {
+      final value = (raw ?? '').toString();
+      if (value.trim().isEmpty) continue;
+      try {
+        return DateTime.parse(value).toLocal();
+      } catch (_) {}
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  String _statusLabel(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('complete') || s.contains('submitted')) return 'COMPLETED';
+    if (s.contains('cancel')) return 'CANCELLED';
+    if (s.contains('pending') || s.contains('assign')) return 'UPCOMING';
+    return s.isEmpty ? 'PENDING' : s.toUpperCase();
+  }
+
+  Color _statusColor(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('complete') || s.contains('submitted')) {
+      return const Color(0xFF0F766E);
+    }
+    if (s.contains('cancel')) return const Color(0xFFB91C1C);
+    return const Color(0xFF1D4ED8);
+  }
+
   void _openUnavailable() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -52,6 +87,9 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final sorted = [..._items]
+      ..sort((a, b) => _dateOf(a).compareTo(_dateOf(b)));
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inspector Bookings'),
@@ -59,73 +97,141 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: _items.isEmpty
-                  ? ListView(
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        const SizedBox(height: 60),
-                        const Icon(Icons.assignment_outlined, size: 44),
-                        const SizedBox(height: 12),
-                        Text(
-                          (_info ?? 'No assigned inspections yet.').trim(),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 32),
-                      itemCount: _items.length,
-                      itemBuilder: (_, index) {
-                        final item = _items[index];
-                        final title =
-                            (item['listing_title'] ?? 'Inspection').toString();
-                        final status =
-                            (item['status'] ?? 'assigned').toString();
-                        final orderId = (item['order_id'] ?? '-').toString();
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          child: ListTile(
-                            title: Text('$title (Order #$orderId)'),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Status: $status'),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    OutlinedButton(
-                                      onPressed: _openUnavailable,
-                                      child: const Text('Submit'),
-                                    ),
-                                    OutlinedButton(
-                                      onPressed: int.tryParse(orderId) == null
-                                          ? null
-                                          : () => Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      TransactionTimelineScreen(
-                                                    orderId: int.parse(orderId),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: _loading
+            ? ListView(
+                padding: const EdgeInsets.all(16),
+                children: const [
+                  FTSkeleton(height: 120),
+                  SizedBox(height: 10),
+                  FTSkeleton(height: 120),
+                  SizedBox(height: 10),
+                  FTSkeleton(height: 120),
+                ],
+              )
+            : sorted.isEmpty
+                ? ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      FTEmptyState(
+                        icon: Icons.assignment_outlined,
+                        title: 'No assigned inspections',
+                        subtitle: (_info ??
+                                'Inspection bookings will appear here when assigned.')
+                            .trim(),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                    itemCount: sorted.length,
+                    itemBuilder: (_, index) {
+                      final item = sorted[index];
+                      final dt = _dateOf(item);
+                      final showHeader = index == 0 ||
+                          DateUtils.dateOnly(dt) !=
+                              DateUtils.dateOnly(_dateOf(sorted[index - 1]));
+                      final title =
+                          (item['listing_title'] ?? 'Inspection').toString();
+                      final status = (item['status'] ?? 'assigned').toString();
+                      final orderId =
+                          int.tryParse((item['order_id'] ?? '').toString());
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (showHeader)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
+                              child: Text(
+                                DateFormat('EEEE, d MMM yyyy').format(dt),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 13),
+                              ),
+                            ),
+                          Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          title,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w800),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: _statusColor(status)
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          _statusLabel(status),
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                            color: _statusColor(status),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text('Order #${orderId?.toString() ?? '-'}'),
+                                  Text(DateFormat('h:mm a').format(dt)),
+                                  const SizedBox(height: 10),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      OutlinedButton(
+                                        onPressed: _openUnavailable,
+                                        child: const Text('Submit Report'),
+                                      ),
+                                      OutlinedButton(
+                                        onPressed: orderId == null
+                                            ? () => Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const NotAvailableYetScreen(
+                                                      title:
+                                                          'Timeline Not Linked',
+                                                      reason:
+                                                          'Timeline is unavailable because this booking has no linked order ID.',
+                                                    ),
+                                                  ),
+                                                )
+                                            : () => Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        TransactionTimelineScreen(
+                                                      orderId: orderId,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                      child: const Text(
-                                          'View Transaction Timeline'),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                        child: const Text('Timeline'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-            ),
+                        ],
+                      );
+                    },
+                  ),
+      ),
     );
   }
 }

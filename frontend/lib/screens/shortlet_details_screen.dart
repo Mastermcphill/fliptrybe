@@ -67,9 +67,9 @@ class _ShortletDetailsScreenState extends State<ShortletDetailsScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              Text("â‚¦$price / night", style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text("₦$price / night", style: const TextStyle(fontWeight: FontWeight.w800)),
               const SizedBox(width: 10),
-              Text("Cleaning: â‚¦$cleaning", style: TextStyle(color: Colors.grey.shade700)),
+              Text("Cleaning: ₦$cleaning", style: TextStyle(color: Colors.grey.shade700)),
             ],
           ),
           const SizedBox(height: 8),

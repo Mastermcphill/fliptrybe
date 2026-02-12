@@ -102,9 +102,9 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: ?${_money(_wallet?['balance'])}'),
+                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
                         Text(
-                            'MoneyBox Locked: ?${_money(_moneybox['principal_balance'])}'),
+                            'MoneyBox Locked: ₦${_money(_moneybox['principal_balance'])}'),
                         Text('Pending Bookings: $pending'),
                         Text('Completed Inspections: $completed'),
                         Text('Rating Snapshot: $avgRating'),

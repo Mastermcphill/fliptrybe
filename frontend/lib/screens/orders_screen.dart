@@ -139,7 +139,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                       child: ListTile(
                         title: Text(
-                          '$listingTitle • ?$amount',
+                          '$listingTitle • ₦$amount',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                         subtitle: Column(
