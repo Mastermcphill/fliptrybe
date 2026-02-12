@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/inspector_service.dart';
 import 'not_available_yet_screen.dart';
+import 'transaction/transaction_timeline_screen.dart';
 
 class InspectorBookingsScreen extends StatefulWidget {
   const InspectorBookingsScreen({super.key});
@@ -89,10 +90,36 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
                             title: Text('$title (Order #$orderId)'),
-                            subtitle: Text('Status: $status'),
-                            trailing: OutlinedButton(
-                              onPressed: _openUnavailable,
-                              child: const Text('Submit'),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Status: $status'),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    OutlinedButton(
+                                      onPressed: _openUnavailable,
+                                      child: const Text('Submit'),
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: int.tryParse(orderId) == null
+                                          ? null
+                                          : () => Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      TransactionTimelineScreen(
+                                                    orderId: int.parse(orderId),
+                                                  ),
+                                                ),
+                                              ),
+                                      child: const Text(
+                                          'View Transaction Timeline'),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         );

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_service.dart';
-import '../services/token_storage.dart';
-import 'landing_screen.dart';
-import 'login_screen.dart';
-import 'moneybox_dashboard_screen.dart';
-import 'role_signup_screen.dart';
+import '../services/driver_service.dart';
+import 'order_detail_screen.dart';
+import 'transaction/transaction_timeline_screen.dart';
 
 class DriverJobsScreen extends StatefulWidget {
   const DriverJobsScreen({super.key});
@@ -15,67 +12,45 @@ class DriverJobsScreen extends StatefulWidget {
 }
 
 class _DriverJobsScreenState extends State<DriverJobsScreen> {
-  bool _signingOut = false;
+  final DriverService _driverService = DriverService();
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _jobs = const [];
 
-  Future<bool> _confirmSignOut() async {
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
-    );
-    return res ?? false;
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  void _goToLanding() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
-          onLogin: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-            );
-          },
-          onSignup: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
-            );
-          },
-        ),
-      ),
-      (_) => false,
-    );
-  }
-
-  Future<void> _handleSignOut() async {
-    if (_signingOut) return;
-    final confirmed = await _confirmSignOut();
-    if (!confirmed) return;
-    setState(() => _signingOut = true);
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      await TokenStorage().clear();
-      ApiService.setToken(null);
-      ApiService.lastMeStatusCode = null;
-      ApiService.lastMeAt = null;
-      ApiService.lastAuthError = null;
-    } finally {
-      if (mounted) {
-        setState(() => _signingOut = false);
-      }
+      final jobs = await _driverService.getJobs();
+      if (!mounted) return;
+      setState(() {
+        _jobs = jobs
+            .whereType<Map>()
+            .map((raw) => Map<String, dynamic>.from(raw as Map))
+            .toList();
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Unable to load jobs right now.';
+        _loading = false;
+      });
     }
-    if (!mounted) return;
-    _goToLanding();
+  }
+
+  int? _resolveOrderId(Map<String, dynamic> job) {
+    final orderVal = job['order_id'] ?? job['id'];
+    if (orderVal is int) return orderVal;
+    return int.tryParse(orderVal?.toString() ?? '');
   }
 
   @override
@@ -84,40 +59,88 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
       appBar: AppBar(
         title: const Text('Driver Jobs'),
         actions: [
-          TextButton(
-            onPressed: _signingOut ? null : _handleSignOut,
-            child: Text(
-              _signingOut ? 'Signing out...' : 'Sign out',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.savings_outlined),
-              title: const Text('MoneyBox'),
-              subtitle: const Text('Save from commission earnings'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MoneyBoxDashboardScreen()),
-              ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: _jobs.isEmpty
+                  ? ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        const SizedBox(height: 60),
+                        const Icon(Icons.local_shipping_outlined, size: 44),
+                        const SizedBox(height: 12),
+                        Text(
+                          (_error ?? 'No assigned jobs yet.').trim(),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
+                      itemCount: _jobs.length,
+                      itemBuilder: (_, index) {
+                        final job = _jobs[index];
+                        final orderId = _resolveOrderId(job);
+                        final status = (job['status'] ?? 'pending').toString();
+                        final pickup = (job['pickup'] ?? '').toString();
+                        final dropoff = (job['dropoff'] ?? '').toString();
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          child: ListTile(
+                            title: Text('Job #${job['id'] ?? '-'}'),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Status: $status'),
+                                if (pickup.isNotEmpty) Text('Pickup: $pickup'),
+                                if (dropoff.isNotEmpty)
+                                  Text('Dropoff: $dropoff'),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 8,
+                                  children: [
+                                    TextButton(
+                                      onPressed: orderId == null
+                                          ? null
+                                          : () => Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      OrderDetailScreen(
+                                                    orderId: orderId,
+                                                  ),
+                                                ),
+                                              ),
+                                      child: const Text('Open Order'),
+                                    ),
+                                    TextButton(
+                                      onPressed: orderId == null
+                                          ? null
+                                          : () => Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      TransactionTimelineScreen(
+                                                    orderId: orderId,
+                                                  ),
+                                                ),
+                                              ),
+                                      child: const Text(
+                                          'View Transaction Timeline'),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
-          ),
-          const SizedBox(height: 10),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.local_shipping_outlined),
-              title: Text('Jobs'),
-              subtitle: Text('Assignments will appear here once approved'),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

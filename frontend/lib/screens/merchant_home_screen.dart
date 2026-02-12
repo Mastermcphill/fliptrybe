@@ -17,6 +17,7 @@ import 'role_signup_screen.dart';
 import 'support_chat_screen.dart';
 import '../widgets/email_verification_dialog.dart';
 import 'not_available_yet_screen.dart';
+import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
   final ValueChanged<int>? onSelectTab;
@@ -239,7 +240,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   Row(
                     children: [
                       _snapCard('Available Balance',
-                          'NGN ${_money(_wallet['balance'])}'),
+                          '₦${_money(_wallet['balance'])}'),
                       const SizedBox(width: 8),
                       _snapCard('Escrow Pending', '$pendingOrders orders'),
                     ],
@@ -247,7 +248,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   Row(
                     children: [
                       _snapCard(
-                          'MoneyBox Locked', 'NGN ${_money(moneyboxLocked)}'),
+                          'MoneyBox Locked', '₦${_money(moneyboxLocked)}'),
                       const SizedBox(width: 8),
                       _snapCard('Leaderboard Rank',
                           _rank > 0 ? '#$_rank' : 'Unranked'),
@@ -305,6 +306,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     onTap: () => widget.onSelectTab?.call(3),
                   ),
                   const SizedBox(height: 16),
+                  const RoleHowItWorksEntryCard(role: 'merchant'),
+                  const SizedBox(height: 16),
                   const Text('KPI Quick Stats',
                       style:
                           TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
@@ -329,10 +332,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                             children: [
                               Expanded(
                                   child: Text(
-                                      'Gross Revenue: NGN ${_kpis['gross_revenue'] ?? 0}')),
+                                      'Gross Revenue: ₦${_kpis['gross_revenue'] ?? 0}')),
                               Expanded(
                                   child: Text(
-                                      'Platform Fees: NGN ${_kpis['platform_fees'] ?? 0}')),
+                                      'Platform Fees: ₦${_kpis['platform_fees'] ?? 0}')),
                             ],
                           ),
                         ],

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/order_service.dart';
-import 'order_detail_screen.dart';
 import 'listing_detail_screen.dart';
+import 'order_detail_screen.dart';
+import 'transaction/transaction_timeline_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -11,11 +12,11 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderStateMixin {
-  final _svc = OrderService();
+class _OrdersScreenState extends State<OrdersScreen>
+    with SingleTickerProviderStateMixin {
+  final OrderService _service = OrderService();
   bool _loading = true;
   List<dynamic> _rows = const [];
-
   late final TabController _tabs;
 
   @override
@@ -24,14 +25,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     _tabs = TabController(length: 4, vsync: this);
     _tabs.addListener(() {
       if (_tabs.indexIsChanging) return;
-      _applyFilter();
+      setState(() {});
     });
     _load();
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final rows = await _svc.myOrders();
+    final rows = await _service.myOrders();
     if (!mounted) return;
     setState(() {
       _rows = rows;
@@ -42,19 +43,16 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   String _tabStatus() {
     switch (_tabs.index) {
       case 0:
-        return "all";
+        return 'all';
       case 1:
-        return "pending";
+        return 'pending';
       case 2:
-        return "in_progress";
+        return 'in_progress';
       case 3:
-        return "completed";
+        return 'completed';
+      default:
+        return 'all';
     }
-    return "all";
-  }
-
-  void _applyFilter() {
-    setState(() {}); // filter is computed in build
   }
 
   List<Map<String, dynamic>> _filtered() {
@@ -62,21 +60,40 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     final out = <Map<String, dynamic>>[];
     for (final raw in _rows) {
       if (raw is! Map) continue;
-      final m = Map<String, dynamic>.from(raw as Map);
-      final s = (m["status"] ?? "").toString();
-      if (status == "all") {
-        out.add(m);
-        continue;
-      }
-      if (status == "pending") {
-        if (["created", "awaiting_merchant", "accepted"].contains(s)) out.add(m);
-      } else if (status == "in_progress") {
-        if (["assigned", "picked_up", "delivered"].contains(s)) out.add(m);
-      } else if (status == "completed") {
-        if (["completed", "cancelled"].contains(s)) out.add(m);
+      final map = Map<String, dynamic>.from(raw as Map);
+      final value = (map['status'] ?? '').toString().toLowerCase();
+      if (status == 'all') {
+        out.add(map);
+      } else if (status == 'pending') {
+        if (['created', 'awaiting_merchant', 'accepted'].contains(value)) {
+          out.add(map);
+        }
+      } else if (status == 'in_progress') {
+        if (['assigned', 'picked_up', 'delivered'].contains(value)) {
+          out.add(map);
+        }
+      } else if (status == 'completed') {
+        if (['completed', 'cancelled'].contains(value)) {
+          out.add(map);
+        }
       }
     }
     return out;
+  }
+
+  void _openReorder(Map<String, dynamic> item) {
+    final listingId = int.tryParse((item['listing_id'] ?? '').toString());
+    if (listingId == null) return;
+    final listing = <String, dynamic>{
+      'id': listingId,
+      'owner_id': item['merchant_id'],
+      'title': item['listing_title'],
+      'price': item['amount'],
+    };
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => ListingDetailScreen(listing: listing)),
+    );
   }
 
   @override
@@ -88,61 +105,84 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final rows = _filtered();
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Orders"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        title: const Text('My Orders'),
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
+        ],
         bottom: TabBar(
           controller: _tabs,
           tabs: const [
-            Tab(text: "All"),
-            Tab(text: "Pending"),
-            Tab(text: "In Progress"),
-            Tab(text: "Completed"),
+            Tab(text: 'All'),
+            Tab(text: 'Pending'),
+            Tab(text: 'In Progress'),
+            Tab(text: 'Completed'),
           ],
         ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : rows.isEmpty
-              ? const Center(child: Text("No orders yet."))
+              ? const Center(child: Text('No orders yet.'))
               : ListView.builder(
                   itemCount: rows.length,
-                  itemBuilder: (_, i) {
-                    final m = rows[i];
-                    final id = int.tryParse((m["id"] ?? "").toString()) ?? 0;
-                    final amount = (m["amount"] ?? 0).toString();
-                    final status = (m["status"] ?? "").toString();
-                    final listingTitle = (m["listing_title"] ?? "Listing").toString();
-
+                  itemBuilder: (_, index) {
+                    final item = rows[index];
+                    final orderId =
+                        int.tryParse((item['id'] ?? '').toString()) ?? 0;
+                    final amount = (item['amount'] ?? 0).toString();
+                    final status = (item['status'] ?? '').toString();
+                    final listingTitle =
+                        (item['listing_title'] ?? 'Listing').toString();
                     return Card(
                       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                       child: ListTile(
-                        title: Text("$listingTitle  •  ₦$amount", style: const TextStyle(fontWeight: FontWeight.w900)),
-                        subtitle: Text("Status: $status"),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        title: Text(
+                          '$listingTitle • ₦$amount',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            TextButton(
-                              onPressed: () {
-                                final listingId = int.tryParse((m["listing_id"] ?? "").toString());
-                                if (listingId == null) return;
-                                final listing = <String, dynamic>{
-                                  "id": listingId,
-                                  "owner_id": m["merchant_id"],
-                                  "title": listingTitle,
-                                  "price": m["amount"],
-                                };
-                                Navigator.push(context, MaterialPageRoute(builder: (_) => ListingDetailScreen(listing: listing)));
-                              },
-                              child: const Text("Reorder"),
+                            Text('Status: $status'),
+                            const SizedBox(height: 4),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                TextButton(
+                                  onPressed: () => _openReorder(item),
+                                  child: const Text('Reorder'),
+                                ),
+                                TextButton(
+                                  onPressed: orderId <= 0
+                                      ? null
+                                      : () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  TransactionTimelineScreen(
+                                                orderId: orderId,
+                                              ),
+                                            ),
+                                          ),
+                                  child:
+                                      const Text('View Transaction Timeline'),
+                                ),
+                              ],
                             ),
-                            const Icon(Icons.chevron_right),
                           ],
                         ),
+                        trailing: const Icon(Icons.chevron_right),
                         onTap: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: id)));
+                          if (orderId <= 0) return;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  OrderDetailScreen(orderId: orderId),
+                            ),
+                          );
                         },
                       ),
                     );

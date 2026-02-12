@@ -7,7 +7,10 @@ import 'package:fliptrybe/screens/marketplace_filters_screen.dart';
 import 'package:fliptrybe/screens/listing_detail_screen.dart';
 import 'package:fliptrybe/screens/admin_overview_screen.dart';
 import 'package:fliptrybe/screens/buyer_home_screen.dart';
+import 'package:fliptrybe/screens/how_it_works/role_how_it_works_screen.dart';
 import 'package:fliptrybe/screens/merchant_home_screen.dart';
+import 'package:fliptrybe/screens/transaction/transaction_timeline_screen.dart';
+import 'package:fliptrybe/widgets/transaction/transaction_timeline_step.dart';
 import 'package:fliptrybe/shells/admin_shell.dart';
 import 'package:fliptrybe/shells/buyer_shell.dart';
 import 'package:fliptrybe/shells/driver_shell.dart';
@@ -111,6 +114,30 @@ void main() {
     expect(find.text('Leaderboards'), findsOneWidget);
   });
 
+  testWidgets('Merchant home opens How It Works screen',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MerchantHomeScreen(autoLoad: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final finder = find.textContaining('How FlipTrybe Works');
+    await tester.scrollUntilVisible(
+      finder,
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(finder, findsWidgets);
+    await tester.tap(finder.first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(RoleHowItWorksScreen), findsOneWidget);
+    expect(find.text('Merchant: How FlipTrybe Works'), findsOneWidget);
+  });
+
   testWidgets('Buyer shell renders 5 tabs', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -203,5 +230,71 @@ void main() {
     expect(find.text('Seed Leaderboards'), findsOneWidget);
     expect(find.text('Run Notify Queue Demo'), findsOneWidget);
     expect(find.text('Toggle Autopilot'), findsOneWidget);
+  });
+
+  testWidgets('Transaction timeline renders 5+ key steps',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TransactionTimelineScreen(
+          orderId: 77,
+          autoLoad: false,
+          initialOrder: {
+            'id': 77,
+            'status': 'completed',
+            'amount': 50000,
+            'platform_fee': 1500,
+            'delivery_fee': 2500,
+            'escrow_status': 'released',
+          },
+          initialDelivery: {
+            'pickup_confirmed_at': '2026-01-01T09:00:00Z',
+            'dropoff_confirmed_at': '2026-01-01T12:00:00Z',
+          },
+          initialEvents: [
+            {'event': 'availability_confirmed'},
+            {'event': 'payment_captured', 'sms_sent': true},
+            {'event': 'driver_assigned'},
+            {'event': 'pickup_confirmed'},
+            {'event': 'delivery_confirmed', 'notified_whatsapp': true},
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Order Lifecycle'), findsOneWidget);
+    expect(find.byType(TransactionTimelineStep), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Listing Created'), findsWidgets);
+    await tester.scrollUntilVisible(
+      find.textContaining('Wallet Credited'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Wallet Credited'), findsWidgets);
+  });
+
+  testWidgets('Transaction timeline does not overflow on small device',
+      (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: TransactionTimelineScreen(
+          orderId: 55,
+          autoLoad: false,
+          initialOrder: {'id': 55, 'status': 'created'},
+          initialEvents: [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

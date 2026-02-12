@@ -7,6 +7,7 @@ import 'driver_jobs_screen.dart';
 import 'moneybox_dashboard_screen.dart';
 import 'not_available_yet_screen.dart';
 import 'support_chat_screen.dart';
+import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key, this.onSelectTab});
@@ -106,8 +107,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: NGN ${_money(_wallet?['balance'])}'),
-                        Text('MoneyBox Locked: NGN ${_money(moneyboxLocked)}'),
+                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
+                        Text('MoneyBox Locked: ₦${_money(moneyboxLocked)}'),
                         Text("Today's Jobs: $todayJobs"),
                         Text('Pending Pickups: $activeJobs'),
                         Text('Completed Deliveries: $completedJobs'),
@@ -115,6 +116,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
+                const RoleHowItWorksEntryCard(role: 'driver'),
                 const SizedBox(height: 10),
                 const Card(
                   child: Padding(

@@ -7,6 +7,7 @@ import 'inspector_bookings_screen.dart';
 import 'moneybox_dashboard_screen.dart';
 import 'not_available_yet_screen.dart';
 import 'support_chat_screen.dart';
+import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
 
 class InspectorHomeScreen extends StatefulWidget {
   const InspectorHomeScreen({super.key, this.onSelectTab});
@@ -100,9 +101,9 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: NGN ${_money(_wallet?['balance'])}'),
+                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
                         Text(
-                            'MoneyBox Locked: NGN ${_money(_moneybox['principal_balance'])}'),
+                            'MoneyBox Locked: ₦${_money(_moneybox['principal_balance'])}'),
                         Text('Pending Bookings: $pending'),
                         Text('Completed Inspections: $completed'),
                         Text('Rating Snapshot: $avgRating'),
@@ -110,6 +111,8 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
+                const RoleHowItWorksEntryCard(role: 'inspector'),
                 const SizedBox(height: 10),
                 const Card(
                   child: Padding(

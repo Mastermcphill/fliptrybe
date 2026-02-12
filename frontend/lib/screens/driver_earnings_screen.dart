@@ -24,14 +24,14 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final results = await Future.wait([
+    final values = await Future.wait([
       _walletService.getWallet(),
       _walletService.ledger(),
     ]);
     if (!mounted) return;
     setState(() {
-      _wallet = results[0] as Map<String, dynamic>?;
-      _ledger = (results[1] as List<dynamic>)
+      _wallet = values[0] as Map<String, dynamic>?;
+      _ledger = (values[1] as List<dynamic>)
           .whereType<Map>()
           .map((raw) => Map<String, dynamic>.from(raw as Map))
           .toList();
@@ -79,7 +79,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'NGN ${_money(_wallet?['balance'])}',
+                          '₦${_money(_wallet?['balance'])}',
                           style: const TextStyle(
                               fontSize: 22, fontWeight: FontWeight.w900),
                         ),
@@ -133,7 +133,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen> {
                       return Card(
                         child: ListTile(
                           title: Text(
-                            '$direction NGN $amount',
+                            '$direction ₦$amount',
                             style: const TextStyle(fontWeight: FontWeight.w800),
                           ),
                           subtitle: Text('$kind\n$note'),

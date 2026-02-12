@@ -5,6 +5,7 @@ import '../services/driver_directory_service.dart';
 import '../services/auth_service.dart';
 import 'receipts_screen.dart';
 import 'support_chat_screen.dart';
+import 'transaction/transaction_timeline_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final int orderId;
@@ -346,6 +347,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       },
                       icon: const Icon(Icons.receipt_long),
                       label: const Text("View Receipts"),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => TransactionTimelineScreen(
+                              orderId: widget.orderId),
+                        ),
+                      ),
+                      icon: const Icon(Icons.timeline_outlined),
+                      label: const Text("View Transaction Timeline"),
                     ),
                     const SizedBox(height: 12),
                     Text(

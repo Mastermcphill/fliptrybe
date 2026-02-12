@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/order_service.dart';
 import 'order_detail_screen.dart';
+import 'transaction/transaction_timeline_screen.dart';
 
 class MerchantOrdersScreen extends StatefulWidget {
   const MerchantOrdersScreen({super.key});
@@ -53,12 +54,25 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
               separatorBuilder: (_, __) => const Divider(),
               itemBuilder: (context, i) {
                 final o = items[i] as Map<String, dynamic>;
+                final oid = o['id'];
+                final id = (oid is int) ? oid : int.tryParse(oid.toString());
                 return ListTile(
                   leading: const Icon(Icons.storefront),
+                  trailing: TextButton(
+                    onPressed: id == null
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    TransactionTimelineScreen(orderId: id),
+                              ),
+                            );
+                          },
+                    child: const Text('Timeline'),
+                  ),
                   onTap: () {
-                    final oid = o['id'];
-                    final id =
-                        (oid is int) ? oid : int.tryParse(oid.toString());
                     if (id != null) {
                       Navigator.push(
                         context,
@@ -67,7 +81,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                       );
                     }
                   },
-                  title: Text('Order #${o['id']} | NGN ${o['amount']}'),
+                  title: Text('Order #${o['id']} | ₦${o['amount']}'),
                   subtitle: Text('${o['status']}'),
                 );
               },

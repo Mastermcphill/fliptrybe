@@ -57,7 +57,7 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen> {
 
   String _priceText(Map<String, dynamic> item) {
     final value = double.tryParse((item['price'] ?? 0).toString()) ?? 0;
-    return 'NGN ${value.toStringAsFixed(2)}';
+    return '₦${value.toStringAsFixed(2)}';
   }
 
   String _statusText(Map<String, dynamic> item) {
