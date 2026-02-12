@@ -34,6 +34,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   int _step = 0;
   bool _loading = false;
   bool _loadingLocations = false;
+  bool _showValidation = false;
   bool _inspectionEnabled = true;
   bool _deliveryEnabled = true;
 
@@ -219,29 +220,57 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       case 0:
         if (_category.trim().isEmpty) {
           _showSnack('Select a category.');
+          setState(() => _showValidation = true);
           return false;
         }
+        setState(() => _showValidation = false);
         return true;
       case 1:
         final title = _titleCtrl.text.trim();
         final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
         if (title.isEmpty) {
           _showSnack('Listing title is required.');
+          setState(() => _showValidation = true);
           return false;
         }
         if (price <= 0) {
           _showSnack('Enter a valid price.');
+          setState(() => _showValidation = true);
           return false;
         }
+        setState(() => _showValidation = false);
         return true;
       case 2:
         if (_selectedImage == null) {
           _showSnack('Add at least one photo to continue.');
+          setState(() => _showValidation = true);
           return false;
         }
+        setState(() => _showValidation = false);
         return true;
       default:
+        setState(() => _showValidation = false);
         return true;
+    }
+  }
+
+  bool _isStepComplete(int index) {
+    switch (index) {
+      case 0:
+        return _category.trim().isNotEmpty;
+      case 1:
+        return _titleCtrl.text.trim().isNotEmpty &&
+            (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0;
+      case 2:
+        return _selectedImage != null;
+      case 3:
+        return true;
+      case 4:
+        return _titleCtrl.text.trim().isNotEmpty &&
+            (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0 &&
+            _selectedImage != null;
+      default:
+        return false;
     }
   }
 
@@ -403,6 +432,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             title: const Text('Category'),
             subtitle: const Text('Set category and listing location'),
             isActive: _step >= 0,
+            state: _isStepComplete(0) ? StepState.complete : StepState.indexed,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -458,6 +488,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                if (_showValidation && _category.trim().isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Category is required.',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                    ),
+                  ),
                 if (cityChips.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -481,14 +519,18 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             title: const Text('Basics'),
             subtitle: const Text('Title, price and condition'),
             isActive: _step >= 1,
+            state: _isStepComplete(1) ? StepState.complete : StepState.indexed,
             content: Column(
               children: [
                 TextField(
                   controller: _titleCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Title',
                     hintText: 'e.g. iPhone 13 Pro Max',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: _showValidation && _titleCtrl.text.trim().isEmpty
+                        ? 'Title is required'
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -496,10 +538,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                   controller: _priceCtrl,
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Price (₦)',
                     hintText: 'e.g. 450000',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    errorText: _showValidation &&
+                            (double.tryParse(_priceCtrl.text.trim()) ?? 0) <= 0
+                        ? 'Enter a valid price'
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -543,6 +589,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             title: const Text('Photos'),
             subtitle: const Text('Add at least one image'),
             isActive: _step >= 2,
+            state: _isStepComplete(2) ? StepState.complete : StepState.indexed,
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -581,6 +628,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 const Text(
                   'Use clear photos. Listings with quality images convert better.',
                 ),
+                if (_showValidation && _selectedImage == null)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'At least one photo is required.',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -588,6 +643,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             title: const Text('Delivery Options'),
             subtitle: const Text('Set fulfillment preferences'),
             isActive: _step >= 3,
+            state: _isStepComplete(3) ? StepState.complete : StepState.indexed,
             content: Column(
               children: [
                 SwitchListTile.adaptive(
@@ -634,6 +690,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             title: const Text('Preview & Publish'),
             subtitle: const Text('Review details before posting'),
             isActive: _step >= 4,
+            state: _isStepComplete(4) ? StepState.complete : StepState.indexed,
             content: Card(
               margin: EdgeInsets.zero,
               child: Padding(

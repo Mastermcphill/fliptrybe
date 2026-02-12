@@ -119,6 +119,12 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
   @override
   Widget build(BuildContext context) {
     final rows = _filteredForTab();
+    final activeCount = _items.where((item) => _statusOf(item) == 'active').length;
+    final pendingCount =
+        _items.where((item) => _statusOf(item) == 'pending').length;
+    final soldCount = _items.where((item) => _statusOf(item) == 'sold').length;
+    final inactiveCount =
+        _items.where((item) => _statusOf(item) == 'inactive').length;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Merchant Inventory'),
@@ -169,6 +175,22 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
                     ? ListView(
                         padding: const EdgeInsets.all(16),
                         children: [
+                          FTSectionContainer(
+                            title: 'Inventory Snapshot',
+                            subtitle:
+                                'Views and saves metrics are not available yet. Use status tabs to manage stock.',
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FTPill(text: 'Active: $activeCount'),
+                                FTPill(text: 'Pending: $pendingCount'),
+                                FTPill(text: 'Sold: $soldCount'),
+                                FTPill(text: 'Inactive: $inactiveCount'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                           const FTEmptyState(
                             icon: Icons.inventory_2_outlined,
                             title: 'No listings in this section',
@@ -195,9 +217,30 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
-                        itemCount: rows.length,
+                        itemCount: rows.length + 1,
                         itemBuilder: (_, index) {
-                          final item = rows[index];
+                          if (index == 0) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: FTSectionContainer(
+                                title: 'Inventory Snapshot',
+                                subtitle:
+                                    'Views and saves metrics are not available yet.',
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    FTPill(text: 'Active: $activeCount'),
+                                    FTPill(text: 'Pending: $pendingCount'),
+                                    FTPill(text: 'Sold: $soldCount'),
+                                    FTPill(text: 'Inactive: $inactiveCount'),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          final rowIndex = index - 1;
+                          final item = rows[rowIndex];
                           final listingId = _idOf(item);
                           final title =
                               (item['title'] ?? 'Untitled listing').toString();

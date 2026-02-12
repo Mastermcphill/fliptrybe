@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../screens/create_listing_screen.dart';
-import '../screens/growth/growth_analytics_screen.dart';
 import '../screens/merchant_home_screen.dart';
+import '../screens/merchant_growth_screen.dart';
 import '../screens/merchant_listings_screen.dart';
 import '../screens/merchant_orders_screen.dart';
 import '../screens/support_chat_screen.dart';
@@ -33,7 +33,7 @@ class _MerchantShellState extends State<MerchantShell> {
       MerchantHomeScreen(onSelectTab: (i) => setState(() => _currentIndex = i)),
       const MerchantListingsScreen(),
       const MerchantOrdersScreen(),
-      const GrowthAnalyticsScreen(role: 'merchant'),
+      const MerchantGrowthScreen(),
       const SupportChatScreen(),
     ];
   }

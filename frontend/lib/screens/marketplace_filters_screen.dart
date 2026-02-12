@@ -138,7 +138,7 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
             controller: _minCtrl,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'Min price',
+              labelText: 'Min price (₦)',
               border: OutlineInputBorder(),
             ),
           ),
@@ -147,7 +147,7 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
             controller: _maxCtrl,
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(
-              labelText: 'Max price',
+              labelText: 'Max price (₦)',
               border: OutlineInputBorder(),
             ),
           ),

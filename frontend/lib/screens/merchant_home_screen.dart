@@ -167,32 +167,6 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     });
   }
 
-  Widget _metricTile(String title, String value, {String? subtitle}) {
-    return FTCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
-          ),
-          if ((subtitle ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              subtitle!,
-              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _quickAction({
     required IconData icon,
     required String label,
@@ -237,11 +211,6 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       return active && !status.contains('sold') && !status.contains('complete');
     }).length;
     final inactiveListings = _myListings.length - activeListings;
-    final lowSignalListings = _myListings.where((item) {
-      final views = _int(item['views']);
-      return views > 0 && views < 3;
-    }).length;
-
     final emailVerified = (_profile['email_verified'] == true) ||
         (_profile['email_verified_at'] ?? '').toString().trim().isNotEmpty;
     final kycStatus =
@@ -303,15 +272,28 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     physics: const NeverScrollableScrollPhysics(),
                     childAspectRatio: 1.5,
                     children: [
-                      _metricTile('Revenue (period)', grossRevenue),
-                      _metricTile('Orders', '$totalOrders',
-                          subtitle: '$completedOrders completed'),
-                      _metricTile('Active Listings', '$activeListings',
-                          subtitle: '$inactiveListings inactive'),
-                      _metricTile(
-                        _rank > 0 ? 'Leaderboard Rank' : 'Merchant Reach',
-                        _rank > 0 ? '#$_rank' : 'Unranked',
+                      FTMetricTile(
+                        label: 'Revenue (period)',
+                        value: grossRevenue,
+                        icon: Icons.show_chart_outlined,
+                      ),
+                      FTMetricTile(
+                        label: 'Orders',
+                        value: '$totalOrders',
+                        subtitle: '$completedOrders completed',
+                        icon: Icons.receipt_long_outlined,
+                      ),
+                      FTMetricTile(
+                        label: 'Active Listings',
+                        value: '$activeListings',
+                        subtitle: '$inactiveListings inactive',
+                        icon: Icons.inventory_2_outlined,
+                      ),
+                      FTMetricTile(
+                        label: _rank > 0 ? 'Leaderboard Rank' : 'Merchant Reach',
+                        value: _rank > 0 ? '#$_rank' : 'Unranked',
                         subtitle: 'Balance: ${_money(_wallet['balance'])}',
+                        icon: Icons.emoji_events_outlined,
                       ),
                     ],
                   ),

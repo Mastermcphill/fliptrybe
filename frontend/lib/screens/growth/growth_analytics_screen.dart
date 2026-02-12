@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/components/ft_components.dart';
 import 'role_growth_calculator.dart';
 
 class GrowthAnalyticsScreen extends StatelessWidget {
@@ -20,13 +21,9 @@ class GrowthAnalyticsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_title()),
-      ),
-      body: SafeArea(
-        child: RoleGrowthCalculator(role: role),
-      ),
+    return FTScaffold(
+      title: _title(),
+      child: RoleGrowthCalculator(role: role),
     );
   }
 }

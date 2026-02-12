@@ -17,6 +17,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   final _prefs = MarketplacePrefsService();
   final _catalog = MarketplaceCatalogService();
   bool _loading = true;
+  String? _error;
   List<Map<String, dynamic>> _items = const [];
   Set<int> _favorites = <int>{};
 
@@ -27,19 +28,30 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final values = await Future.wait([
-      _catalog.listAll(),
-      _prefs.loadFavorites(),
-    ]);
-    if (!mounted) return;
-    final all = values[0] as List<Map<String, dynamic>>;
-    final fav = values[1] as Set<int>;
     setState(() {
-      _favorites = fav;
-      _items = all.where((item) => fav.contains(item['id'])).toList();
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final values = await Future.wait([
+        _catalog.listAll(),
+        _prefs.loadFavorites(),
+      ]);
+      if (!mounted) return;
+      final all = values[0] as List<Map<String, dynamic>>;
+      final fav = values[1] as Set<int>;
+      setState(() {
+        _favorites = fav;
+        _items = all.where((item) => fav.contains(item['id'])).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Unable to load favorites: $e';
+      });
+    }
   }
 
   Future<void> _toggle(Map<String, dynamic> item) async {
@@ -59,7 +71,30 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     return FTScaffold(
       title: 'Favorites',
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? GridView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: 6,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.64,
+              ),
+              itemBuilder: (_, __) => const FTCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: FTSkeleton(height: double.infinity)),
+                    SizedBox(height: 8),
+                    FTSkeleton(height: 14, width: 90),
+                    SizedBox(height: 6),
+                    FTSkeleton(height: 12, width: 120),
+                  ],
+                ),
+              ),
+            )
+          : _error != null
+              ? FTErrorState(message: _error!, onRetry: _load)
           : _items.isEmpty
               ? const FTEmptyState(
                   icon: Icons.favorite_border,

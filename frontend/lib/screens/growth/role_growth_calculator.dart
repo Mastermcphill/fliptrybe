@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../ui/components/ft_components.dart';
 import '../../widgets/growth/moneybox_projection_table.dart';
 import '../../widgets/growth/projection_table.dart';
 
@@ -220,35 +221,25 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$roleLabel Earnings Projection',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 18),
+        FTSectionContainer(
+          title: '$roleLabel Earnings Projection',
+          subtitle:
+              'Use current live commission and withdrawal rules to estimate growth.',
+          child: _validationMessage.isEmpty
+              ? const Text(
+                  'Input realistic values to project daily, monthly and yearly earnings.',
+                )
+              : Text(
+                  _validationMessage,
+                  style: const TextStyle(color: Colors.redAccent),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                    'Use current live commission and withdrawal rules to estimate growth.'),
-                if (_validationMessage.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(_validationMessage,
-                      style: const TextStyle(color: Colors.redAccent)),
-                ],
-              ],
-            ),
-          ),
         ),
         const SizedBox(height: 10),
-        Form(
-          key: _formKey,
-          child: Card(
+        FTCard(
+          child: Form(
+            key: _formKey,
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(4),
               child: Column(
                 children: [
                   TextFormField(
@@ -330,10 +321,10 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
                   const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
+                    child: FTPrimaryButton(
                       onPressed: _calculate,
-                      icon: const Icon(Icons.calculate_outlined),
-                      label: const Text('Calculate Projection'),
+                      icon: Icons.calculate_outlined,
+                      label: 'Calculate Projection',
                     ),
                   ),
                 ],
@@ -346,13 +337,13 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
           Row(
             children: [
               Expanded(
-                child: _SummaryCard(
+                child: FTMetricTile(
                     label: 'Monthly gross',
                     value: _money(_result!['monthlyGross'] ?? 0)),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _SummaryCard(
+                child: FTMetricTile(
                   label: 'Platform commissions',
                   value: _money(_result!['monthlyCommission'] ?? 0),
                 ),
@@ -362,13 +353,13 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
           Row(
             children: [
               Expanded(
-                child: _SummaryCard(
+                child: FTMetricTile(
                     label: 'Net earnings',
                     value: _money(_result!['monthlyNet'] ?? 0)),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _SummaryCard(
+                child: FTMetricTile(
                   label: 'Withdrawal fee',
                   value: _money(_result!['monthlyWithdrawalFee'] ?? 0),
                 ),
@@ -378,14 +369,14 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
           Row(
             children: [
               Expanded(
-                child: _SummaryCard(
+                child: FTMetricTile(
                   label: 'Take-home after withdrawal',
                   value: _money(_result!['monthlyTakeHome'] ?? 0),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _SummaryCard(
+                child: FTMetricTile(
                   label: 'Monthly autosave',
                   value: _money(_result!['monthlyAutosave'] ?? 0),
                 ),
@@ -428,34 +419,6 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Text(value,
-                style:
-                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
-          ],
-        ),
-      ),
     );
   }
 }

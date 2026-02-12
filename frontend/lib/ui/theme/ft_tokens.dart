@@ -9,15 +9,18 @@ class FTTokens {
   static const double spaceSm = 10;
   static const double spaceMd = 16;
   static const double spaceLg = 24;
+  static const double spaceXl = 32;
 
   static const Color bg = Color(0xFFF6F8FB);
   static const Color card = Colors.white;
   static const Color textPrimary = Color(0xFF0F172A);
   static const Color textSecondary = Color(0xFF475569);
   static const Color accent = Color(0xFF0E7490);
+  static const Color accentSoft = Color(0xFFD9F3F7);
   static const Color success = Color(0xFF0F766E);
   static const Color warn = Color(0xFFB45309);
   static const Color danger = Color(0xFFB91C1C);
+  static const Color border = Color(0xFFE2E8F0);
 
   static List<BoxShadow> get shadowSm => const [
         BoxShadow(

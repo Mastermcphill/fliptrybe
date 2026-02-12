@@ -347,12 +347,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                             seeAllSort: 'price_low',
                           ),
                           const SizedBox(height: 14),
-                          const FTSectionHeader(
+                          const FTSectionContainer(
                             title: 'How FlipTrybe Protects You',
                             subtitle: 'Escrow and verification flow overview',
-                          ),
-                          const SizedBox(height: 8),
-                          const FTCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -365,13 +362,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          const FTSectionHeader(
+                          FTSectionContainer(
                             title: 'My Wallet Snapshot',
                             subtitle:
                                 'Current balance and latest transaction activity',
-                          ),
-                          const SizedBox(height: 8),
-                          FTCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -411,12 +405,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                             ),
                           ),
                           const SizedBox(height: 14),
-                          const FTSectionHeader(
+                          FTSectionContainer(
                             title: 'MoneyBox Awareness',
                             subtitle: 'Role-based access to structured savings',
-                          ),
-                          const SizedBox(height: 8),
-                          FTCard(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

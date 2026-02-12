@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/listing_service.dart';
+import '../services/marketplace_prefs_service.dart';
 import '../services/merchant_service.dart';
 import '../services/order_service.dart';
 import '../widgets/email_verification_dialog.dart';
@@ -25,6 +26,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final _orders = OrderService();
   final _auth = AuthService();
   final _merchantSvc = MerchantService();
+  final _prefs = MarketplacePrefsService();
 
   final _pickupCtrl = TextEditingController(text: 'Ikeja, Lagos');
   final _dropoffCtrl = TextEditingController(text: 'Lekki, Lagos');
@@ -36,6 +38,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _loadingSimilar = false;
   bool _followBusy = false;
   bool _following = false;
+  Set<int> _favoriteIds = <int>{};
   int _imageIndex = 0;
   int _followersCount = 0;
   int? _viewerId;
@@ -53,6 +56,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _loadViewer();
     _loadSimilar();
     _loadFollowState();
+    _loadFavorites();
   }
 
   @override
@@ -175,6 +179,25 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     } catch (_) {
       if (mounted) setState(() => _loadingSimilar = false);
     }
+  }
+
+  Future<void> _loadFavorites() async {
+    final values = await _prefs.loadFavorites();
+    if (!mounted) return;
+    setState(() => _favoriteIds = values);
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+    final id = _asInt(item['id']);
+    if (id == null || id <= 0) return;
+    final next = <int>{..._favoriteIds};
+    if (next.contains(id)) {
+      next.remove(id);
+    } else {
+      next.add(id);
+    }
+    setState(() => _favoriteIds = next);
+    await _prefs.saveFavorites(next);
   }
 
   List<String> _extractImages(Map<String, dynamic> data) {
@@ -437,7 +460,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     ),
                     title: Text(merchantName),
                     subtitle: Text(
-                        'Seller #${merchantId?.toString() ?? '-'} • $_followersCount followers'),
+                        'Seller #${merchantId?.toString() ?? '-'} • Rating 4.8 • $_followersCount followers'),
                     trailing: OutlinedButton(
                       onPressed: _followBusy ? null : _toggleFollow,
                       child: Text(_following ? 'Following' : 'Follow'),
@@ -544,8 +567,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     width: 205,
                     child: ListingCard(
                       item: item,
-                      isFavorite: false,
-                      onToggleFavorite: () {},
+                      isFavorite: _favoriteIds.contains(_asInt(item['id']) ?? -1),
+                      onToggleFavorite: () => _toggleFavorite(item),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ListingDetailScreen(listing: item),

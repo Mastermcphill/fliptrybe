@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../constants/ng_states.dart';
+import '../../models/marketplace_query_state.dart';
+import '../../models/saved_search_record.dart';
 import '../../services/marketplace_catalog_service.dart';
 import '../../services/marketplace_prefs_service.dart';
 import '../../ui/components/ft_components.dart';
@@ -45,14 +47,7 @@ class _MarketplaceSearchResultsScreenState
   List<Map<String, dynamic>> _all = const [];
   List<Map<String, dynamic>> _filtered = const [];
   Set<int> _favorites = <int>{};
-
-  bool _grid = true;
-  String _category = 'All';
-  String _state = allNigeriaLabel;
-  String _sort = 'relevance';
-  double? _minPrice;
-  double? _maxPrice;
-  List<String> _conditions = const [];
+  late MarketplaceQueryState _queryState;
 
   static const _categories = [
     'All',
@@ -82,13 +77,16 @@ class _MarketplaceSearchResultsScreenState
   @override
   void initState() {
     super.initState();
-    _queryCtrl.text = widget.initialQuery;
-    _category = widget.initialCategory;
-    _state = widget.initialState;
-    _sort = widget.initialSort;
-    _minPrice = widget.initialMinPrice;
-    _maxPrice = widget.initialMaxPrice;
-    _conditions = [...widget.initialConditions];
+    _queryState = MarketplaceQueryState(
+      query: widget.initialQuery,
+      category: widget.initialCategory,
+      state: widget.initialState,
+      sort: widget.initialSort,
+      minPrice: widget.initialMinPrice,
+      maxPrice: widget.initialMaxPrice,
+      conditions: widget.initialConditions,
+    );
+    _queryCtrl.text = _queryState.query;
     _boot();
   }
 
@@ -126,12 +124,12 @@ class _MarketplaceSearchResultsScreenState
     _filtered = _catalog.applyFilters(
       _all,
       query: _queryCtrl.text,
-      category: _category,
-      state: _state,
-      minPrice: _minPrice,
-      maxPrice: _maxPrice,
-      conditions: _conditions,
-      sort: _sort,
+      category: _queryState.category,
+      state: _queryState.state,
+      minPrice: _queryState.minPrice,
+      maxPrice: _queryState.maxPrice,
+      conditions: _queryState.conditions,
+      sort: _queryState.sort,
     );
   }
 
@@ -151,21 +149,18 @@ class _MarketplaceSearchResultsScreenState
   }
 
   Future<void> _saveCurrentSearch() async {
-    final query = _queryCtrl.text.trim();
-    final payload = {
-      'query': query,
-      'category': _category,
-      'state': _state,
-      'sort': _sort,
-      'minPrice': _minPrice,
-      'maxPrice': _maxPrice,
-      'conditions': _conditions,
-    };
+    final state = _queryState.copyWith(query: _queryCtrl.text.trim());
+    final payload = state.toMap();
     final key = base64Encode(utf8.encode(jsonEncode(payload)));
-    await _prefs.upsertSearch({
-      'key': key,
-      ...payload,
-    });
+    final now = DateTime.now().toUtc();
+    await _prefs.upsertSearch(
+      SavedSearchRecord(
+        key: key,
+        state: state,
+        createdAt: now,
+        updatedAt: now,
+      ).toMap(),
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Search saved.')),
@@ -174,12 +169,12 @@ class _MarketplaceSearchResultsScreenState
 
   Future<void> _openFilters() async {
     final minCtrl =
-        TextEditingController(text: _minPrice?.toStringAsFixed(0) ?? '');
+        TextEditingController(text: _queryState.minPrice?.toStringAsFixed(0) ?? '');
     final maxCtrl =
-        TextEditingController(text: _maxPrice?.toStringAsFixed(0) ?? '');
-    String draftCategory = _category;
-    String draftState = _state;
-    final draftConditions = <String>{..._conditions};
+        TextEditingController(text: _queryState.maxPrice?.toStringAsFixed(0) ?? '');
+    String draftCategory = _queryState.category;
+    String draftState = _queryState.state;
+    final draftConditions = <String>{..._queryState.conditions};
 
     await showModalBottomSheet<void>(
       context: context,
@@ -237,7 +232,7 @@ class _MarketplaceSearchResultsScreenState
                             controller: minCtrl,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                                labelText: 'Min price (?)'),
+                                labelText: 'Min price (₦)'),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -246,7 +241,7 @@ class _MarketplaceSearchResultsScreenState
                             controller: maxCtrl,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                                labelText: 'Max price (?)'),
+                                labelText: 'Max price (₦)'),
                           ),
                         ),
                       ],
@@ -274,6 +269,35 @@ class _MarketplaceSearchResultsScreenState
                               ))
                           .toList(),
                     ),
+                    const SizedBox(height: 14),
+                    const Text('Distance',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    const ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.near_me_disabled_outlined),
+                      title: Text('Distance filter'),
+                      subtitle: Text('Coming soon (location radius support).'),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text('Delivery / Inspection',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    CheckboxListTile(
+                      value: false,
+                      onChanged: null,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Delivery available'),
+                      subtitle: const Text('Coming soon'),
+                    ),
+                    CheckboxListTile(
+                      value: false,
+                      onChanged: null,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Inspection available'),
+                      subtitle: const Text('Coming soon'),
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -299,13 +323,15 @@ class _MarketplaceSearchResultsScreenState
                             icon: Icons.check,
                             onPressed: () {
                               setState(() {
-                                _category = draftCategory;
-                                _state = draftState;
-                                _conditions = draftConditions.toList();
-                                _minPrice =
-                                    double.tryParse(minCtrl.text.trim());
-                                _maxPrice =
-                                    double.tryParse(maxCtrl.text.trim());
+                                _queryState = _queryState.copyWith(
+                                  category: draftCategory,
+                                  state: draftState,
+                                  conditions: draftConditions.toList(),
+                                  minPrice:
+                                      double.tryParse(minCtrl.text.trim()),
+                                  maxPrice:
+                                      double.tryParse(maxCtrl.text.trim()),
+                                );
                                 _apply();
                               });
                               Navigator.of(ctx).pop();
@@ -326,48 +352,54 @@ class _MarketplaceSearchResultsScreenState
 
   List<Widget> _activeFilterChips() {
     final chips = <Widget>[];
-    if (_category != 'All') {
+    if (_queryState.category != 'All') {
       chips.add(FTChip(
-          label: 'Category: $_category',
+          label: 'Category: ${_queryState.category}',
           selected: true,
           onTap: () {
             setState(() {
-              _category = 'All';
+              _queryState = _queryState.copyWith(category: 'All');
               _apply();
             });
           }));
     }
-    if (_state != allNigeriaLabel) {
+    if (_queryState.state != allNigeriaLabel) {
       chips.add(FTChip(
-          label: displayState(_state),
+          label: displayState(_queryState.state),
           selected: true,
           onTap: () {
             setState(() {
-              _state = allNigeriaLabel;
+              _queryState = _queryState.copyWith(state: allNigeriaLabel);
               _apply();
             });
           }));
     }
-    if (_minPrice != null || _maxPrice != null) {
+    if (_queryState.minPrice != null || _queryState.maxPrice != null) {
       chips.add(FTChip(
           label:
-              '₦${_minPrice?.toStringAsFixed(0) ?? '0'} - ₦${_maxPrice?.toStringAsFixed(0) ?? '∞'}',
+              '₦${_queryState.minPrice?.toStringAsFixed(0) ?? '0'} - ₦${_queryState.maxPrice?.toStringAsFixed(0) ?? '∞'}',
           selected: true,
           onTap: () {
             setState(() {
-              _minPrice = null;
-              _maxPrice = null;
+              _queryState = _queryState.copyWith(
+                clearMinPrice: true,
+                clearMaxPrice: true,
+              );
               _apply();
             });
           }));
     }
-    for (final c in _conditions) {
+    for (final c in _queryState.conditions) {
       chips.add(FTChip(
           label: c,
           selected: true,
           onTap: () {
             setState(() {
-              _conditions = _conditions.where((item) => item != c).toList();
+              _queryState = _queryState.copyWith(
+                conditions: _queryState.conditions
+                    .where((item) => item != c)
+                    .toList(growable: false),
+              );
               _apply();
             });
           }));
@@ -433,7 +465,7 @@ class _MarketplaceSearchResultsScreenState
                                               .map((entry) =>
                                                   RadioListTile<String>(
                                                     value: entry.key,
-                                                    groupValue: _sort,
+                                                    groupValue: _queryState.sort,
                                                     onChanged: (value) {
                                                       Navigator.of(context)
                                                           .pop(value);
@@ -446,7 +478,8 @@ class _MarketplaceSearchResultsScreenState
                                     );
                                     if (selected == null) return;
                                     setState(() {
-                                      _sort = selected;
+                                      _queryState =
+                                          _queryState.copyWith(sort: selected);
                                       _apply();
                                     });
                                   },
@@ -462,10 +495,15 @@ class _MarketplaceSearchResultsScreenState
                               ),
                               const SizedBox(width: 8),
                               IconButton(
-                                tooltip:
-                                    _grid ? 'Switch to list' : 'Switch to grid',
-                                onPressed: () => setState(() => _grid = !_grid),
-                                icon: Icon(_grid
+                                tooltip: _queryState.gridView
+                                    ? 'Switch to list'
+                                    : 'Switch to grid',
+                                onPressed: () => setState(() {
+                                  _queryState = _queryState.copyWith(
+                                    gridView: !_queryState.gridView,
+                                  );
+                                }),
+                                icon: Icon(_queryState.gridView
                                     ? Icons.view_list_outlined
                                     : Icons.grid_view_outlined),
                               ),
@@ -493,19 +531,21 @@ class _MarketplaceSearchResultsScreenState
                               actionLabel: 'Clear filters',
                               onAction: () {
                                 setState(() {
-                                  _category = 'All';
-                                  _state = allNigeriaLabel;
-                                  _conditions = const [];
-                                  _minPrice = null;
-                                  _maxPrice = null;
-                                  _sort = 'relevance';
+                                  _queryState = _queryState.copyWith(
+                                    category: 'All',
+                                    state: allNigeriaLabel,
+                                    conditions: const <String>[],
+                                    sort: 'relevance',
+                                    clearMinPrice: true,
+                                    clearMaxPrice: true,
+                                  );
                                   _apply();
                                 });
                               },
                             )
                           : RefreshIndicator(
                               onRefresh: _boot,
-                              child: _grid
+                              child: _queryState.gridView
                                   ? GridView.builder(
                                       padding: const EdgeInsets.fromLTRB(
                                           16, 0, 16, 20),

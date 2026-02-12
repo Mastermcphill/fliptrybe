@@ -50,6 +50,10 @@ class ListingCard extends StatelessWidget {
     final created = (item['created_at'] ?? '').toString();
     final image = (item['image_path'] ?? item['image'] ?? '').toString();
     final boosted = item['is_boosted'] == true;
+    final deliveryEnabled = item['delivery_enabled'] == true ||
+        item['delivery_enabled']?.toString().toLowerCase() == 'true';
+    final inspectionEnabled = item['inspection_enabled'] == true ||
+        item['inspection_enabled']?.toString().toLowerCase() == 'true';
 
     return InkWell(
       borderRadius: BorderRadius.circular(FTTokens.radiusMd),
@@ -142,26 +146,35 @@ class ListingCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
                     children: [
                       if (condition.trim().isNotEmpty)
-                        FTPill(
-                            text: condition, bgColor: const Color(0xFFF1F5F9)),
-                      if (location.trim().isNotEmpty) ...[
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            location,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: FTTokens.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
+                        FTPill(text: condition, bgColor: const Color(0xFFF1F5F9)),
+                      if (deliveryEnabled)
+                        const FTPill(
+                          text: 'Delivery',
+                          bgColor: Color(0xFFE0F2FE),
                         ),
-                      ],
+                      if (inspectionEnabled)
+                        const FTPill(
+                          text: 'Inspection',
+                          bgColor: Color(0xFFFFF7ED),
+                        ),
                     ],
                   ),
+                  if (location.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      location,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: FTTokens.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     _timeAgo(created),

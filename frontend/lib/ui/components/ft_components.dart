@@ -323,3 +323,106 @@ class FTSecondaryButton extends StatelessWidget {
     );
   }
 }
+
+class FTSectionContainer extends StatelessWidget {
+  const FTSectionContainer({
+    super.key,
+    required this.title,
+    this.subtitle,
+    required this.child,
+    this.trailing,
+    this.padding,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget child;
+  final Widget? trailing;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return FTCard(
+      padding: padding ?? const EdgeInsets.all(FTTokens.spaceMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FTSectionHeader(
+            title: title,
+            subtitle: subtitle,
+            trailing: trailing,
+          ),
+          const SizedBox(height: FTTokens.spaceSm),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class FTMetricTile extends StatelessWidget {
+  const FTMetricTile({
+    super.key,
+    required this.label,
+    required this.value,
+    this.subtitle,
+    this.icon,
+    this.color,
+  });
+
+  final String label;
+  final String value;
+  final String? subtitle;
+  final IconData? icon;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return FTCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: FTTokens.textSecondary,
+                  ),
+                ),
+              ),
+              if (icon != null)
+                Icon(
+                  icon,
+                  size: 16,
+                  color: color ?? FTTokens.accent,
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              color: FTTokens.textPrimary,
+            ),
+          ),
+          if ((subtitle ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle!,
+              style: const TextStyle(
+                fontSize: 11,
+                color: FTTokens.textSecondary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

@@ -28,6 +28,8 @@ import 'investor_metrics_screen.dart';
 import 'sales_analytics_screen.dart';
 import 'email_verify_screen.dart';
 import 'following_merchants_screen.dart';
+import 'marketplace/favorites_screen.dart';
+import 'marketplace/saved_searches_screen.dart';
 import '../utils/auth_navigation.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -372,6 +374,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             MaterialPageRoute(
                                 builder: (_) =>
                                     const FollowingMerchantsScreen()));
+                      }),
+                      _buildMenuItem(Icons.bookmarks_outlined, "Saved Searches",
+                          onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SavedSearchesScreen()));
+                      }),
+                      _buildMenuItem(Icons.favorite_border, "Favorites",
+                          onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const FavoritesScreen()));
                       }),
                       _buildMenuItem(
                         Icons.store,

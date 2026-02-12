@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/saved_search_record.dart';
+
 class MarketplacePrefsService {
   static const _favoritesKey = 'marketplace_favorites';
   static const _savedSearchesKey = 'marketplace_saved_searches';
@@ -20,53 +22,80 @@ class MarketplacePrefsService {
     );
   }
 
-  Future<List<Map<String, dynamic>>> loadSavedSearches() async {
+  Future<List<SavedSearchRecord>> loadSavedSearchRecords() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_savedSearchesKey) ?? const <String>[];
     return raw
         .map((item) {
           try {
             final decoded = jsonDecode(item);
-            if (decoded is Map) return Map<String, dynamic>.from(decoded);
+            if (decoded is Map) {
+              return SavedSearchRecord.fromMap(
+                Map<String, dynamic>.from(decoded),
+              );
+            }
           } catch (_) {}
-          return <String, dynamic>{};
+          return null;
         })
-        .where((m) => m.isNotEmpty)
-        .toList();
+        .whereType<SavedSearchRecord>()
+        .toList(growable: false);
   }
 
-  Future<void> saveSavedSearches(List<Map<String, dynamic>> searches) async {
+  Future<List<Map<String, dynamic>>> loadSavedSearches() async {
+    final rows = await loadSavedSearchRecords();
+    return rows.map((record) => record.toMap()).toList(growable: false);
+  }
+
+  Future<void> saveSavedSearchesRecords(List<SavedSearchRecord> records) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = searches.map((m) => jsonEncode(m)).toList(growable: false);
+    final raw =
+        records.map((record) => jsonEncode(record.toMap())).toList(growable: false);
     await prefs.setStringList(_savedSearchesKey, raw);
   }
 
-  Future<void> upsertSearch(Map<String, dynamic> search) async {
-    final existing = await loadSavedSearches();
-    final key = (search['key'] ?? '').toString();
-    final now = DateTime.now().toIso8601String();
-    final normalized = {
-      ...search,
-      'createdAt': search['createdAt'] ?? now,
-      'updatedAt': now,
-    };
+  Future<void> saveSavedSearches(List<Map<String, dynamic>> searches) async {
+    final records = searches
+        .map((map) => SavedSearchRecord.fromMap(map))
+        .where((record) => record.key.isNotEmpty)
+        .toList(growable: false);
+    await saveSavedSearchesRecords(records);
+  }
 
-    final idx = existing.indexWhere((m) => (m['key'] ?? '').toString() == key);
+  Future<void> upsertSearch(Map<String, dynamic> search) async {
+    final existing = await loadSavedSearchRecords();
+    final key = (search['key'] ?? '').toString().trim();
+    if (key.isEmpty) return;
+
+    final now = DateTime.now().toUtc();
+    final incoming = SavedSearchRecord.fromMap({
+      ...search,
+      'key': key,
+      'createdAt': search['createdAt'] ?? now.toIso8601String(),
+      'updatedAt': now.toIso8601String(),
+    });
+
+    final idx = existing.indexWhere((item) => item.key == key);
     if (idx >= 0) {
-      existing[idx] = normalized;
+      final current = existing[idx];
+      existing[idx] = SavedSearchRecord(
+        key: key,
+        state: incoming.state,
+        createdAt: current.createdAt,
+        updatedAt: now,
+      );
     } else {
-      existing.insert(0, normalized);
+      existing.insert(0, incoming);
     }
 
     if (existing.length > 30) {
       existing.removeRange(30, existing.length);
     }
-    await saveSavedSearches(existing);
+    await saveSavedSearchesRecords(existing);
   }
 
   Future<void> deleteSearch(String key) async {
-    final existing = await loadSavedSearches();
-    existing.removeWhere((m) => (m['key'] ?? '').toString() == key);
-    await saveSavedSearches(existing);
+    final existing = await loadSavedSearchRecords();
+    existing.removeWhere((record) => record.key == key);
+    await saveSavedSearchesRecords(existing);
   }
 }
