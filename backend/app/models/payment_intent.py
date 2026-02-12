@@ -13,6 +13,7 @@ class PaymentIntent(db.Model):
     reference = db.Column(db.String(128), nullable=False, unique=True)
     purpose = db.Column(db.String(32), nullable=False, default="topup")  # topup | order
     amount = db.Column(db.Float, nullable=False, default=0.0)
+    amount_minor = db.Column(db.Integer, nullable=True, index=True)
 
     status = db.Column(db.String(32), nullable=False, default="initialized")  # initialized|paid|failed
 
@@ -30,6 +31,7 @@ class PaymentIntent(db.Model):
             "reference": self.reference,
             "purpose": self.purpose,
             "amount": float(self.amount or 0.0),
+            "amount_minor": int(self.amount_minor or 0) if self.amount_minor is not None else None,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

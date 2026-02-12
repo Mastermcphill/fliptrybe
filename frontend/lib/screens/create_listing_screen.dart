@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -9,6 +10,7 @@ import '../constants/ng_states.dart';
 import '../services/api_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
+import '../services/marketplace_catalog_service.dart';
 import '../utils/formatters.dart';
 import '../widgets/email_verification_dialog.dart';
 
@@ -24,6 +26,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   final _listingService = ListingService();
   final _feedService = FeedService();
+  final _catalog = MarketplaceCatalogService();
 
   final _titleCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -38,6 +41,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   bool _showValidation = false;
   bool _inspectionEnabled = true;
   bool _deliveryEnabled = true;
+  bool _loadingSuggestions = false;
 
   String _category = 'General';
   String _condition = 'Used - Good';
@@ -49,11 +53,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   File? _selectedImage;
   String? _selectedImagePath;
+  Timer? _titleDebounce;
+  List<String> _titleSuggestions = const <String>[];
 
   @override
   void initState() {
     super.initState();
     _attachDraftListeners();
+    _titleCtrl.addListener(_onTitleChanged);
     _loadDraft().then((_) => _loadLocations());
   }
 
@@ -65,6 +72,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _cityCtrl.dispose();
     _localityCtrl.dispose();
     _lgaCtrl.dispose();
+    _titleDebounce?.cancel();
     super.dispose();
   }
 
@@ -75,6 +83,29 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _cityCtrl.addListener(_saveDraft);
     _localityCtrl.addListener(_saveDraft);
     _lgaCtrl.addListener(_saveDraft);
+  }
+
+  void _onTitleChanged() {
+    _titleDebounce?.cancel();
+    _titleDebounce = Timer(const Duration(milliseconds: 280), () async {
+      final q = _titleCtrl.text.trim();
+      if (q.length < 2) {
+        if (!mounted) return;
+        setState(() {
+          _loadingSuggestions = false;
+          _titleSuggestions = const <String>[];
+        });
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _loadingSuggestions = true);
+      final values = await _catalog.titleSuggestions(q, limit: 8);
+      if (!mounted) return;
+      setState(() {
+        _loadingSuggestions = false;
+        _titleSuggestions = values;
+      });
+    });
   }
 
   Future<void> _loadDraft() async {
@@ -534,6 +565,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         : null,
                   ),
                 ),
+                if (_loadingSuggestions) ...[
+                  const SizedBox(height: 8),
+                  const LinearProgressIndicator(minHeight: 2),
+                ],
+                if (_titleSuggestions.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _titleSuggestions.map((suggestion) {
+                        return ActionChip(
+                          label: Text(suggestion),
+                          onPressed: () async {
+                            _titleCtrl.text = suggestion;
+                            _titleCtrl.selection = TextSelection.fromPosition(
+                              TextPosition(offset: _titleCtrl.text.length),
+                            );
+                            setState(
+                                () => _titleSuggestions = const <String>[]);
+                            await _saveDraft();
+                          },
+                        );
+                      }).toList(growable: false),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _priceCtrl,

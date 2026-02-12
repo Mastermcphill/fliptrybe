@@ -10,6 +10,7 @@ from app.models.listing import Listing
 from app.models.shortlet import Shortlet
 from app.models.merchant import MerchantProfile
 from app.models.merchant_follow import MerchantFollow
+from app.models.discovery import ItemDictionary
 from app.utils.jwt_utils import decode_token, get_bearer_token
 
 admin_bp = Blueprint("admin_bp", __name__, url_prefix="/api/admin")
@@ -332,18 +333,18 @@ def seed_nationwide():
             return jsonify({"ok": False, "error": "db_error"}), 500
 
     listing_targets = [
-        ("Lagos", "Ikeja", ""),
-        ("Abuja", "Wuse", ""),
-        ("Rivers", "Port Harcourt", ""),
-        ("Kano", "Nassarawa", ""),
-        ("Oyo", "Ibadan", ""),
-        ("Kaduna", "Kaduna North", ""),
-        ("Enugu", "Enugu", ""),
-        ("Delta", "Asaba", ""),
-        ("Ogun", "Abeokuta", ""),
-        ("Akwa Ibom", "Uyo", ""),
-        ("Plateau", "Jos", ""),
-        ("Edo", "Benin City", ""),
+        ("Lagos", "Ikeja", "", "PlayStation 5 Console"),
+        ("Abuja", "Wuse", "", "Samsung 55-inch Smart TV"),
+        ("Rivers", "Port Harcourt", "", "Mikano 5KVA Generator"),
+        ("Kano", "Nassarawa", "", "Leather Sofa Set"),
+        ("Oyo", "Ibadan", "", "6-Seater Dining Table"),
+        ("Kaduna", "Kaduna North", "", "TV Console Cabinet"),
+        ("Enugu", "Enugu", "", "iPhone 13 Pro 256GB"),
+        ("Delta", "Asaba", "", "HP EliteBook Laptop"),
+        ("Ogun", "Abeokuta", "", "Hisense Double Door Fridge"),
+        ("Akwa Ibom", "Uyo", "", "LG Washing Machine"),
+        ("Plateau", "Jos", "", "PlayStation 4 Slim"),
+        ("Edo", "Benin City", "", "Infinix Hot 40 Pro"),
     ]
     shortlet_targets = [
         ("Lagos", "Lekki", "Chevron"),
@@ -366,8 +367,8 @@ def seed_nationwide():
     shortlet_ids = []
 
     try:
-        for idx, (state, city, locality) in enumerate(listing_targets):
-            seed_key = f"nationwide_listing_{state.lower().replace(' ', '_')}"
+        for idx, (state, city, locality, title) in enumerate(listing_targets):
+            seed_key = f"nationwide_listing_{state.lower().replace(' ', '_')}_{idx}"
             existing = Listing.query.filter_by(seed_key=seed_key).first()
             if existing:
                 listing_existing += 1
@@ -379,7 +380,7 @@ def seed_nationwide():
             final_price = round(base_price + platform_fee, 2)
             listing = Listing(
                 user_id=int(merchant.id),
-                title=f"{state} Declutter Deal",
+                title=title,
                 description=f"Seeded listing for {state} marketplace coverage.",
                 state=state,
                 city=city,
@@ -462,6 +463,36 @@ def seed_nationwide():
             db.session.flush()
             shortlet_created += 1
             shortlet_ids.append(int(shortlet.id))
+
+        terms = [
+            ("PS4", "electronics"),
+            ("PS5", "electronics"),
+            ("Smart TV", "electronics"),
+            ("Generator", "home"),
+            ("Sofa set", "furniture"),
+            ("Dining table", "furniture"),
+            ("TV console", "furniture"),
+            ("iPhone", "phones"),
+            ("Laptop", "computers"),
+            ("Fridge", "appliances"),
+            ("Washing machine", "appliances"),
+        ]
+        for idx, (term, category) in enumerate(terms):
+            row = ItemDictionary.query.filter(ItemDictionary.term.ilike(term)).first()
+            if row:
+                row.popularity_score = max(int(row.popularity_score or 0), 100 - idx)
+                row.updated_at = datetime.utcnow()
+                db.session.add(row)
+            else:
+                db.session.add(
+                    ItemDictionary(
+                        term=term,
+                        category=category,
+                        popularity_score=100 - idx,
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow(),
+                    )
+                )
 
         db.session.commit()
     except Exception as e:

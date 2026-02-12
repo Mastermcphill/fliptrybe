@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/cart_service.dart';
 import '../services/listing_service.dart';
+import '../services/marketplace_catalog_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/merchant_service.dart';
 import '../services/order_service.dart';
@@ -12,6 +14,7 @@ import '../ui/components/ft_components.dart';
 import '../widgets/email_verification_dialog.dart';
 import '../widgets/listing/listing_card.dart';
 import '../widgets/safe_image.dart';
+import 'cart_screen.dart';
 import 'manual_payment_instructions_screen.dart';
 import 'order_detail_screen.dart';
 import 'support_chat_screen.dart';
@@ -32,6 +35,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   final _auth = AuthService();
   final _merchantSvc = MerchantService();
   final _prefs = MarketplacePrefsService();
+  final _catalog = MarketplaceCatalogService();
+  final _cart = CartService();
 
   final _pickupCtrl = TextEditingController(text: 'Ikeja, Lagos');
   final _dropoffCtrl = TextEditingController(text: 'Lekki, Lagos');
@@ -43,6 +48,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   bool _loadingSimilar = false;
   bool _followBusy = false;
   bool _following = false;
+  bool _viewSent = false;
   Set<int> _favoriteIds = <int>{};
   int _imageIndex = 0;
   int _followersCount = 0;
@@ -62,6 +68,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _loadSimilar();
     _loadFollowState();
     _loadFavorites();
+    _recordViewOnce();
   }
 
   @override
@@ -202,7 +209,39 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       next.add(id);
     }
     setState(() => _favoriteIds = next);
+    final remote = await _catalog.favoriteListing(
+      listingId: id,
+      favorite: next.contains(id),
+    );
+    if (remote['ok'] == true && mounted) {
+      setState(() {
+        _detail['favorites_count'] = int.tryParse(
+                '${remote['favorites_count'] ?? _detail['favorites_count'] ?? 0}') ??
+            0;
+      });
+    }
     await _prefs.saveFavorites(next);
+  }
+
+  Future<void> _recordViewOnce() async {
+    if (_viewSent) return;
+    final listingId = _asInt(_detail['id']);
+    if (listingId == null || listingId <= 0) return;
+    _viewSent = true;
+    final payload = await _catalog.recordListingView(
+      listingId,
+      sessionKey: 'mobile-${DateTime.now().millisecondsSinceEpoch}',
+    );
+    if (!mounted) return;
+    if (payload['ok'] == true) {
+      setState(() {
+        _detail['views_count'] = int.tryParse(
+                '${payload['views_count'] ?? _detail['views_count'] ?? 0}') ??
+            0;
+        _detail['heat_level'] =
+            (payload['heat_level'] ?? _detail['heat_level'] ?? '').toString();
+      });
+    }
   }
 
   List<String> _extractImages(Map<String, dynamic> data) {
@@ -234,6 +273,33 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _addToCart() async {
+    final listingId = _asInt(_detail['id']);
+    if (listingId == null || listingId <= 0) {
+      _toast('Listing is unavailable for cart.');
+      return;
+    }
+    final res = await _cart.addItem(listingId: listingId, quantity: 1);
+    if (res['ok'] == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Added to cart.'),
+          action: SnackBarAction(
+            label: 'Open cart',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CartScreen()),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+    _toast((res['message'] ?? 'Unable to add item to cart').toString());
   }
 
   Future<void> _buyNowAndRequestDelivery() async {
@@ -313,7 +379,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             .toString();
         _toast(initMsg);
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
+          MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(orderId: orderId)),
         );
         return;
       }
@@ -323,7 +390,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       _toast('Order created successfully.');
       if (initMode == 'manual_company_account') {
         final instructions = paymentInit['manual_instructions'] is Map
-            ? Map<String, dynamic>.from(paymentInit['manual_instructions'] as Map)
+            ? Map<String, dynamic>.from(
+                paymentInit['manual_instructions'] as Map)
             : <String, dynamic>{};
         final paymentIntentRaw = paymentInit['payment_intent_id'];
         final paymentIntentId = paymentIntentRaw is int
@@ -343,7 +411,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         );
       } else {
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: orderId)),
+          MaterialPageRoute(
+              builder: (_) => OrderDetailScreen(orderId: orderId)),
         );
       }
     } catch (e) {
@@ -384,6 +453,16 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       (_detail['state'] ?? '').toString(),
     ].where((v) => v.trim().isNotEmpty).join(', ');
     final posted = formatRelativeTime(_detail['created_at']);
+    final viewsCount = int.tryParse('${_detail['views_count'] ?? 0}') ?? 0;
+    final favoritesCount =
+        int.tryParse('${_detail['favorites_count'] ?? 0}') ?? 0;
+    final heatLevel =
+        (_detail['heat_level'] ?? '').toString().trim().toLowerCase();
+    final heatText = heatLevel == 'hotter'
+        ? 'Hotter'
+        : heatLevel == 'hot'
+            ? 'Hot'
+            : '';
     final merchantName =
         (_detail['merchant_name'] ?? _detail['shop_name'] ?? 'Merchant')
             .toString();
@@ -477,6 +556,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   location.trim().isEmpty ? 'Location not set' : location),
               _metaChip(Icons.sell_outlined, condition),
               _metaChip(Icons.schedule_outlined, posted),
+              _metaChip(Icons.visibility_outlined, '$viewsCount views'),
+              _metaChip(Icons.favorite_outline, '$favoritesCount watching'),
+              if (heatText.isNotEmpty)
+                _metaChip(Icons.local_fire_department_outlined, heatText),
             ],
           ),
           const SizedBox(height: 14),
@@ -615,7 +698,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       bottomNavigationBar: SafeArea(
         top: false,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
           decoration: const BoxDecoration(
             border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
             color: Colors.white,
@@ -629,16 +712,24 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                         builder: (_) => const SupportChatScreen()),
                   ),
                   icon: const Icon(Icons.support_agent_outlined),
-                  label: const Text('Chat Admin'),
+                  label: const Text('Support'),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy || isOwnListing ? null : _addToCart,
+                  icon: const Icon(Icons.add_shopping_cart_outlined),
+                  label: const Text('Cart'),
+                ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed:
                       _busy || isOwnListing ? null : _buyNowAndRequestDelivery,
                   icon: const Icon(Icons.shopping_bag_outlined),
-                  label: Text(_busy ? 'Processing...' : 'Buy Now'),
+                  label: Text(_busy ? '...' : 'Buy'),
                 ),
               ),
             ],

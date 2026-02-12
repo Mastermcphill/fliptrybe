@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../constants/ng_cities.dart';
 import '../services/marketplace_catalog_service.dart';
+import '../services/city_preference_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../ui/components/ft_components.dart';
 import '../ui/theme/ft_tokens.dart';
 import '../widgets/listing/listing_card.dart';
+import 'cart_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'marketplace/favorites_screen.dart';
@@ -21,12 +24,16 @@ class MarketplaceScreen extends StatefulWidget {
 class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final _catalog = MarketplaceCatalogService();
   final _prefs = MarketplacePrefsService();
+  final _cityPrefs = CityPreferenceService();
   final _searchCtrl = TextEditingController();
 
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _all = const [];
+  List<Map<String, dynamic>> _recommendedRemote = const [];
   Set<int> _favorites = <int>{};
+  String _preferredCity = defaultDiscoveryCity;
+  String _preferredState = defaultDiscoveryState;
 
   @override
   void initState() {
@@ -49,11 +56,23 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       final values = await Future.wait([
         _catalog.listAll(),
         _prefs.loadFavorites(),
+        _cityPrefs.syncFromServer(),
       ]);
+      final pref = Map<String, String>.from(values[2] as Map<String, String>);
+      final city = (pref['preferred_city'] ?? defaultDiscoveryCity).trim();
+      final state = (pref['preferred_state'] ?? defaultDiscoveryState).trim();
+      final remoteRecommended = await _catalog.recommendedRemote(
+        city: city,
+        state: state,
+        limit: 12,
+      );
       if (!mounted) return;
       setState(() {
         _all = values[0] as List<Map<String, dynamic>>;
         _favorites = values[1] as Set<int>;
+        _preferredCity = city.isEmpty ? defaultDiscoveryCity : city;
+        _preferredState = state.isEmpty ? defaultDiscoveryState : state;
+        _recommendedRemote = remoteRecommended;
         _loading = false;
       });
     } catch (_) {
@@ -66,7 +85,9 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _toggleFavorite(Map<String, dynamic> item) async {
-    final id = item['id'] is int ? item['id'] as int : int.tryParse('${item['id']}') ?? -1;
+    final id = item['id'] is int
+        ? item['id'] as int
+        : int.tryParse('${item['id']}') ?? -1;
     if (id <= 0) return;
     final next = <int>{..._favorites};
     if (next.contains(id)) {
@@ -76,6 +97,82 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
     setState(() => _favorites = next);
     await _prefs.saveFavorites(next);
+  }
+
+  Future<void> _pickCity() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final ctrl = TextEditingController();
+        return StatefulBuilder(
+          builder: (context, setModal) {
+            final query = ctrl.text.trim().toLowerCase();
+            final rows = nigeriaTieredCities
+                .where((city) =>
+                    query.isEmpty || city.toLowerCase().contains(query))
+                .toList(growable: false);
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 12,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Choose city'),
+                      subtitle: Text(
+                          'City-first discovery for recommendations and search'),
+                    ),
+                    TextField(
+                      controller: ctrl,
+                      onChanged: (_) => setModal(() {}),
+                      decoration: const InputDecoration(
+                        hintText: 'Search city',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 340,
+                      child: ListView.builder(
+                        itemCount: rows.length,
+                        itemBuilder: (_, index) {
+                          final city = rows[index];
+                          final isCurrent = city == _preferredCity;
+                          return ListTile(
+                            title: Text(city),
+                            trailing: isCurrent
+                                ? const Icon(Icons.check_circle,
+                                    color: Colors.green)
+                                : null,
+                            onTap: () => Navigator.of(ctx).pop(city),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (selected == null || selected.trim().isEmpty) return;
+    await _cityPrefs.saveAndSync(
+        preferredCity: selected.trim(), preferredState: _preferredState);
+    if (!mounted) return;
+    await _load();
   }
 
   void _openResults({
@@ -149,6 +246,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   @override
   Widget build(BuildContext context) {
     final recommended = _catalog.recommended(_all, limit: 10);
+    final recommendedItems =
+        _recommendedRemote.isNotEmpty ? _recommendedRemote : recommended;
     final trending = _catalog.trending(_all, limit: 10);
     final newest = _catalog.newest(_all, limit: 10);
     final bestValue = _catalog.bestValue(_all, limit: 10);
@@ -169,6 +268,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             MaterialPageRoute(builder: (_) => const FavoritesScreen()),
           ),
           icon: const Icon(Icons.favorite_border),
+        ),
+        IconButton(
+          tooltip: 'Cart',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CartScreen()),
+          ),
+          icon: const Icon(Icons.shopping_cart_outlined),
         ),
       ],
       floatingActionButton: FloatingActionButton.extended(
@@ -204,7 +310,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             suffixIcon: IconButton(
                               icon: const Icon(Icons.tune),
                               tooltip: 'Open filters',
-                              onPressed: () => _openResults(query: _searchCtrl.text),
+                              onPressed: () =>
+                                  _openResults(query: _searchCtrl.text),
                             ),
                           ),
                         ),
@@ -214,18 +321,49 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                           child: Column(
                             children: [
+                              FTCard(
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'City Discovery',
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.w800),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                              'Showing results around $_preferredCity'),
+                                        ],
+                                      ),
+                                    ),
+                                    OutlinedButton.icon(
+                                      onPressed: _pickCity,
+                                      icon: const Icon(
+                                          Icons.location_city_outlined),
+                                      label: Text(_preferredCity),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
                               _section(
                                 context,
                                 title: 'Recommended for you',
-                                subtitle: 'Based on active listings and quality score',
-                                items: recommended,
+                                subtitle:
+                                    'Ranked by city, heat, freshness, and quality',
+                                items: recommendedItems,
                                 seeAllSort: 'relevance',
                               ),
                               const SizedBox(height: 18),
                               _section(
                                 context,
                                 title: 'Trending near you',
-                                subtitle: 'Fast-moving listings with strong demand',
+                                subtitle:
+                                    'Fast-moving listings with strong demand',
                                 items: trending,
                                 seeAllSort: 'distance',
                               ),
@@ -241,7 +379,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               _section(
                                 context,
                                 title: 'Best value',
-                                subtitle: 'Low-price options with solid condition tags',
+                                subtitle:
+                                    'Low-price options with solid condition tags',
                                 items: bestValue,
                                 seeAllSort: 'price_low',
                               ),
@@ -290,7 +429,8 @@ class _MarketplaceSkeleton extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(child: FTSkeleton(height: double.infinity)),
+                            Expanded(
+                                child: FTSkeleton(height: double.infinity)),
                             SizedBox(height: 8),
                             FTSkeleton(height: 16, width: 100),
                             SizedBox(height: 6),

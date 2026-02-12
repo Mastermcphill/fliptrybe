@@ -9,7 +9,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from flask import Blueprint, jsonify, request, current_app, g
 
 from app.extensions import db
-from app.models import AuditLog, User, PaymentIntent, PaymentIntentTransition, WebhookEvent, Order
+from app.models import AuditLog, User, PaymentIntent, PaymentIntentTransition, WebhookEvent, Order, ShortletBooking
 from app.utils.jwt_utils import decode_token
 from app.utils.paystack_client import verify_signature
 from app.utils.wallets import post_txn
@@ -28,6 +28,8 @@ from app.services.risk_engine_service import record_event
 payments_bp = Blueprint("payments_bp", __name__, url_prefix="/api/payments")
 admin_payments_bp = Blueprint("admin_payments_bp", __name__, url_prefix="/api/admin/payments")
 public_payments_bp = Blueprint("public_payments_bp", __name__, url_prefix="/api/public")
+admin_payment_intents_bp = Blueprint("admin_payment_intents_bp", __name__, url_prefix="/api/admin/payment-intents")
+payment_intents_bp = Blueprint("payment_intents_bp", __name__, url_prefix="/api/payment-intents")
 
 _INIT = False
 
@@ -295,10 +297,35 @@ def _payments_mode_payload(settings) -> dict:
 def _extract_order_id(meta_raw) -> int | None:
     payload = _meta_dict(meta_raw)
     oid = payload.get("order_id")
+    if oid is None:
+        order_ids = payload.get("order_ids")
+        if isinstance(order_ids, list) and order_ids:
+            oid = order_ids[0]
     try:
         return int(oid) if oid is not None else None
     except Exception:
         return None
+
+
+def _extract_order_ids(meta_raw) -> list[int]:
+    payload = _meta_dict(meta_raw)
+    out: list[int] = []
+    order_ids = payload.get("order_ids")
+    if isinstance(order_ids, list):
+        for value in order_ids:
+            try:
+                out.append(int(value))
+            except Exception:
+                continue
+    oid = payload.get("order_id")
+    if oid is not None:
+        try:
+            parsed = int(oid)
+            if parsed not in out:
+                out.append(parsed)
+        except Exception:
+            pass
+    return out
 
 
 def _ensure_payment_intent(*, user_id: int, provider: str, reference: str, purpose: str, amount: float, meta: dict) -> PaymentIntent:
@@ -359,6 +386,13 @@ def _mark_order_paid(order: Order, reference: str):
         order.status = "paid"
         order.payment_reference = reference
     db.session.add(order)
+    db.session.commit()
+
+
+def _mark_shortlet_booking_paid(booking: ShortletBooking, reference: str):
+    booking.payment_status = "paid"
+    booking.status = "confirmed"
+    db.session.add(booking)
     db.session.commit()
 
 
@@ -534,36 +568,29 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
                 db.session.rollback()
             return {"ok": False, "error": "AMOUNT_MISMATCH", "reference": reference}, 200
 
-        if (pi.purpose or "").strip().lower() == "order":
-            order_id = _extract_order_id(pi.meta)
-            if not order_id:
+        purpose_key = (pi.purpose or "").strip().lower()
+        if purpose_key == "shortlet_booking":
+            payload_meta = _meta_dict(pi.meta)
+            try:
+                booking_id = int(payload_meta.get("booking_id"))
+            except Exception:
+                booking_id = None
+            booking = db.session.get(ShortletBooking, int(booking_id)) if booking_id else None
+            if not booking:
                 try:
                     if webhook_row is None:
                         webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
                     if webhook_row:
-                        webhook_row.status = "order_missing"
+                        webhook_row.status = "booking_not_found"
                         webhook_row.processed_at = datetime.utcnow()
-                        webhook_row.error = "ORDER_ID_MISSING"
+                        webhook_row.error = "BOOKING_NOT_FOUND"
                         db.session.add(webhook_row)
                         db.session.commit()
                 except Exception:
                     db.session.rollback()
-                return {"ok": False, "error": "ORDER_ID_MISSING", "reference": reference}, 200
-            order = db.session.get(Order, int(order_id))
-            if not order:
-                try:
-                    if webhook_row is None:
-                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
-                    if webhook_row:
-                        webhook_row.status = "order_not_found"
-                        webhook_row.processed_at = datetime.utcnow()
-                        webhook_row.error = "ORDER_NOT_FOUND"
-                        db.session.add(webhook_row)
-                        db.session.commit()
-                except Exception:
-                    db.session.rollback()
-                return {"ok": False, "error": "ORDER_NOT_FOUND", "reference": reference}, 200
-            if _order_is_paid(order):
+                return {"ok": False, "error": "BOOKING_NOT_FOUND", "reference": reference}, 200
+
+            if (booking.payment_status or "").strip().lower() == "paid":
                 try:
                     transition_intent(
                         pi,
@@ -586,7 +613,90 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
                         db.session.commit()
                 except Exception:
                     db.session.rollback()
-                return {"ok": True, "verified": verified, "already_paid": True}, 200
+                return {"ok": True, "verified": verified, "already_paid": True, "booking_id": int(booking.id)}, 200
+
+            transition_intent(
+                pi,
+                PaymentIntentStatus.PAID,
+                actor={"type": "webhook"},
+                idempotency_key=f"webhook:paystack:{event_id}",
+                reason="charge_success_shortlet_booking",
+                metadata={"reference": reference, "source": source, "booking_id": int(booking.id)},
+            )
+            _mark_shortlet_booking_paid(booking, reference=reference)
+            try:
+                if webhook_row is None:
+                    webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                if webhook_row:
+                    webhook_row.status = "processed"
+                    webhook_row.processed_at = datetime.utcnow()
+                    webhook_row.error = None
+                    db.session.add(webhook_row)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+            return {"ok": True, "verified": verified, "purpose": "shortlet_booking", "booking_id": int(booking.id)}, 200
+
+        if purpose_key == "order":
+            order_ids = _extract_order_ids(pi.meta)
+            if not order_ids:
+                try:
+                    if webhook_row is None:
+                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                    if webhook_row:
+                        webhook_row.status = "order_missing"
+                        webhook_row.processed_at = datetime.utcnow()
+                        webhook_row.error = "ORDER_ID_MISSING"
+                        db.session.add(webhook_row)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                return {"ok": False, "error": "ORDER_ID_MISSING", "reference": reference}, 200
+            orders: list[Order] = []
+            missing = []
+            for oid in order_ids:
+                row = db.session.get(Order, int(oid))
+                if row is None:
+                    missing.append(int(oid))
+                else:
+                    orders.append(row)
+            if missing:
+                try:
+                    if webhook_row is None:
+                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                    if webhook_row:
+                        webhook_row.status = "order_not_found"
+                        webhook_row.processed_at = datetime.utcnow()
+                        webhook_row.error = "ORDER_NOT_FOUND"
+                        db.session.add(webhook_row)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                return {"ok": False, "error": "ORDER_NOT_FOUND", "reference": reference, "missing_order_ids": missing}, 200
+            if orders and all(_order_is_paid(order) for order in orders):
+                try:
+                    transition_intent(
+                        pi,
+                        PaymentIntentStatus.PAID,
+                        actor={"type": "webhook"},
+                        idempotency_key=f"webhook:paystack:{event_id}",
+                        reason="charge_success_replay",
+                        metadata={"reference": reference, "source": source},
+                    )
+                except Exception:
+                    db.session.rollback()
+                try:
+                    if webhook_row is None:
+                        webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
+                    if webhook_row:
+                        webhook_row.status = "processed"
+                        webhook_row.processed_at = datetime.utcnow()
+                        webhook_row.error = None
+                        db.session.add(webhook_row)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                return {"ok": True, "verified": verified, "already_paid": True, "order_ids": [int(o.id) for o in orders]}, 200
 
             transition_intent(
                 pi,
@@ -596,7 +706,12 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
                 reason="charge_success",
                 metadata={"reference": reference, "source": source},
             )
-            _mark_order_paid(order, reference=reference)
+            paid_ids = []
+            for order in orders:
+                if _order_is_paid(order):
+                    continue
+                _mark_order_paid(order, reference=reference)
+                paid_ids.append(int(order.id))
             try:
                 if webhook_row is None:
                     webhook_row = WebhookEvent.query.filter_by(provider="paystack", event_id=event_id).first()
@@ -612,12 +727,12 @@ def process_paystack_webhook(*, payload: dict, raw: bytes, signature: str | None
                 record_event(
                     "webhook_success",
                     user=None,
-                    context={"reference": reference, "event_id": event_id, "order_id": int(order.id)},
+                    context={"reference": reference, "event_id": event_id, "order_ids": [int(o.id) for o in orders]},
                     request_id=request_id,
                 )
             except Exception:
                 db.session.rollback()
-            return {"ok": True, "verified": verified, "purpose": "order"}, 200
+            return {"ok": True, "verified": verified, "purpose": "order", "order_ids": [int(o.id) for o in orders], "paid_ids": paid_ids}, 200
 
         _credit_wallet_from_reference(reference)
         try:
@@ -1037,6 +1152,16 @@ def submit_manual_payment_proof(intent_id: int):
         return jsonify({"ok": False, "error": "PROOF_SUBMIT_FAILED", "message": str(e)}), 500
 
 
+@payments_bp.post("/payment-intents/<int:intent_id>/manual-proof")
+def submit_manual_payment_proof_alias(intent_id: int):
+    return submit_manual_payment_proof(intent_id)
+
+
+@payment_intents_bp.post("/<int:intent_id>/manual-proof")
+def submit_manual_payment_proof_root_alias(intent_id: int):
+    return submit_manual_payment_proof(intent_id)
+
+
 @payments_bp.post("/webhook/paystack")
 def paystack_webhook():
     try:
@@ -1102,6 +1227,11 @@ def _manual_intent_context(row: PaymentIntent):
 
 def _manual_intent_item(row: PaymentIntent) -> dict:
     oid, order, buyer, proof = _manual_intent_context(row)
+    payload = _meta_dict(row.meta)
+    try:
+        booking_id = int(payload.get("booking_id")) if payload.get("booking_id") is not None else None
+    except Exception:
+        booking_id = None
     return {
         "payment_intent_id": int(row.id),
         "intent_id": int(row.id),
@@ -1109,6 +1239,7 @@ def _manual_intent_item(row: PaymentIntent) -> dict:
         "status": row.status or "",
         "amount": float(row.amount or 0.0),
         "order_id": int(oid) if oid else None,
+        "booking_id": booking_id,
         "buyer_id": int(order.buyer_id) if order and order.buyer_id is not None else None,
         "buyer_email": getattr(buyer, "email", "") or "",
         "buyer_phone": getattr(buyer, "phone", "") or "",
@@ -1124,6 +1255,12 @@ def _manual_intent_item(row: PaymentIntent) -> dict:
 
 def _manual_intent_details_payload(row: PaymentIntent) -> dict:
     oid, order, buyer, proof = _manual_intent_context(row)
+    payload = _meta_dict(row.meta)
+    try:
+        booking_id = int(payload.get("booking_id")) if payload.get("booking_id") is not None else None
+    except Exception:
+        booking_id = None
+    booking = db.session.get(ShortletBooking, int(booking_id)) if booking_id else None
     transitions = (
         PaymentIntentTransition.query.filter_by(intent_id=int(row.id))
         .order_by(PaymentIntentTransition.created_at.asc())
@@ -1145,6 +1282,12 @@ def _manual_intent_details_payload(row: PaymentIntent) -> dict:
         }
         if order
         else None,
+        "booking": {
+            "id": int(booking.id),
+            "shortlet_id": int(booking.shortlet_id),
+            "status": (booking.status or "").strip().lower(),
+            "payment_status": (booking.payment_status or "").strip().lower(),
+        } if booking else None,
         "buyer": {
             "id": int(buyer.id),
             "name": (buyer.name or ""),
@@ -1257,34 +1400,52 @@ def admin_mark_manual_paid():
     manual_intent = db.session.get(PaymentIntent, int(intent_id))
     if not manual_intent or (manual_intent.provider or "").strip().lower() != "manual_company_account":
         return jsonify({"ok": False, "error": "MANUAL_INTENT_NOT_FOUND"}), 404
-    if (manual_intent.purpose or "").strip().lower() != "order":
+    purpose = (manual_intent.purpose or "").strip().lower()
+    if purpose not in ("order", "shortlet_booking"):
         return jsonify({"ok": False, "error": "INTENT_PURPOSE_UNSUPPORTED"}), 409
 
-    order_id = _extract_order_id(manual_intent.meta)
-    order = db.session.get(Order, int(order_id)) if order_id else None
-    if not order:
-        return jsonify({"ok": False, "error": "ORDER_NOT_FOUND"}), 404
+    booking = None
+    orders: list[Order] = []
+    if purpose == "shortlet_booking":
+        payload_meta = _meta_dict(manual_intent.meta)
+        try:
+            booking_id = int(payload_meta.get("booking_id"))
+        except Exception:
+            booking_id = None
+        booking = db.session.get(ShortletBooking, int(booking_id)) if booking_id else None
+        if not booking:
+            return jsonify({"ok": False, "error": "BOOKING_NOT_FOUND"}), 404
+    else:
+        order_ids = _extract_order_ids(manual_intent.meta)
+        orders = [db.session.get(Order, int(oid)) for oid in order_ids]
+        orders = [row for row in orders if row is not None]
+        if not orders:
+            return jsonify({"ok": False, "error": "ORDER_NOT_FOUND"}), 404
 
     current_status = (manual_intent.status or "").strip().lower()
     if current_status == PaymentIntentStatus.CANCELLED:
         return jsonify({"ok": False, "error": "INTENT_CANCELLED"}), 409
     if current_status == PaymentIntentStatus.FAILED:
         return jsonify({"ok": False, "error": "INTENT_FAILED"}), 409
-    if current_status == PaymentIntentStatus.PAID or _order_is_paid(order):
+    already_paid_orders = all(_order_is_paid(order) for order in orders) if orders else False
+    already_paid_booking = bool(booking and (booking.payment_status or "").strip().lower() == "paid")
+    if current_status == PaymentIntentStatus.PAID or already_paid_orders or already_paid_booking:
         return jsonify(
             {
                 "ok": True,
                 "idempotent": True,
                 "payment_intent_id": int(manual_intent.id),
-                "order_id": int(order.id),
-                "reference": manual_intent.reference or (order.payment_reference or ""),
+                "order_id": int(orders[0].id) if orders else None,
+                "order_ids": [int(order.id) for order in orders],
+                "booking_id": int(booking.id) if booking else None,
+                "reference": manual_intent.reference or ((orders[0].payment_reference if orders else "") or ""),
             }
         ), 200
 
     amount_minor = data.get("amount_minor")
     if amount_minor is not None:
         try:
-            expected_minor = int((_order_payment_amount(order) * 100.0))
+            expected_minor = int(sum(_order_payment_amount(order) for order in orders) * 100.0) if orders else int(booking.amount_minor or 0)
             provided_minor = int(amount_minor)
         except Exception:
             return jsonify({"ok": False, "message": "amount_minor invalid"}), 400
@@ -1294,17 +1455,20 @@ def admin_mark_manual_paid():
     bank_txn_reference = str((data.get("bank_txn_reference") or "")).strip()
     note = str((data.get("note") or "")).strip()
     now_stamp = int(datetime.utcnow().timestamp())
-    final_reference = (manual_intent.reference or "").strip() or (order.payment_reference or "").strip()
+    final_reference = (manual_intent.reference or "").strip() or (orders[0].payment_reference if orders else "").strip()
     if not final_reference:
-        final_reference = f"FT-MAN-{int(order.id)}-{now_stamp}"
+        anchor = int(orders[0].id) if orders else int(booking.id)
+        final_reference = f"FT-MAN-{anchor}-{now_stamp}"
 
     try:
         manual_intent.reference = final_reference
         manual_intent.provider = "manual_company_account"
         manual_intent.purpose = "order"
         payload = _meta_dict(manual_intent.meta)
-        payload["order_id"] = int(order.id)
-        payload["purpose"] = "order"
+        payload["order_ids"] = [int(order.id) for order in orders]
+        payload["order_id"] = int(orders[0].id) if orders else None
+        payload["booking_id"] = int(booking.id) if booking else None
+        payload["purpose"] = purpose
         payload["manual_mark_paid"] = {
             "marked_by_admin_id": int(u.id),
             "marked_at": datetime.utcnow().isoformat(),
@@ -1325,20 +1489,31 @@ def admin_mark_manual_paid():
             reason="manual_admin_mark_paid",
             metadata={
                 "reference": final_reference,
-                "order_id": int(order.id),
+                "order_ids": [int(order.id) for order in orders],
+                "booking_id": int(booking.id) if booking else None,
                 "bank_txn_reference": bank_txn_reference[:120],
             },
         )
 
-        _mark_order_paid(order, reference=final_reference)
+        paid_ids = []
+        if booking is not None:
+            _mark_shortlet_booking_paid(booking, reference=final_reference)
+            paid_ids.append(int(booking.id))
+        else:
+            for order in orders:
+                if _order_is_paid(order):
+                    continue
+                _mark_order_paid(order, reference=final_reference)
+                paid_ids.append(int(order.id))
         try:
             record_event(
                 "manual_mark_paid",
                 user=u,
                 context={
-                    "order_id": int(order.id),
+                    "order_ids": [int(order.id) for order in orders],
+                    "booking_id": int(booking.id) if booking else None,
                     "payment_intent_id": int(manual_intent.id),
-                    "amount": float(_order_payment_amount(order)),
+                    "amount": float(sum(_order_payment_amount(order) for order in orders)) if orders else float(booking.total_amount if booking else 0.0),
                 },
                 request_id=_request_id(),
             )
@@ -1350,7 +1525,8 @@ def admin_mark_manual_paid():
             target_type="payment_intent",
             target_id=int(manual_intent.id),
             meta={
-                "order_id": int(order.id),
+                "order_ids": [int(order.id) for order in orders],
+                "booking_id": int(booking.id) if booking else None,
                 "reference": final_reference,
                 "bank_txn_reference": bank_txn_reference[:120],
                 "note": note[:240],
@@ -1360,7 +1536,10 @@ def admin_mark_manual_paid():
             {
                 "ok": True,
                 "payment_intent_id": int(manual_intent.id),
-                "order_id": int(order.id),
+                "order_id": int(orders[0].id) if orders else None,
+                "order_ids": [int(order.id) for order in orders],
+                "booking_id": int(booking.id) if booking else None,
+                "paid_ids": paid_ids,
                 "reference": final_reference,
             }
         ), 200
@@ -1368,6 +1547,14 @@ def admin_mark_manual_paid():
         db.session.rollback()
         current_app.logger.exception("admin_mark_manual_paid_failed payment_intent_id=%s", int(manual_intent.id))
         return jsonify({"ok": False, "error": "MANUAL_MARK_PAID_FAILED", "message": str(e)}), 500
+
+
+@admin_payments_bp.post("/payment-intents/<int:intent_id>/manual/mark-paid")
+def admin_mark_manual_paid_alias(intent_id: int):
+    payload = request.get_json(silent=True) or {}
+    payload["payment_intent_id"] = int(intent_id)
+    request._cached_json = (payload, payload)  # noqa: SLF001
+    return admin_mark_manual_paid()
 
 
 @admin_payments_bp.post("/manual/reject")
@@ -1399,6 +1586,7 @@ def admin_reject_manual_paid():
         return jsonify({"ok": False, "message": "reason required"}), 400
 
     order_id = _extract_order_id(intent.meta)
+    order_ids = _extract_order_ids(intent.meta)
     payload = _meta_dict(intent.meta)
     payload["manual_reject"] = {
         "reason": reason[:240],
@@ -1423,7 +1611,7 @@ def admin_reject_manual_paid():
         record_event(
             "manual_payment_reject",
             user=u,
-            context={"payment_intent_id": int(intent.id), "order_id": int(order_id) if order_id else None},
+            context={"payment_intent_id": int(intent.id), "order_id": int(order_id) if order_id else None, "order_ids": order_ids},
             request_id=_request_id(),
         )
     except Exception:
@@ -1434,7 +1622,7 @@ def admin_reject_manual_paid():
         action="manual_payment_reject",
         target_type="payment_intent",
         target_id=int(intent.id),
-        meta={"order_id": int(order_id) if order_id else None, "reason": reason[:240]},
+        meta={"order_id": int(order_id) if order_id else None, "order_ids": order_ids, "reason": reason[:240]},
     )
 
     return jsonify(
@@ -1442,6 +1630,31 @@ def admin_reject_manual_paid():
             "ok": True,
             "payment_intent_id": int(intent.id),
             "order_id": int(order_id) if order_id else None,
+            "order_ids": order_ids,
             "status": "cancelled",
         }
     ), 200
+
+
+@admin_payments_bp.post("/payment-intents/<int:intent_id>/manual/reject")
+def admin_reject_manual_paid_alias(intent_id: int):
+    payload = request.get_json(silent=True) or {}
+    payload["payment_intent_id"] = int(intent_id)
+    request._cached_json = (payload, payload)  # noqa: SLF001
+    return admin_reject_manual_paid()
+
+
+@admin_payment_intents_bp.post("/<int:intent_id>/manual/mark-paid")
+def admin_mark_manual_paid_alias_root(intent_id: int):
+    payload = request.get_json(silent=True) or {}
+    payload["payment_intent_id"] = int(intent_id)
+    request._cached_json = (payload, payload)  # noqa: SLF001
+    return admin_mark_manual_paid()
+
+
+@admin_payment_intents_bp.post("/<int:intent_id>/manual/reject")
+def admin_reject_manual_paid_alias_root(intent_id: int):
+    payload = request.get_json(silent=True) or {}
+    payload["payment_intent_id"] = int(intent_id)
+    request._cached_json = (payload, payload)  # noqa: SLF001
+    return admin_reject_manual_paid()

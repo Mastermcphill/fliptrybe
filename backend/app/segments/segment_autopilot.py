@@ -104,6 +104,11 @@ def _settings_payload(s):
         "payments_allow_legacy_fallback": bool(getattr(s, "payments_allow_legacy_fallback", False)),
         "otel_enabled": bool(getattr(s, "otel_enabled", False)),
         "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
+        "city_discovery_v1": bool(getattr(s, "city_discovery_v1", True)),
+        "views_heat_v1": bool(getattr(s, "views_heat_v1", True)),
+        "cart_checkout_v1": bool(getattr(s, "cart_checkout_v1", False)),
+        "shortlet_reels_v1": bool(getattr(s, "shortlet_reels_v1", False)),
+        "watcher_notifications_v1": bool(getattr(s, "watcher_notifications_v1", False)),
     }
     return base
 
@@ -244,6 +249,11 @@ def update_settings():
     )
     s.otel_enabled = _as_bool(data.get("otel_enabled"), bool(getattr(s, "otel_enabled", False)))
     s.rate_limit_enabled = _as_bool(data.get("rate_limit_enabled"), bool(getattr(s, "rate_limit_enabled", True)))
+    s.city_discovery_v1 = _as_bool(data.get("city_discovery_v1"), bool(getattr(s, "city_discovery_v1", True)))
+    s.views_heat_v1 = _as_bool(data.get("views_heat_v1"), bool(getattr(s, "views_heat_v1", True)))
+    s.cart_checkout_v1 = _as_bool(data.get("cart_checkout_v1"), bool(getattr(s, "cart_checkout_v1", False)))
+    s.shortlet_reels_v1 = _as_bool(data.get("shortlet_reels_v1"), bool(getattr(s, "shortlet_reels_v1", False)))
+    s.watcher_notifications_v1 = _as_bool(data.get("watcher_notifications_v1"), bool(getattr(s, "watcher_notifications_v1", False)))
     if "manual_payment_bank_name" in data:
         s.manual_payment_bank_name = str(data.get("manual_payment_bank_name") or "").strip()[:120]
     if "manual_payment_account_number" in data:
@@ -298,6 +308,11 @@ def get_payments_settings():
         "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
         "otel_enabled": bool(getattr(s, "otel_enabled", False)),
         "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
+        "city_discovery_v1": bool(getattr(s, "city_discovery_v1", True)),
+        "views_heat_v1": bool(getattr(s, "views_heat_v1", True)),
+        "cart_checkout_v1": bool(getattr(s, "cart_checkout_v1", False)),
+        "shortlet_reels_v1": bool(getattr(s, "shortlet_reels_v1", False)),
+        "watcher_notifications_v1": bool(getattr(s, "watcher_notifications_v1", False)),
         "manual_payment_bank_name": (getattr(s, "manual_payment_bank_name", "") or ""),
         "manual_payment_account_number": (getattr(s, "manual_payment_account_number", "") or ""),
         "manual_payment_account_name": (getattr(s, "manual_payment_account_name", "") or ""),
@@ -343,6 +358,16 @@ def set_payments_settings():
         s.otel_enabled = _as_bool(data.get("otel_enabled"), bool(getattr(s, "otel_enabled", False)))
     if "rate_limit_enabled" in data:
         s.rate_limit_enabled = _as_bool(data.get("rate_limit_enabled"), bool(getattr(s, "rate_limit_enabled", True)))
+    if "city_discovery_v1" in data:
+        s.city_discovery_v1 = _as_bool(data.get("city_discovery_v1"), bool(getattr(s, "city_discovery_v1", True)))
+    if "views_heat_v1" in data:
+        s.views_heat_v1 = _as_bool(data.get("views_heat_v1"), bool(getattr(s, "views_heat_v1", True)))
+    if "cart_checkout_v1" in data:
+        s.cart_checkout_v1 = _as_bool(data.get("cart_checkout_v1"), bool(getattr(s, "cart_checkout_v1", False)))
+    if "shortlet_reels_v1" in data:
+        s.shortlet_reels_v1 = _as_bool(data.get("shortlet_reels_v1"), bool(getattr(s, "shortlet_reels_v1", False)))
+    if "watcher_notifications_v1" in data:
+        s.watcher_notifications_v1 = _as_bool(data.get("watcher_notifications_v1"), bool(getattr(s, "watcher_notifications_v1", False)))
     if "manual_payment_bank_name" in data:
         s.manual_payment_bank_name = str(data.get("manual_payment_bank_name") or "").strip()[:120]
     if "manual_payment_account_number" in data:
@@ -369,6 +394,11 @@ def set_payments_settings():
         "search_v2_mode": (getattr(s, "search_v2_mode", None) or "off"),
         "otel_enabled": bool(getattr(s, "otel_enabled", False)),
         "rate_limit_enabled": bool(getattr(s, "rate_limit_enabled", True)),
+        "city_discovery_v1": bool(getattr(s, "city_discovery_v1", True)),
+        "views_heat_v1": bool(getattr(s, "views_heat_v1", True)),
+        "cart_checkout_v1": bool(getattr(s, "cart_checkout_v1", False)),
+        "shortlet_reels_v1": bool(getattr(s, "shortlet_reels_v1", False)),
+        "watcher_notifications_v1": bool(getattr(s, "watcher_notifications_v1", False)),
         "manual_payment_bank_name": (getattr(s, "manual_payment_bank_name", "") or ""),
         "manual_payment_account_number": (getattr(s, "manual_payment_account_number", "") or ""),
         "manual_payment_account_name": (getattr(s, "manual_payment_account_name", "") or ""),

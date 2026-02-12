@@ -60,6 +60,10 @@ class Shortlet(db.Model):
     rating = db.Column(db.Float, nullable=False, default=0.0)
     reviews_count = db.Column(db.Integer, nullable=False, default=0)
     verification_score = db.Column(db.Integer, nullable=False, default=0)  # 0-100
+    views_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    favorites_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    heat_level = db.Column(db.String(16), nullable=False, default="normal", server_default="normal")
+    heat_score = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -120,6 +124,10 @@ class Shortlet(db.Model):
             "rating": float(self.rating or 0.0),
             "reviews_count": int(self.reviews_count or 0),
             "verification_score": int(self.verification_score or 0),
+            "views_count": int(getattr(self, "views_count", 0) or 0),
+            "favorites_count": int(getattr(self, "favorites_count", 0) or 0),
+            "heat_level": (getattr(self, "heat_level", "normal") or "normal"),
+            "heat_score": int(getattr(self, "heat_score", 0) or 0),
             "image_path": img,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -130,6 +138,11 @@ class ShortletBooking(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     shortlet_id = db.Column(db.Integer, db.ForeignKey("shortlets.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    payment_intent_id = db.Column(db.Integer, db.ForeignKey("payment_intents.id"), nullable=True, index=True)
+    payment_status = db.Column(db.String(32), nullable=False, default="pending")
+    payment_method = db.Column(db.String(48), nullable=False, default="wallet")
+    amount_minor = db.Column(db.Integer, nullable=False, default=0)
 
     # In future: user_id, payment refs, etc.
     guest_name = db.Column(db.String(120), nullable=True)
@@ -149,6 +162,11 @@ class ShortletBooking(db.Model):
         return {
             "id": self.id,
             "shortlet_id": self.shortlet_id,
+            "user_id": int(self.user_id) if self.user_id is not None else None,
+            "payment_intent_id": int(self.payment_intent_id) if self.payment_intent_id is not None else None,
+            "payment_status": self.payment_status or "pending",
+            "payment_method": self.payment_method or "wallet",
+            "amount_minor": int(self.amount_minor or 0),
             "guest_name": self.guest_name or "",
             "guest_phone": self.guest_phone or "",
             "check_in": self.check_in.isoformat() if self.check_in else None,

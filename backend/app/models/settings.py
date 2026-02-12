@@ -14,6 +14,8 @@ class UserSettings(db.Model):
     notif_whatsapp = db.Column(db.Boolean, nullable=False, default=False)
 
     dark_mode = db.Column(db.Boolean, nullable=False, default=False)
+    preferred_city = db.Column(db.String(80), nullable=True)
+    preferred_state = db.Column(db.String(80), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -24,4 +26,6 @@ class UserSettings(db.Model):
             "notif_sms": bool(self.notif_sms),
             "notif_whatsapp": bool(self.notif_whatsapp),
             "dark_mode": bool(self.dark_mode),
+            "preferred_city": (self.preferred_city or ""),
+            "preferred_state": (self.preferred_state or ""),
         }

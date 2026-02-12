@@ -1,29 +1,48 @@
 import 'package:flutter/material.dart';
 
+import '../services/payment_service.dart';
 import '../services/shortlet_service.dart';
-import '../services/api_client.dart';
+import '../utils/formatters.dart';
+import '../ui/components/ft_components.dart';
 import '../widgets/safe_image.dart';
 
 class ShortletDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> shortlet;
-
   const ShortletDetailScreen({super.key, required this.shortlet});
+
+  final Map<String, dynamic> shortlet;
 
   @override
   State<ShortletDetailScreen> createState() => _ShortletDetailScreenState();
 }
 
 class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
-  final _svc = ShortletService();
+  final ShortletService _svc = ShortletService();
+  final PaymentService _payments = PaymentService();
+  final TextEditingController _checkInCtrl = TextEditingController();
+  final TextEditingController _checkOutCtrl = TextEditingController();
+  final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _proofRefCtrl = TextEditingController();
+  final TextEditingController _proofNoteCtrl = TextEditingController();
 
-  final _checkInCtrl = TextEditingController();
-  final _checkOutCtrl = TextEditingController();
-  final _nameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-
-  bool _loadingQuote = false;
-  Map<String, dynamic>? _quote;
+  bool _loading = false;
   bool _booking = false;
+  bool _favoriteBusy = false;
+  bool _favorite = false;
+  bool _viewSent = false;
+  String _paymentMethod = 'wallet';
+  int? _paymentIntentId;
+  Map<String, dynamic> _shortlet = const <String, dynamic>{};
+  Map<String, dynamic>? _manualInstructions;
+
+  @override
+  void initState() {
+    super.initState();
+    _shortlet = Map<String, dynamic>.from(widget.shortlet);
+    _favorite = _shortlet['is_favorite'] == true;
+    _refresh();
+    _recordView();
+  }
 
   @override
   void dispose() {
@@ -31,248 +50,401 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     _checkOutCtrl.dispose();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _proofRefCtrl.dispose();
+    _proofNoteCtrl.dispose();
     super.dispose();
   }
 
-  List<String> _asStringList(dynamic v) {
-    if (v is List) return v.map((e) => e.toString()).where((s) => s.trim().isNotEmpty).toList();
-    if (v is String) {
-      final s = v.trim();
-      if (s.isEmpty) return [];
-      // crude parse: try JSON list else comma-separated
-      try {
-        final data = ApiClient.instance.jsonDecodeSafe(s);
-        if (data is List) return data.map((e) => e.toString()).toList();
-      } catch (_) {}
-      return s.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList();
-    }
-    return [];
+  int _id() => int.tryParse('${_shortlet['id'] ?? 0}') ?? 0;
+
+  String _location(Map<String, dynamic> row) {
+    final city = (row['city'] ?? '').toString().trim();
+    final state = (row['state'] ?? '').toString().trim();
+    if (city.isEmpty && state.isEmpty) return 'Location not set';
+    if (city.isEmpty) return state;
+    if (state.isEmpty) return city;
+    return '$city, $state';
   }
 
-  Future<void> _getQuote() async {
-    final id = widget.shortlet['id'];
-    if (id == null) return;
+  Future<void> _refresh() async {
+    final id = _id();
+    if (id <= 0) return;
+    setState(() => _loading = true);
+    final data = await _svc.getShortlet(id);
+    if (!mounted) return;
+    if (data['ok'] == true && data['shortlet'] is Map) {
+      setState(() {
+        _shortlet = Map<String, dynamic>.from(data['shortlet'] as Map);
+        _loading = false;
+      });
+    } else {
+      setState(() => _loading = false);
+    }
+  }
 
-    final checkIn = _checkInCtrl.text.trim();
-    final checkOut = _checkOutCtrl.text.trim();
-    if (checkIn.isEmpty || checkOut.isEmpty) return;
+  Future<void> _recordView() async {
+    if (_viewSent) return;
+    final id = _id();
+    if (id <= 0) return;
+    _viewSent = true;
+    final payload = await _svc.recordView(id,
+        sessionKey: 'mobile-${DateTime.now().millisecondsSinceEpoch}');
+    if (!mounted) return;
+    if (payload['ok'] == true) {
+      setState(() {
+        _shortlet['views_count'] = int.tryParse(
+                '${payload['views_count'] ?? _shortlet['views_count'] ?? 0}') ??
+            0;
+        _shortlet['favorites_count'] = int.tryParse(
+                '${payload['favorites_count'] ?? _shortlet['favorites_count'] ?? 0}') ??
+            0;
+        _shortlet['heat_level'] =
+            (payload['heat_level'] ?? _shortlet['heat_level'] ?? '').toString();
+      });
+    }
+  }
 
-    setState(() {
-      _loadingQuote = true;
-      _quote = null;
-    });
+  Future<void> _toggleFavorite() async {
+    if (_favoriteBusy) return;
+    final id = _id();
+    if (id <= 0) return;
+    setState(() => _favoriteBusy = true);
+    final payload = _favorite
+        ? await _svc.unfavoriteShortlet(id)
+        : await _svc.favoriteShortlet(id);
+    if (!mounted) return;
+    setState(() => _favoriteBusy = false);
+    if (payload['ok'] == true) {
+      setState(() {
+        _favorite = !_favorite;
+        _shortlet['favorites_count'] = int.tryParse(
+                '${payload['favorites_count'] ?? _shortlet['favorites_count'] ?? 0}') ??
+            0;
+        _shortlet['heat_level'] =
+            (payload['heat_level'] ?? _shortlet['heat_level'] ?? '').toString();
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text((payload['message'] ?? 'Could not update watchlist')
+                .toString())),
+      );
+    }
+  }
 
-    final data = await _svc.bookShortlet(shortletId: int.parse(id.toString()), checkIn: checkIn, checkOut: checkOut);
-    // bookShortlet actually creates booking; for demo, we treat response quote as a quote.
-    // We won't auto-book twice; instead show quote and leave it as "pending".
-    setState(() {
-      _quote = (data['quote'] is Map) ? Map<String, dynamic>.from(data['quote']) : null;
-      _loadingQuote = false;
-    });
+  Future<void> _submitManualProof() async {
+    final intentId = _paymentIntentId;
+    if (intentId == null || intentId <= 0) return;
+    final res = await _payments.submitManualProof(
+      paymentIntentId: intentId,
+      bankTxnReference: _proofRefCtrl.text.trim(),
+      note: _proofNoteCtrl.text.trim(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          (res['ok'] == true)
+              ? 'Payment proof submitted. Awaiting confirmation.'
+              : (res['message'] ?? res['error'] ?? 'Proof submission failed')
+                  .toString(),
+        ),
+      ),
+    );
   }
 
   Future<void> _book() async {
-    final id = widget.shortlet['id'];
-    if (id == null) return;
-
+    final id = _id();
+    if (id <= 0) return;
     final checkIn = _checkInCtrl.text.trim();
     final checkOut = _checkOutCtrl.text.trim();
-
     if (checkIn.isEmpty || checkOut.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Enter check-in and check-out dates.")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter check-in and check-out dates.')),
+      );
       return;
     }
-
     setState(() => _booking = true);
-    final data = await _svc.bookShortlet(
-      shortletId: int.parse(id.toString()),
+    final resp = await _svc.bookShortlet(
+      shortletId: id,
       checkIn: checkIn,
       checkOut: checkOut,
       guestName: _nameCtrl.text.trim(),
       guestPhone: _phoneCtrl.text.trim(),
+      guests: int.tryParse('${_shortlet['guests'] ?? 1}') ?? 1,
+      paymentMethod: _paymentMethod,
     );
     if (!mounted) return;
     setState(() => _booking = false);
-
-    final ok = data['ok'] == true;
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking created (pending) ✅")));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Booking failed.")));
+    if (resp['ok'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text((resp['message'] ?? resp['error'] ?? 'Booking failed')
+                .toString())),
+      );
+      return;
     }
+    final mode = (resp['mode'] ?? _paymentMethod).toString().toLowerCase();
+    if (mode == 'bank_transfer_manual' || mode == 'manual_company_account') {
+      setState(() {
+        _paymentIntentId = int.tryParse('${resp['payment_intent_id'] ?? 0}');
+        _manualInstructions = (resp['manual_instructions'] is Map)
+            ? Map<String, dynamic>.from(resp['manual_instructions'] as Map)
+            : <String, dynamic>{};
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Manual payment initialized. Transfer and submit proof.')),
+      );
+      return;
+    }
+    if (mode == 'paystack') {
+      final url = (resp['authorization_url'] ?? '').toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(url.isEmpty
+                ? 'Paystack initialization complete.'
+                : 'Paystack URL generated.')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Booking confirmed.')),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final m = widget.shortlet;
-    final img = (m['image'] ?? '').toString();
-    final title = (m['title'] ?? '').toString();
-    final desc = (m['description'] ?? '').toString();
-    final state = (m['state'] ?? '').toString();
-    final city = (m['city'] ?? '').toString();
-    final locality = (m['locality'] ?? '').toString();
-    final lga = (m['lga'] ?? '').toString();
+    final title = (_shortlet['title'] ?? 'Shortlet').toString();
+    final desc = (_shortlet['description'] ?? '').toString();
+    final price = _shortlet['nightly_price'] ?? _shortlet['price'] ?? 0;
+    final beds = int.tryParse('${_shortlet['beds'] ?? 1}') ?? 1;
+    final baths = int.tryParse('${_shortlet['baths'] ?? 1}') ?? 1;
+    final guests = int.tryParse('${_shortlet['guests'] ?? 1}') ?? 1;
+    final views = int.tryParse('${_shortlet['views_count'] ?? 0}') ?? 0;
+    final watching = int.tryParse('${_shortlet['favorites_count'] ?? 0}') ?? 0;
+    final heat =
+        (_shortlet['heat_level'] ?? '').toString().trim().toLowerCase();
+    final mediaRows = (_shortlet['media'] is List)
+        ? (_shortlet['media'] as List)
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final fallbackImage =
+        (_shortlet['image'] ?? _shortlet['image_url'] ?? '').toString();
 
-    final nightly = (m['nightly_price'] ?? 0).toString();
-    final cleaning = (m['cleaning_fee'] ?? 0).toString();
-    final beds = (m['beds'] ?? 1).toString();
-    final baths = (m['baths'] ?? 1).toString();
-    final guests = (m['guests'] ?? 2).toString();
-
-    final minN = (m['min_nights'] ?? 1).toString();
-    final maxN = (m['max_nights'] ?? 30).toString();
-
-    final amenities = _asStringList(m['amenities']);
-    final rules = (m['house_rules'] ?? '').toString();
-    final owner = (m['owner_phone'] ?? '').toString();
-
-    final locParts = [locality, city, state].where((x) => x.trim().isNotEmpty).toList();
-    final loc = locParts.join(", ");
-
-    if (title.trim().isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: Text("Shortlet")),
-        body: Center(child: Text("Shortlet not available.")),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: const Text("Shortlet")),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return FTScaffold(
+      title: 'Shortlet Details',
+      actions: [
+        IconButton(
+          onPressed: _loading ? null : _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: SafeImage(url: img, height: 220, width: double.infinity),
+          if (mediaRows.isNotEmpty)
+            SizedBox(
+              height: 240,
+              child: PageView.builder(
+                itemCount: mediaRows.length,
+                itemBuilder: (_, index) {
+                  final row = mediaRows[index];
+                  final thumb =
+                      (row['thumbnail_url'] ?? row['url'] ?? '').toString();
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SafeImage(
+                        url: thumb,
+                        width: double.infinity,
+                        height: 240,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SafeImage(
+                url: fallbackImage,
+                width: double.infinity,
+                height: 240,
+                fit: BoxFit.cover,
+              ),
+            ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                onPressed: _favoriteBusy ? null : _toggleFavorite,
+                icon: Icon(
+                  _favorite ? Icons.favorite : Icons.favorite_border,
+                  color: _favorite ? Colors.redAccent : Colors.black54,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            formatNaira(price, decimals: 0),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(_location(_shortlet),
+              style: const TextStyle(color: Colors.black54)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FTPill(text: '$beds beds', bgColor: const Color(0xFFF1F5F9)),
+              FTPill(text: '$baths baths', bgColor: const Color(0xFFF1F5F9)),
+              FTPill(text: '$guests guests', bgColor: const Color(0xFFF1F5F9)),
+              FTPill(text: '$views views', bgColor: const Color(0xFFF1F5F9)),
+              FTPill(
+                  text: '$watching watching', bgColor: const Color(0xFFFFF1F2)),
+              if (heat == 'hot' || heat == 'hotter')
+                FTPill(
+                  text: heat == 'hotter' ? 'Hotter' : 'Hot',
+                  bgColor: heat == 'hotter'
+                      ? const Color(0xFFFFEDD5)
+                      : const Color(0xFFFEF3C7),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          FTSectionContainer(
+            title: 'About',
+            child: Text(
+              desc.trim().isEmpty ? 'No description provided.' : desc,
+            ),
           ),
           const SizedBox(height: 12),
-          Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 6),
-          Text(loc, style: TextStyle(color: Colors.grey.shade700)),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: _pill("₦$nightly / night")),
-              const SizedBox(width: 8),
-              Expanded(child: _pill("Cleaning ₦$cleaning")),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _pill("$beds beds")),
-              const SizedBox(width: 8),
-              Expanded(child: _pill("$baths baths")),
-              const SizedBox(width: 8),
-              Expanded(child: _pill("$guests guests")),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _pill("Stay: $minN - $maxN nights"),
-          const SizedBox(height: 16),
-          if (desc.trim().isNotEmpty) ...[
-            const Text("About", style: TextStyle(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            Text(desc),
-            const SizedBox(height: 16),
-          ],
-          if (amenities.isNotEmpty) ...[
-            const Text("Amenities", style: TextStyle(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: amenities.take(20).map((a) => Chip(label: Text(a))).toList(),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (rules.trim().isNotEmpty) ...[
-            const Text("House rules", style: TextStyle(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            Text(rules),
-            const SizedBox(height: 16),
-          ],
-          if (owner.trim().isNotEmpty) ...[
-            const Text("Host contact", style: TextStyle(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 6),
-            Text(owner),
-            const SizedBox(height: 16),
-          ],
-          const Divider(height: 24),
-          const Text("Book dates", style: TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _checkInCtrl,
-            decoration: const InputDecoration(labelText: "Check-in (YYYY-MM-DD)", border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _checkOutCtrl,
-            decoration: const InputDecoration(labelText: "Check-out (YYYY-MM-DD)", border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _nameCtrl,
-            decoration: const InputDecoration(labelText: "Guest name (optional)", border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _phoneCtrl,
-            decoration: const InputDecoration(labelText: "Guest phone (optional)", border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _loadingQuote ? null : _getQuote,
-                  icon: const Icon(Icons.calculate_outlined),
-                  label: _loadingQuote ? const Text("...") : const Text("Get quote"),
+          FTSectionContainer(
+            title: 'Book this shortlet',
+            child: Column(
+              children: [
+                TextField(
+                  controller: _checkInCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Check-in (YYYY-MM-DD)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _booking ? null : _book,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: _booking ? const Text("...") : const Text("Book (pending)"),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _checkOutCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Check-out (YYYY-MM-DD)',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
-          ),
-          if (_quote != null) ...[
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Quote", style: TextStyle(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 6),
-                    Text("Nights: ${_quote!['nights'] ?? '-'}"),
-                    Text("Subtotal: ₦${_quote!['subtotal'] ?? '-'}"),
-                    Text("Platform fee: ₦${_quote!['platform_fee'] ?? '-'}"),
-                    const Divider(height: 16),
-                    Text("Total: ₦${_quote!['total'] ?? '-'}", style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Guest name (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _phoneCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Guest phone (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: _paymentMethod,
+                  items: const [
+                    DropdownMenuItem(value: 'wallet', child: Text('Wallet')),
+                    DropdownMenuItem(
+                        value: 'paystack', child: Text('Paystack (Card/Bank)')),
+                    DropdownMenuItem(
+                        value: 'bank_transfer_manual',
+                        child: Text('Bank Transfer (Manual)')),
                   ],
+                  onChanged: (value) {
+                    if (value == null || value.trim().isEmpty) return;
+                    setState(() => _paymentMethod = value);
+                  },
+                  decoration: const InputDecoration(
+                    labelText: 'Payment method',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _booking ? null : _book,
+                    icon: const Icon(Icons.lock_outline),
+                    label: Text(_booking ? 'Processing...' : 'Book now'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_manualInstructions != null) ...[
+            const SizedBox(height: 12),
+            FTSectionContainer(
+              title: 'Manual payment instructions',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                      'Bank: ${(_manualInstructions!['bank_name'] ?? '').toString()}'),
+                  Text(
+                      'Account name: ${(_manualInstructions!['account_name'] ?? '').toString()}'),
+                  Text(
+                      'Account number: ${(_manualInstructions!['account_number'] ?? '').toString()}'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _proofRefCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Bank transaction reference',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _proofNoteCtrl,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Note',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: _submitManualProof,
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('Submit payment proof'),
+                  ),
+                ],
               ),
             ),
-          ]
+          ],
         ],
       ),
-    );
-  }
-
-  Widget _pill(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: Colors.grey.shade100,
-      ),
-      child: Center(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w800))),
     );
   }
 }

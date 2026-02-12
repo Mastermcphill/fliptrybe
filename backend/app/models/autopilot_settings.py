@@ -40,6 +40,11 @@ class AutopilotSettings(db.Model):
     rate_limit_enabled = db.Column(
         db.Boolean, nullable=False, default=True, server_default=sa.text("true")
     )
+    city_discovery_v1 = db.Column(db.Boolean, nullable=False, default=True, server_default=sa.text("true"))
+    views_heat_v1 = db.Column(db.Boolean, nullable=False, default=True, server_default=sa.text("true"))
+    cart_checkout_v1 = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
+    shortlet_reels_v1 = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
+    watcher_notifications_v1 = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -67,5 +72,10 @@ class AutopilotSettings(db.Model):
             "payments_allow_legacy_fallback": bool(self.payments_allow_legacy_fallback),
             "otel_enabled": bool(self.otel_enabled),
             "rate_limit_enabled": bool(self.rate_limit_enabled),
+            "city_discovery_v1": bool(self.city_discovery_v1),
+            "views_heat_v1": bool(self.views_heat_v1),
+            "cart_checkout_v1": bool(self.cart_checkout_v1),
+            "shortlet_reels_v1": bool(self.shortlet_reels_v1),
+            "watcher_notifications_v1": bool(self.watcher_notifications_v1),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

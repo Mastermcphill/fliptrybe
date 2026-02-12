@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import '../constants/ng_states.dart';
+
+import '../constants/ng_cities.dart';
+import '../services/city_preference_service.dart';
 import '../services/shortlet_service.dart';
-import 'marketplace_filters_screen.dart';
+import '../utils/formatters.dart';
+import '../ui/components/ft_components.dart';
+import '../widgets/safe_image.dart';
 import 'shortlet_detail_screen.dart';
 
 class ShortletScreen extends StatefulWidget {
@@ -13,12 +17,19 @@ class ShortletScreen extends StatefulWidget {
 
 class _ShortletScreenState extends State<ShortletScreen> {
   final _svc = ShortletService();
+  final _cityPrefs = CityPreferenceService();
   final _searchCtrl = TextEditingController();
-  String _selectedState = allNigeriaLabel;
 
-  Future<List<dynamic>> _load() {
-    final state = _selectedState == allNigeriaLabel ? '' : _selectedState;
-    return _svc.listShortlets(state: state);
+  String _selectedCity = defaultDiscoveryCity;
+  String _selectedState = defaultDiscoveryState;
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _all = const <Map<String, dynamic>>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
   @override
@@ -27,218 +38,339 @@ class _ShortletScreenState extends State<ShortletScreen> {
     super.dispose();
   }
 
-  String _formatNaira(dynamic v) {
-    final amount = double.tryParse((v ?? '').toString()) ?? 0;
-    final raw = amount.round().toString();
-    final out = StringBuffer();
-    for (var i = 0; i < raw.length; i++) {
-      final idxFromEnd = raw.length - i;
-      out.write(raw[i]);
-      if (idxFromEnd > 1 && idxFromEnd % 3 == 1) {
-        out.write(',');
-      }
-    }
-    return 'NGN ${out.toString()}';
-  }
-
-  String _formatLocation(String city, String state) {
-    final c = city.trim();
-    final s = state.trim();
-    if (c.isEmpty && s.isEmpty) return 'Location not set';
-    if (c.isEmpty) return s;
-    if (s.isEmpty) return c;
-    return '$c, $s';
-  }
-
-  Future<void> _openFilters() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MarketplaceFiltersScreen(
-          categories: const ['All', 'Shortlet'],
-          selectedCategory: 'Shortlet',
-          initialQuery: _searchCtrl.text,
-          initialState: _selectedState,
-        ),
-      ),
-    );
-    if (result == null) return;
+  Future<void> _load() async {
     setState(() {
-      _searchCtrl.text = (result['query'] ?? '').toString();
-      final state = (result['state'] ?? allNigeriaLabel).toString();
-      _selectedState = state.isEmpty ? allNigeriaLabel : state;
+      _loading = true;
+      _error = null;
     });
+    try {
+      final pref = await _cityPrefs.syncFromServer();
+      final city = (pref['preferred_city'] ?? defaultDiscoveryCity).trim();
+      final state = (pref['preferred_state'] ?? defaultDiscoveryState).trim();
+      List<dynamic> raw = await _svc.recommendedShortlets(
+        city: city,
+        state: state,
+        limit: 80,
+      );
+      if (raw.isEmpty) {
+        raw = await _svc.listShortlets(state: state, city: city);
+      }
+      if (!mounted) return;
+      setState(() {
+        _selectedCity = city.isEmpty ? defaultDiscoveryCity : city;
+        _selectedState = state.isEmpty ? defaultDiscoveryState : state;
+        _all = raw
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not load shortlets: $e';
+      });
+    }
+  }
+
+  Future<void> _pickCity() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final ctrl = TextEditingController();
+        return StatefulBuilder(
+          builder: (context, setModal) {
+            final q = ctrl.text.trim().toLowerCase();
+            final cities = nigeriaTieredCities
+                .where((city) => q.isEmpty || city.toLowerCase().contains(q))
+                .toList(growable: false);
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 12,
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('Choose city'),
+                      subtitle: Text(
+                          'Shortlet recommendations prioritize your city first'),
+                    ),
+                    TextField(
+                      controller: ctrl,
+                      onChanged: (_) => setModal(() {}),
+                      decoration: const InputDecoration(
+                        hintText: 'Search city',
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 340,
+                      child: ListView.builder(
+                        itemCount: cities.length,
+                        itemBuilder: (_, index) {
+                          final city = cities[index];
+                          return ListTile(
+                            title: Text(city),
+                            trailing: city == _selectedCity
+                                ? const Icon(Icons.check_circle,
+                                    color: Colors.green)
+                                : null,
+                            onTap: () => Navigator.of(ctx).pop(city),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (selected == null || selected.trim().isEmpty) return;
+    await _cityPrefs.saveAndSync(
+      preferredCity: selected.trim(),
+      preferredState: _selectedState,
+    );
+    if (!mounted) return;
+    await _load();
+  }
+
+  List<Map<String, dynamic>> _filtered() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) return _all;
+    return _all.where((row) {
+      final title = (row['title'] ?? '').toString().toLowerCase();
+      final city = (row['city'] ?? '').toString().toLowerCase();
+      final state = (row['state'] ?? '').toString().toLowerCase();
+      return title.contains(q) || city.contains(q) || state.contains(q);
+    }).toList(growable: false);
+  }
+
+  String _location(Map<String, dynamic> row) {
+    final city = (row['city'] ?? '').toString().trim();
+    final state = (row['state'] ?? '').toString().trim();
+    if (city.isEmpty && state.isEmpty) return 'Location not set';
+    if (city.isEmpty) return state;
+    if (state.isEmpty) return city;
+    return '$city, $state';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Haven Short-lets')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search by city or name',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  onPressed: _openFilters,
-                  tooltip: 'Filters',
-                  icon: const Icon(Icons.tune),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              value: _selectedState,
-              items: <String>[allNigeriaLabel, ...nigeriaStates]
-                  .map((s) =>
-                      DropdownMenuItem(value: s, child: Text(displayState(s))))
-                  .toList(),
-              decoration: const InputDecoration(
-                labelText: 'State',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() => _selectedState = value);
-              },
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: FutureBuilder<List<dynamic>>(
-                future: _load(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return const Center(
-                        child: Text('Could not load apartments.'));
-                  }
-
-                  final raw = snapshot.data ?? [];
-                  final q = _searchCtrl.text.trim().toLowerCase();
-                  final items = raw.where((m) {
-                    if (m is! Map) return false;
-                    final title = (m['title'] ?? '').toString().toLowerCase();
-                    final city = (m['city'] ?? '').toString().toLowerCase();
-                    final state = (m['state'] ?? '').toString().toLowerCase();
-                    if (q.isEmpty) return true;
-                    return title.contains(q) ||
-                        city.contains(q) ||
-                        state.contains(q);
-                  }).toList();
-
-                  if (items.isEmpty) {
-                    return const Center(child: Text('No apartments found'));
-                  }
-
-                  return ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) {
-                      final m = items[i] as Map;
-                      final title = (m['title'] ?? '').toString();
-                      final city = (m['city'] ?? '').toString();
-                      final state = (m['state'] ?? '').toString();
-                      final beds = (m['rooms'] ?? m['beds'] ?? '').toString();
-                      final baths =
-                          (m['bathrooms'] ?? m['baths'] ?? '').toString();
-
-                      final priceText =
-                          _formatNaira(m['nightly_price'] ?? m['price']);
-                      final locText = _formatLocation(city, state);
-                      final bedsText = beds.trim().isEmpty ? '-' : beds;
-                      final bathsText = baths.trim().isEmpty ? '-' : baths;
-
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ShortletDetailScreen(
-                                    shortlet: Map<String, dynamic>.from(m)),
-                              ),
-                            );
-                          },
-                          child: Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 90,
-                                    height: 90,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFEFF6FF),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.apartment_outlined,
-                                        size: 36, color: Color(0xFF60A5FA)),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(title,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.w800)),
-                                        const SizedBox(height: 4),
-                                        Text(locText,
-                                            style: TextStyle(
-                                                color: Colors.grey.shade600)),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                            'Beds: $bedsText | Baths: $bathsText',
-                                            style:
-                                                const TextStyle(fontSize: 12)),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text(priceText,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w900)),
-                                      const SizedBox(height: 2),
-                                      const Text('/ night',
-                                          style: TextStyle(fontSize: 12)),
-                                    ],
-                                  )
-                                ],
-                              ),
+    final rows = _filtered();
+    return FTScaffold(
+      title: 'Haven Shortlets',
+      actions: [
+        IconButton(
+          onPressed: _loading ? null : _load,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? FTErrorState(message: _error!, onRetry: _load)
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Column(
+                        children: [
+                          TextField(
+                            controller: _searchCtrl,
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(
+                              hintText: 'Search by title or city',
+                              prefixIcon: Icon(Icons.search),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
+                          const SizedBox(height: 10),
+                          FTCard(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'City-first feed',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w800),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                          'Showing top shortlets around $_selectedCity'),
+                                    ],
+                                  ),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _pickCity,
+                                  icon:
+                                      const Icon(Icons.location_city_outlined),
+                                  label: Text(_selectedCity),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: rows.isEmpty
+                          ? FTEmptyState(
+                              icon: Icons.home_work_outlined,
+                              title: 'No shortlets found',
+                              subtitle: 'Try another city or search term.',
+                              actionLabel: 'Change city',
+                              onAction: _pickCity,
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _load,
+                              child: ListView.separated(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                                itemCount: rows.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (_, index) {
+                                  final row = rows[index];
+                                  final mediaRows = (row['media'] is List)
+                                      ? (row['media'] as List)
+                                          .whereType<Map>()
+                                          .map((v) =>
+                                              Map<String, dynamic>.from(v))
+                                          .toList(growable: false)
+                                      : const <Map<String, dynamic>>[];
+                                  final image = mediaRows.isNotEmpty
+                                      ? (mediaRows.first['thumbnail_url'] ??
+                                              mediaRows.first['url'] ??
+                                              '')
+                                          .toString()
+                                      : (row['image'] ?? row['image_url'] ?? '')
+                                          .toString();
+                                  final views = int.tryParse(
+                                          '${row['views_count'] ?? 0}') ??
+                                      0;
+                                  final watching = int.tryParse(
+                                          '${row['favorites_count'] ?? 0}') ??
+                                      0;
+                                  final heatLevel = (row['heat_level'] ?? '')
+                                      .toString()
+                                      .trim()
+                                      .toLowerCase();
+                                  return InkWell(
+                                    borderRadius: BorderRadius.circular(14),
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            ShortletDetailScreen(shortlet: row),
+                                      ),
+                                    ),
+                                    child: FTCard(
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            child: SafeImage(
+                                              url: image,
+                                              width: 110,
+                                              height: 98,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  formatNaira(
+                                                      row['nightly_price'] ??
+                                                          row['price'],
+                                                      decimals: 0),
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      fontSize: 17),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  (row['title'] ?? 'Shortlet')
+                                                      .toString(),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w800),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _location(row),
+                                                  style: const TextStyle(
+                                                      fontSize: 12,
+                                                      color: Colors.black54),
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Wrap(
+                                                  spacing: 6,
+                                                  runSpacing: 6,
+                                                  children: [
+                                                    FTPill(
+                                                        text: '$views views',
+                                                        bgColor: const Color(
+                                                            0xFFF1F5F9)),
+                                                    FTPill(
+                                                        text:
+                                                            '$watching watching',
+                                                        bgColor: const Color(
+                                                            0xFFFFF1F2)),
+                                                    if (heatLevel == 'hot' ||
+                                                        heatLevel == 'hotter')
+                                                      FTPill(
+                                                        text: heatLevel ==
+                                                                'hotter'
+                                                            ? 'Hotter'
+                                                            : 'Hot',
+                                                        bgColor: heatLevel ==
+                                                                'hotter'
+                                                            ? const Color(
+                                                                0xFFFFEDD5)
+                                                            : const Color(
+                                                                0xFFFEF3C7),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
     );
   }
 }

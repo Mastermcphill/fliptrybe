@@ -9,6 +9,7 @@ from app.models import User, UserSettings
 from app.utils.jwt_utils import decode_token
 
 settings_bp = Blueprint("settings_bp", __name__, url_prefix="/api/settings")
+preferences_bp = Blueprint("preferences_bp", __name__, url_prefix="/api/me")
 
 _INIT_DONE = False
 
@@ -98,3 +99,63 @@ def update_settings():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+def _ensure_user_settings(user_id: int) -> UserSettings:
+    row = UserSettings.query.filter_by(user_id=int(user_id)).first()
+    if row:
+        return row
+    row = UserSettings(user_id=int(user_id))
+    db.session.add(row)
+    db.session.commit()
+    return row
+
+
+@preferences_bp.get("/preferences")
+def get_preferences():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    try:
+        s = _ensure_user_settings(int(u.id))
+        return jsonify(
+            {
+                "ok": True,
+                "preferences": {
+                    "preferred_city": (getattr(s, "preferred_city", "") or ""),
+                    "preferred_state": (getattr(s, "preferred_state", "") or ""),
+                },
+            }
+        ), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "PREFERENCES_READ_FAILED", "message": str(exc)}), 500
+
+
+@preferences_bp.post("/preferences")
+def set_preferences():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    preferred_city = str(payload.get("preferred_city") or "").strip()
+    preferred_state = str(payload.get("preferred_state") or "").strip()
+    try:
+        s = _ensure_user_settings(int(u.id))
+        s.preferred_city = preferred_city[:80] if preferred_city else None
+        s.preferred_state = preferred_state[:80] if preferred_state else None
+        s.updated_at = datetime.utcnow()
+        db.session.add(s)
+        db.session.commit()
+        return jsonify(
+            {
+                "ok": True,
+                "preferences": {
+                    "preferred_city": (s.preferred_city or ""),
+                    "preferred_state": (s.preferred_state or ""),
+                },
+            }
+        ), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "PREFERENCES_UPDATE_FAILED", "message": str(exc)}), 500

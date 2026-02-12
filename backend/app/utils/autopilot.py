@@ -31,6 +31,11 @@ def get_settings() -> AutopilotSettings:
         row.payments_allow_legacy_fallback = env in ("staging", "stage")
         row.otel_enabled = False
         row.rate_limit_enabled = True
+        row.city_discovery_v1 = True
+        row.views_heat_v1 = True
+        row.cart_checkout_v1 = False
+        row.shortlet_reels_v1 = False
+        row.watcher_notifications_v1 = False
         db.session.add(row)
         db.session.commit()
     changed = False
@@ -78,6 +83,21 @@ def get_settings() -> AutopilotSettings:
         changed = True
     if getattr(row, "rate_limit_enabled", None) is None:
         row.rate_limit_enabled = True
+        changed = True
+    if getattr(row, "city_discovery_v1", None) is None:
+        row.city_discovery_v1 = True
+        changed = True
+    if getattr(row, "views_heat_v1", None) is None:
+        row.views_heat_v1 = True
+        changed = True
+    if getattr(row, "cart_checkout_v1", None) is None:
+        row.cart_checkout_v1 = False
+        changed = True
+    if getattr(row, "shortlet_reels_v1", None) is None:
+        row.shortlet_reels_v1 = False
+        changed = True
+    if getattr(row, "watcher_notifications_v1", None) is None:
+        row.watcher_notifications_v1 = False
         changed = True
     if changed:
         db.session.add(row)

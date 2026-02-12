@@ -8,7 +8,7 @@ from app.extensions import db, migrate, cors
 from app.models import User
 from app.segments.segment_09_users_auth_routes import auth_bp
 from app.segments.segment_20_rides_routes import ride_bp
-from app.segments.segment_payments import payments_bp, admin_payments_bp, public_payments_bp
+from app.segments.segment_payments import payments_bp, admin_payments_bp, public_payments_bp, admin_payment_intents_bp, payment_intents_bp
 from app.segments.segment_payout_recipient import recipient_bp
 from app.segments.segment_audit_admin import audit_bp
 from app.segments.segment_reconciliation_admin import recon_bp
@@ -42,7 +42,7 @@ from app.segments.segment_inspector_requests import inspector_req_bp, inspector_
 from app.segments.segment_demo import demo_bp
 from app.segments.segment_orders_api import orders_bp
 from app.segments.segment_inspections_api import inspections_bp
-from app.segments.segment_settings import settings_bp
+from app.segments.segment_settings import settings_bp, preferences_bp
 from app.segments.segment_kyc import kyc_bp
 from app.segments.segment_drivers_list import drivers_list_bp
 from app.segments.segment_merchant_follow import merchant_follow_bp
@@ -152,6 +152,7 @@ def create_app():
     app.register_blueprint(orders_bp)
     app.register_blueprint(inspections_bp)
     app.register_blueprint(settings_bp)
+    app.register_blueprint(preferences_bp)
     app.register_blueprint(drivers_list_bp)
     app.register_blueprint(merchant_follow_bp)
     app.register_blueprint(demo_bp)
@@ -384,7 +385,9 @@ def create_app():
     app.register_blueprint(driver_avail_bp)
 
     app.register_blueprint(payments_bp)
+    app.register_blueprint(payment_intents_bp)
     app.register_blueprint(admin_payments_bp)
+    app.register_blueprint(admin_payment_intents_bp)
     app.register_blueprint(recipient_bp)
     app.register_blueprint(driver_offer_bp)
     app.register_blueprint(drivers_bp)

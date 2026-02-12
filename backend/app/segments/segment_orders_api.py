@@ -5,6 +5,7 @@ import hmac
 import random
 import secrets
 import uuid
+import json
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime, timedelta
 
@@ -28,6 +29,9 @@ from app.models import (
     QRChallenge,
     InspectionTicket,
     AuditLog,
+    CartItem,
+    CheckoutBatch,
+    PaymentIntent,
 )
 from app.utils.jwt_utils import decode_token
 from app.utils.receipts import create_receipt
@@ -51,6 +55,12 @@ from app.escrow import release_seller_payout, release_driver_payout
 from app.jobs.availability_runner import run_availability_timeouts
 from app.services.escrow_service import transition_escrow, EscrowStatus
 from app.services.risk_engine_service import record_event
+from app.utils.autopilot import get_settings
+from app.integrations.payments.factory import build_payments_provider
+from app.integrations.payments.mock_provider import MockPaymentsProvider
+from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
+from app.services.payment_intent_service import transition_intent, PaymentIntentStatus
+from app.utils.idempotency import lookup_response, store_response, get_idempotency_key
 
 orders_bp = Blueprint("orders_bp", __name__, url_prefix="/api")
 
@@ -473,6 +483,71 @@ def _mark_paid(order: Order, reference: str | None = None, actor_id: int | None 
             pass
 
 
+def _money_to_minor(amount: float | Decimal | int | None) -> int:
+    try:
+        parsed = Decimal(str(amount or 0))
+    except Exception:
+        parsed = Decimal("0")
+    return int((parsed * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _minor_to_money(amount_minor: int | None) -> float:
+    try:
+        return float((Decimal(int(amount_minor or 0)) / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    except Exception:
+        return 0.0
+
+
+def _cart_item_payload(item: CartItem, listing: Listing | None) -> dict:
+    return {
+        "id": int(item.id),
+        "listing_id": int(item.listing_id),
+        "quantity": int(item.quantity or 1),
+        "unit_price_minor": int(item.unit_price_minor or 0),
+        "unit_price": _minor_to_money(item.unit_price_minor),
+        "line_total_minor": int((item.unit_price_minor or 0) * int(item.quantity or 1)),
+        "line_total": _minor_to_money((item.unit_price_minor or 0) * int(item.quantity or 1)),
+        "listing": listing.to_dict() if listing else None,
+    }
+
+
+def _payments_mode(settings) -> str:
+    mode = (getattr(settings, "payments_mode", None) or "").strip().lower()
+    if mode in ("wallet", "paystack_auto", "manual_company_account", "mock"):
+        return mode
+    provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+    return "mock" if provider == "mock" else "paystack_auto"
+
+
+def _manual_instructions_from_settings(settings) -> dict:
+    return {
+        "mode": "bank_transfer_manual",
+        "bank_name": (getattr(settings, "manual_payment_bank_name", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_NAME") or "").strip(),
+        "account_number": (getattr(settings, "manual_payment_account_number", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_ACCOUNT_NUMBER") or "").strip(),
+        "account_name": (getattr(settings, "manual_payment_account_name", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_ACCOUNT_NAME") or "").strip(),
+        "note": (getattr(settings, "manual_payment_note", "") or "").strip(),
+        "sla_minutes": int(getattr(settings, "manual_payment_sla_minutes", 360) or 360),
+        "message": "Manual transfer enabled. Transfer exact amount and keep your reference.",
+    }
+
+
+def _settle_wallet_batch(*, buyer_id: int, total_minor: int, reference: str, order_ids: list[int], actor_id: int) -> None:
+    amount = _minor_to_money(total_minor)
+    for oid in order_ids:
+        order = db.session.get(Order, int(oid))
+        if not order:
+            continue
+        _mark_paid(order, reference=reference, actor_id=actor_id)
+    if amount > 0:
+        post_ref = f"wallet_purchase:{reference}"
+        try:
+            from app.utils.wallets import post_txn
+            post_txn(int(buyer_id), amount, kind="purchase", direction="debit", reference=post_ref)
+        except Exception:
+            db.session.rollback()
+
+
+
 @orders_bp.post("/orders")
 def create_order():
     u = _current_user()
@@ -788,6 +863,375 @@ def create_order():
                 "buyer_id_raw": buyer_id_raw,
             })}), 500
         return jsonify({"ok": False, "error": "db_error"}), 500
+
+
+@orders_bp.get("/cart")
+def get_cart():
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    rows = CartItem.query.filter_by(user_id=int(u.id)).order_by(CartItem.created_at.desc()).all()
+    listing_ids = [int(row.listing_id) for row in rows]
+    listing_map = {}
+    if listing_ids:
+        for listing in Listing.query.filter(Listing.id.in_(listing_ids)).all():
+            listing_map[int(listing.id)] = listing
+    items = [_cart_item_payload(row, listing_map.get(int(row.listing_id))) for row in rows]
+    total_minor = sum(int(item.get("line_total_minor") or 0) for item in items)
+    return jsonify({"ok": True, "items": items, "total_minor": total_minor, "total": _minor_to_money(total_minor)}), 200
+
+
+@orders_bp.post("/cart/items")
+def add_cart_item():
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    try:
+        listing_id = int(payload.get("listing_id"))
+    except Exception:
+        return jsonify({"ok": False, "message": "listing_id required"}), 400
+    try:
+        quantity = int(payload.get("quantity") or 1)
+    except Exception:
+        quantity = 1
+    if quantity < 1:
+        quantity = 1
+    if quantity > 20:
+        quantity = 20
+    listing = db.session.get(Listing, int(listing_id))
+    if not listing:
+        return jsonify({"ok": False, "message": "listing not found"}), 404
+    if hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
+        return jsonify({"ok": False, "message": "listing unavailable"}), 409
+    unit_price_minor = _money_to_minor(getattr(listing, "final_price", None) or getattr(listing, "price", 0.0))
+    row = CartItem.query.filter_by(user_id=int(u.id), listing_id=int(listing.id)).first()
+    if row is None:
+        row = CartItem(
+            user_id=int(u.id),
+            listing_id=int(listing.id),
+            quantity=int(quantity),
+            unit_price_minor=int(unit_price_minor),
+            updated_at=datetime.utcnow(),
+        )
+    else:
+        row.quantity = int(quantity)
+        row.unit_price_minor = int(unit_price_minor)
+        row.updated_at = datetime.utcnow()
+    try:
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({"ok": True, "item": _cart_item_payload(row, listing)}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "CART_ADD_FAILED", "message": str(exc)}), 500
+
+
+@orders_bp.patch("/cart/items/<int:item_id>")
+def update_cart_item(item_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    row = CartItem.query.filter_by(id=int(item_id), user_id=int(u.id)).first()
+    if not row:
+        return jsonify({"ok": False, "message": "Cart item not found"}), 404
+    payload = request.get_json(silent=True) or {}
+    try:
+        quantity = int(payload.get("quantity") or row.quantity or 1)
+    except Exception:
+        quantity = int(row.quantity or 1)
+    if quantity < 1:
+        quantity = 1
+    if quantity > 20:
+        quantity = 20
+    row.quantity = int(quantity)
+    row.updated_at = datetime.utcnow()
+    try:
+        db.session.add(row)
+        db.session.commit()
+        listing = db.session.get(Listing, int(row.listing_id))
+        return jsonify({"ok": True, "item": _cart_item_payload(row, listing)}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "CART_UPDATE_FAILED", "message": str(exc)}), 500
+
+
+@orders_bp.delete("/cart/items/<int:item_id>")
+def delete_cart_item(item_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    row = CartItem.query.filter_by(id=int(item_id), user_id=int(u.id)).first()
+    if not row:
+        return jsonify({"ok": False, "message": "Cart item not found"}), 404
+    try:
+        db.session.delete(row)
+        db.session.commit()
+        return jsonify({"ok": True, "deleted": True, "id": int(item_id)}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "CART_DELETE_FAILED", "message": str(exc)}), 500
+
+
+@orders_bp.post("/orders/bulk")
+def create_orders_bulk():
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    settings = get_settings()
+    if not bool(getattr(settings, "cart_checkout_v1", False)) and not _is_admin(u):
+        return jsonify({"ok": False, "error": "FEATURE_DISABLED", "message": "Cart checkout is not enabled yet"}), 503
+    idem_key = get_idempotency_key()
+    if not idem_key:
+        return jsonify({"ok": False, "message": "Idempotency-Key required"}), 400
+    payload = request.get_json(silent=True) or {}
+    payment_method = str(payload.get("payment_method") or "wallet").strip().lower()
+    if payment_method not in ("wallet", "paystack", "bank_transfer_manual"):
+        return jsonify({"ok": False, "message": "payment_method must be wallet|paystack|bank_transfer_manual"}), 400
+
+    idem = lookup_response(int(u.id), "/api/orders/bulk", payload)
+    if idem and idem[0] == "hit":
+        return jsonify(idem[1]), idem[2]
+    if idem and idem[0] == "conflict":
+        return jsonify(idem[1]), idem[2]
+    idem_row = idem[1] if idem and idem[0] == "miss" else None
+
+    listing_ids_payload = payload.get("listing_ids")
+    listing_ids: list[int] = []
+    if isinstance(listing_ids_payload, list) and listing_ids_payload:
+        for value in listing_ids_payload:
+            try:
+                listing_ids.append(int(value))
+            except Exception:
+                continue
+    if not listing_ids:
+        rows = CartItem.query.filter_by(user_id=int(u.id)).order_by(CartItem.created_at.desc()).all()
+        listing_ids = [int(row.listing_id) for row in rows]
+    if not listing_ids:
+        return jsonify({"ok": False, "message": "listing_ids required"}), 400
+
+    listings = Listing.query.filter(Listing.id.in_(listing_ids)).all()
+    listing_map = {int(row.id): row for row in listings}
+    missing = [lid for lid in listing_ids if lid not in listing_map]
+    if missing:
+        return jsonify({"ok": False, "message": "listing not found", "missing_listing_ids": missing}), 404
+
+    orders: list[Order] = []
+    total_minor = 0
+    for lid in listing_ids:
+        listing = listing_map[int(lid)]
+        if hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
+            return jsonify({"ok": False, "message": "listing unavailable", "listing_id": int(lid)}), 409
+        merchant_id = int(getattr(listing, "user_id", 0) or 0)
+        if merchant_id <= 0:
+            return jsonify({"ok": False, "message": "listing owner missing", "listing_id": int(lid)}), 409
+        if int(merchant_id) == int(u.id):
+            return jsonify({"ok": False, "error": "SELLER_CANNOT_BUY_OWN_LISTING", "message": "You cannot place an order on a listing you own", "listing_id": int(lid)}), 409
+        amount = float(getattr(listing, "final_price", None) or getattr(listing, "price", 0.0) or 0.0)
+        if amount <= 0:
+            return jsonify({"ok": False, "message": "invalid listing price", "listing_id": int(lid)}), 409
+        order = Order(
+            buyer_id=int(u.id),
+            merchant_id=int(merchant_id),
+            listing_id=int(lid),
+            amount=float(amount),
+            total_price=float(amount),
+            delivery_fee=0.0,
+            inspection_fee=0.0,
+            status="created",
+            updated_at=datetime.utcnow(),
+            handshake_id=str(uuid.uuid4()),
+        )
+        db.session.add(order)
+        orders.append(order)
+        total_minor += _money_to_minor(amount)
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "ORDER_BATCH_CREATE_FAILED", "message": str(exc)}), 500
+
+    order_ids = [int(row.id) for row in orders]
+    batch = CheckoutBatch(
+        user_id=int(u.id),
+        status="created",
+        payment_method=payment_method,
+        total_minor=int(total_minor),
+        currency="NGN",
+        payment_intent_id=None,
+        order_ids_json=json.dumps(order_ids),
+        idempotency_key=str(idem_key)[:128],
+        updated_at=datetime.utcnow(),
+    )
+    db.session.add(batch)
+    db.session.commit()
+
+    response: dict
+    if payment_method == "wallet":
+        reference = f"FT-WAL-BATCH-{int(batch.id)}-{int(datetime.utcnow().timestamp())}"
+        try:
+            _settle_wallet_batch(
+                buyer_id=int(u.id),
+                total_minor=int(total_minor),
+                reference=reference,
+                order_ids=order_ids,
+                actor_id=int(u.id),
+            )
+            for order in orders:
+                order.payment_reference = reference
+                db.session.add(order)
+            batch.status = "paid"
+            batch.updated_at = datetime.utcnow()
+            db.session.add(batch)
+            db.session.commit()
+            response = {
+                "ok": True,
+                "mode": "wallet",
+                "batch_id": int(batch.id),
+                "order_ids": order_ids,
+                "total_minor": int(total_minor),
+                "total": _minor_to_money(total_minor),
+                "status": "paid",
+            }
+        except Exception as exc:
+            db.session.rollback()
+            return jsonify({"ok": False, "error": "WALLET_CHECKOUT_FAILED", "message": str(exc)}), 500
+    elif payment_method == "bank_transfer_manual":
+        settings = get_settings()
+        reference = f"FT-MAN-BATCH-{int(batch.id)}-{int(datetime.utcnow().timestamp())}"
+        pi = PaymentIntent(
+            user_id=int(u.id),
+            provider="manual_company_account",
+            reference=reference,
+            purpose="order",
+            amount=_minor_to_money(total_minor),
+            amount_minor=int(total_minor),
+            status=PaymentIntentStatus.INITIALIZED,
+            updated_at=datetime.utcnow(),
+            meta=json.dumps(
+                {
+                    "purpose": "order",
+                    "order_ids": order_ids,
+                    "batch_id": int(batch.id),
+                    "initiated_by": int(u.id),
+                    "payment_method": "bank_transfer_manual",
+                }
+            ),
+        )
+        db.session.add(pi)
+        db.session.commit()
+        transition_intent(
+            pi,
+            PaymentIntentStatus.MANUAL_PENDING,
+            actor={"type": "user", "id": int(u.id)},
+            idempotency_key=f"init:{pi.reference}:manual_pending",
+            reason="manual_initialize_bulk",
+            metadata={"order_ids": order_ids, "batch_id": int(batch.id)},
+        )
+        for order in orders:
+            order.payment_reference = pi.reference
+            db.session.add(order)
+        batch.payment_intent_id = int(pi.id)
+        batch.status = "manual_pending"
+        batch.updated_at = datetime.utcnow()
+        db.session.add(batch)
+        db.session.commit()
+        response = {
+            "ok": True,
+            "mode": "bank_transfer_manual",
+            "batch_id": int(batch.id),
+            "payment_intent_id": int(pi.id),
+            "order_ids": order_ids,
+            "reference": pi.reference,
+            "total_minor": int(total_minor),
+            "total": _minor_to_money(total_minor),
+            "manual_instructions": _manual_instructions_from_settings(settings),
+            "status": "manual_pending",
+        }
+    else:
+        settings = get_settings()
+        payments_mode = _payments_mode(settings)
+        if payments_mode == "manual_company_account":
+            return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": "Paystack checkout disabled while manual mode is active"}), 503
+        provider = MockPaymentsProvider() if payments_mode == "mock" else None
+        if provider is None:
+            try:
+                provider = build_payments_provider(settings)
+            except IntegrationDisabledError as exc:
+                return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": str(exc)}), 503
+            except IntegrationMisconfiguredError as exc:
+                return jsonify({"ok": False, "error": "INTEGRATION_MISCONFIGURED", "message": str(exc)}), 500
+        reference = f"FT-BATCH-{int(batch.id)}-{int(datetime.utcnow().timestamp())}"
+        pi = PaymentIntent(
+            user_id=int(u.id),
+            provider=provider.name,
+            reference=reference,
+            purpose="order",
+            amount=_minor_to_money(total_minor),
+            amount_minor=int(total_minor),
+            status=PaymentIntentStatus.INITIALIZED,
+            updated_at=datetime.utcnow(),
+            meta=json.dumps(
+                {
+                    "purpose": "order",
+                    "order_ids": order_ids,
+                    "batch_id": int(batch.id),
+                    "initiated_by": int(u.id),
+                    "payment_method": "paystack",
+                }
+            ),
+        )
+        db.session.add(pi)
+        db.session.commit()
+        transition_intent(
+            pi,
+            PaymentIntentStatus.INITIALIZED,
+            actor={"type": "user", "id": int(u.id)},
+            idempotency_key=f"init:{pi.reference}:initialized",
+            reason="payment_initialized_bulk",
+            metadata={"order_ids": order_ids, "batch_id": int(batch.id)},
+        )
+        init_result = provider.initialize(
+            order_id=int(order_ids[0]) if order_ids else None,
+            amount=_minor_to_money(total_minor),
+            email=(u.email or ""),
+            reference=pi.reference,
+            metadata={"order_ids": order_ids, "batch_id": int(batch.id)},
+        )
+        if init_result.reference and init_result.reference != pi.reference:
+            pi.reference = init_result.reference
+        for order in orders:
+            order.payment_reference = pi.reference
+            db.session.add(order)
+        batch.payment_intent_id = int(pi.id)
+        batch.status = "awaiting_payment"
+        batch.updated_at = datetime.utcnow()
+        db.session.add(batch)
+        db.session.add(pi)
+        db.session.commit()
+        response = {
+            "ok": True,
+            "mode": "paystack",
+            "batch_id": int(batch.id),
+            "payment_intent_id": int(pi.id),
+            "order_ids": order_ids,
+            "reference": pi.reference,
+            "authorization_url": init_result.authorization_url,
+            "total_minor": int(total_minor),
+            "total": _minor_to_money(total_minor),
+            "status": "awaiting_payment",
+        }
+
+    try:
+        CartItem.query.filter(CartItem.user_id == int(u.id), CartItem.listing_id.in_(listing_ids)).delete(synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    if idem_row is not None:
+        store_response(idem_row, response, 200)
+    return jsonify(response), 200
 
 
 @orders_bp.post("/orders/<int:order_id>/mark-paid")

@@ -1,4 +1,8 @@
 import os
+import json
+import hashlib
+import time
+import uuid
 from datetime import datetime, date
 from math import radians, sin, cos, sqrt, atan2
 
@@ -12,10 +16,20 @@ from app.utils.commission import compute_commission, RATES
 from app.utils.receipts import create_receipt
 from app.utils.notify import queue_in_app, queue_sms, queue_whatsapp, mark_sent
 from app.utils.wallets import post_txn
-from app.models import User
-import os
+from app.models import User, PaymentIntent, ShortletMedia
 from app.utils.jwt_utils import decode_token
 from app.utils.listing_caps import enforce_listing_cap
+from app.utils.autopilot import get_settings
+from app.services.payment_intent_service import transition_intent, PaymentIntentStatus
+from app.integrations.payments.factory import build_payments_provider
+from app.integrations.payments.mock_provider import MockPaymentsProvider
+from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
+from app.services.discovery_service import (
+    ranking_for_shortlet,
+    set_shortlet_favorite,
+    record_shortlet_view,
+    host_shortlet_metrics,
+)
 
 shortlets_bp = Blueprint("shortlets_bp", __name__, url_prefix="/api")
 
@@ -54,6 +68,46 @@ def _platform_user_id() -> int:
     except Exception:
         pass
     return 1
+
+
+def _payments_mode(settings) -> str:
+    mode = (getattr(settings, "payments_mode", None) or "").strip().lower()
+    if mode in ("paystack_auto", "manual_company_account", "mock"):
+        return mode
+    provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+    return "mock" if provider == "mock" else "paystack_auto"
+
+
+def _manual_instructions(settings) -> dict:
+    return {
+        "bank_name": (getattr(settings, "manual_payment_bank_name", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_NAME") or "").strip(),
+        "account_number": (getattr(settings, "manual_payment_account_number", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_ACCOUNT_NUMBER") or "").strip(),
+        "account_name": (getattr(settings, "manual_payment_account_name", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_ACCOUNT_NAME") or "").strip(),
+        "note": (getattr(settings, "manual_payment_note", "") or "").strip(),
+        "sla_minutes": int(getattr(settings, "manual_payment_sla_minutes", 360) or 360),
+    }
+
+
+def _to_minor(value) -> int:
+    try:
+        return int(round(float(value or 0.0) * 100))
+    except Exception:
+        return 0
+
+
+def _from_minor(value) -> float:
+    try:
+        return float(int(value or 0) / 100.0)
+    except Exception:
+        return 0.0
+
+
+def _cloudinary_enabled() -> bool:
+    return bool((os.getenv("CLOUDINARY_CLOUD_NAME") or "").strip()) and bool((os.getenv("CLOUDINARY_API_KEY") or "").strip()) and bool((os.getenv("CLOUDINARY_API_SECRET") or "").strip())
+
+
+def _cloudinary_folder() -> str:
+    return (os.getenv("CLOUDINARY_UPLOAD_FOLDER") or "fliptrybe/shortlets").strip()
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -138,7 +192,53 @@ def list_shortlets():
         items = filtered
 
     base = _base_url()
-    return jsonify([x.to_dict(base_url=base) for x in items]), 200
+    payload = []
+    for row in items:
+        item = row.to_dict(base_url=base)
+        score, reasons = ranking_for_shortlet(row, preferred_city=city, preferred_state=state)
+        item["ranking_score"] = int(score)
+        item["ranking_reason"] = reasons
+        media_rows = (
+            ShortletMedia.query.filter_by(shortlet_id=int(row.id))
+            .order_by(ShortletMedia.position.asc(), ShortletMedia.id.asc())
+            .limit(20)
+            .all()
+        )
+        item["media"] = [
+            {
+                "id": int(m.id),
+                "media_type": m.media_type or "image",
+                "url": m.url or "",
+                "thumbnail_url": m.thumbnail_url or "",
+                "duration_seconds": int(m.duration_seconds or 0),
+                "position": int(m.position or 0),
+            }
+            for m in media_rows
+        ]
+        payload.append(item)
+    payload.sort(key=lambda row: (int(row.get("ranking_score", 0)), row.get("created_at") or ""), reverse=True)
+    return jsonify(payload), 200
+
+
+@shortlets_bp.get("/public/shortlets/recommended")
+def recommended_shortlets():
+    city = (request.args.get("city") or "").strip()
+    state = (request.args.get("state") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 20), 60))
+    except Exception:
+        limit = 20
+    rows = Shortlet.query.order_by(Shortlet.created_at.desc()).limit(500).all()
+    base = _base_url()
+    items = []
+    for row in rows:
+        score, reasons = ranking_for_shortlet(row, preferred_city=city, preferred_state=state)
+        payload = row.to_dict(base_url=base)
+        payload["ranking_score"] = int(score)
+        payload["ranking_reason"] = reasons
+        items.append(payload)
+    items.sort(key=lambda row: (int(row.get("ranking_score", 0)), row.get("created_at") or ""), reverse=True)
+    return jsonify({"ok": True, "items": items[:limit], "city": city, "state": state, "limit": limit}), 200
 
 
 @shortlets_bp.get("/shortlets/<int:shortlet_id>")
@@ -146,7 +246,165 @@ def get_shortlet(shortlet_id: int):
     item = Shortlet.query.get(shortlet_id)
     if not item:
         return jsonify({"message": "Not found"}), 404
-    return jsonify({"ok": True, "shortlet": item.to_dict(base_url=_base_url())}), 200
+    payload = item.to_dict(base_url=_base_url())
+    media_rows = (
+        ShortletMedia.query.filter_by(shortlet_id=int(item.id))
+        .order_by(ShortletMedia.position.asc(), ShortletMedia.id.asc())
+        .limit(40)
+        .all()
+    )
+    payload["media"] = [
+        {
+            "id": int(m.id),
+            "media_type": m.media_type or "image",
+            "url": m.url or "",
+            "thumbnail_url": m.thumbnail_url or "",
+            "duration_seconds": int(m.duration_seconds or 0),
+            "position": int(m.position or 0),
+        }
+        for m in media_rows
+    ]
+    return jsonify({"ok": True, "shortlet": payload}), 200
+
+
+@shortlets_bp.post("/shortlets/<int:shortlet_id>/favorite")
+def favorite_shortlet(shortlet_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    try:
+        payload = set_shortlet_favorite(shortlet_id=int(shortlet_id), user_id=int(u.id), is_favorite=True)
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "FAVORITE_FAILED", "message": str(exc)}), 500
+
+
+@shortlets_bp.delete("/shortlets/<int:shortlet_id>/favorite")
+def unfavorite_shortlet(shortlet_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    try:
+        payload = set_shortlet_favorite(shortlet_id=int(shortlet_id), user_id=int(u.id), is_favorite=False)
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "UNFAVORITE_FAILED", "message": str(exc)}), 500
+
+
+@shortlets_bp.post("/shortlets/<int:shortlet_id>/view")
+def view_shortlet(shortlet_id: int):
+    u = _current_user()
+    session_key = (request.headers.get("X-Session-Key") or request.args.get("session_key") or "").strip()
+    try:
+        payload = record_shortlet_view(
+            shortlet_id=int(shortlet_id),
+            user_id=int(u.id) if u else None,
+            session_key=session_key,
+        )
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "VIEW_RECORD_FAILED", "message": str(exc)}), 500
+
+
+@shortlets_bp.get("/host/shortlets/metrics")
+def host_metrics():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    role = _role(u)
+    if role not in ("merchant", "admin"):
+        return jsonify({"message": "Forbidden"}), 403
+    host_id = int(u.id)
+    if role == "admin":
+        try:
+            host_id = int(request.args.get("host_id") or host_id)
+        except Exception:
+            host_id = int(u.id)
+    items = host_shortlet_metrics(int(host_id))
+    return jsonify({"ok": True, "host_id": int(host_id), "items": items}), 200
+
+
+@shortlets_bp.get("/media/cloudinary/config")
+def cloudinary_config():
+    cloud = (os.getenv("CLOUDINARY_CLOUD_NAME") or "").strip()
+    folder = _cloudinary_folder()
+    return jsonify({"ok": True, "cloud_name": cloud, "folder": folder, "signed_upload": True}), 200
+
+
+@shortlets_bp.post("/media/cloudinary/sign")
+def cloudinary_sign():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if _role(u) not in ("merchant", "admin"):
+        return jsonify({"message": "Forbidden"}), 403
+    if not _cloudinary_enabled():
+        return jsonify({"ok": False, "error": "INTEGRATION_MISCONFIGURED", "message": "Cloudinary keys missing"}), 500
+    payload = request.get_json(silent=True) or {}
+    timestamp = int(payload.get("timestamp") or int(time.time()))
+    folder = str(payload.get("folder") or _cloudinary_folder()).strip()
+    public_id = str(payload.get("public_id") or f"shortlet_{int(u.id)}_{timestamp}").strip()
+    eager = str(payload.get("eager") or "").strip()
+    sign_parts = [f"folder={folder}", f"public_id={public_id}", f"timestamp={timestamp}"]
+    if eager:
+        sign_parts.append(f"eager={eager}")
+    sign_str = "&".join(sign_parts)
+    secret = (os.getenv("CLOUDINARY_API_SECRET") or "").strip()
+    signature = hashlib.sha1(f"{sign_str}{secret}".encode("utf-8")).hexdigest()
+    return jsonify(
+        {
+            "ok": True,
+            "signature": signature,
+            "timestamp": timestamp,
+            "api_key": (os.getenv("CLOUDINARY_API_KEY") or "").strip(),
+            "cloud_name": (os.getenv("CLOUDINARY_CLOUD_NAME") or "").strip(),
+            "folder": folder,
+            "public_id": public_id,
+            "resource_type": str(payload.get("resource_type") or "auto"),
+        }
+    ), 200
+
+
+@shortlets_bp.post("/shortlets/<int:shortlet_id>/media")
+def attach_shortlet_media(shortlet_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    shortlet = db.session.get(Shortlet, int(shortlet_id))
+    if not shortlet:
+        return jsonify({"message": "Not found"}), 404
+    if not (_role(u) == "admin" or int(shortlet.owner_id or 0) == int(u.id)):
+        return jsonify({"message": "Forbidden"}), 403
+    payload = request.get_json(silent=True) or {}
+    media_type = str(payload.get("media_type") or "image").strip().lower()
+    if media_type not in ("image", "video"):
+        return jsonify({"ok": False, "message": "media_type must be image|video"}), 400
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "message": "url required"}), 400
+    duration_seconds = int(payload.get("duration_seconds") or 0)
+    if media_type == "video" and duration_seconds > 30:
+        return jsonify({"ok": False, "message": "video duration must be <= 30 seconds"}), 400
+    item = ShortletMedia(
+        shortlet_id=int(shortlet_id),
+        media_type=media_type,
+        url=url[:1024],
+        thumbnail_url=str(payload.get("thumbnail_url") or "").strip()[:1024] or None,
+        duration_seconds=max(0, duration_seconds),
+        position=int(payload.get("position") or 0),
+    )
+    db.session.add(item)
+    db.session.commit()
+    return jsonify({"ok": True, "media_id": int(item.id)}), 201
 
 
 @shortlets_bp.post("/shortlets")
@@ -167,6 +425,7 @@ def create_shortlet():
     amenities = []
     house_rules = []
     verification_score = 20
+    media_items = []
 
 
     state = ""
@@ -336,6 +595,9 @@ def create_shortlet():
         available_to = _d_any(payload.get("available_to"))
 
         image_rel = (payload.get("image_path") or payload.get("image") or "").strip()
+        media_payload = payload.get("media")
+        if isinstance(media_payload, list):
+            media_items = media_payload
 
     if not title:
         return jsonify({"message": "title is required"}), 400
@@ -376,6 +638,30 @@ def create_shortlet():
     try:
         db.session.add(s)
         db.session.commit()
+        if media_items:
+            for idx, raw in enumerate(media_items):
+                if not isinstance(raw, dict):
+                    continue
+                media_type = str(raw.get("media_type") or "image").strip().lower()
+                if media_type not in ("image", "video"):
+                    continue
+                duration = int(raw.get("duration_seconds") or 0)
+                if media_type == "video" and duration > 30:
+                    continue
+                media_url = str(raw.get("url") or "").strip()
+                if not media_url:
+                    continue
+                db.session.add(
+                    ShortletMedia(
+                        shortlet_id=int(s.id),
+                        media_type=media_type,
+                        url=media_url[:1024],
+                        thumbnail_url=str(raw.get("thumbnail_url") or "").strip()[:1024] or None,
+                        duration_seconds=max(0, duration),
+                        position=int(raw.get("position") or idx),
+                    )
+                )
+            db.session.commit()
         return jsonify({"ok": True, "shortlet": s.to_dict(base_url=_base_url())}), 201
     except Exception as e:
         db.session.rollback()
@@ -412,6 +698,9 @@ def popular_shortlets():
 
 @shortlets_bp.post("/shortlets/<int:shortlet_id>/book")
 def book_shortlet(shortlet_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
     payload = request.get_json(silent=True) or {}
     check_in_raw = (payload.get("check_in") or "").strip()
     check_out_raw = (payload.get("check_out") or "").strip()
@@ -451,9 +740,13 @@ def book_shortlet(shortlet_id: int):
     subtotal = float(base_price) * float(nights) + float(shortlet.cleaning_fee or 0.0)
     platform_fee = compute_commission(subtotal, RATES.get("shortlet_booking", 0.03))
     total = float(subtotal) + float(platform_fee)
+    total_minor = _to_minor(total)
+    payment_method = str(payload.get("payment_method") or "wallet").strip().lower()
+    if payment_method not in ("wallet", "paystack", "bank_transfer_manual"):
+        return jsonify({"ok": False, "message": "payment_method must be wallet|paystack|bank_transfer_manual"}), 400
 
     rec = create_receipt(
-        user_id=(_current_user_id() or 1),  # use auth if present; fallback demo
+        user_id=int(u.id),
         kind="shortlet_booking",
         reference=f"shortlet:{shortlet_id}:{datetime.utcnow().isoformat()}",
         amount=subtotal,
@@ -466,31 +759,163 @@ def book_shortlet(shortlet_id: int):
 
     b = ShortletBooking(
         shortlet_id=shortlet_id,
+        user_id=int(u.id),
         guest_name=(payload.get("guest_name") or "").strip(),
         guest_phone=(payload.get("guest_phone") or "").strip(),
         check_in=check_in,
         check_out=check_out,
         nights=nights,
         total_amount=total,
+        amount_minor=int(total_minor),
+        payment_method=payment_method,
+        payment_status="pending",
         status="pending",
     )
 
     try:
         db.session.add(b)
         db.session.commit()
-        try:
-            if platform_fee > 0:
+        if payment_method == "wallet":
+            b.payment_status = "paid"
+            b.status = "confirmed"
+            db.session.add(b)
+            db.session.commit()
+            try:
                 post_txn(
-                    user_id=_platform_user_id(),
-                    direction="credit",
-                    amount=float(platform_fee),
-                    kind="platform_fee",
-                    reference=f"shortlet:{int(shortlet_id)}:{int(b.id)}",
-                    note="Shortlet platform fee",
+                    user_id=int(u.id),
+                    direction="debit",
+                    amount=float(total),
+                    kind="shortlet_booking",
+                    reference=f"shortlet:booking:{int(b.id)}",
+                    note="Shortlet booking payment",
                 )
-        except Exception:
-            pass
-        return jsonify({"ok": True, "booking": b.to_dict(), "quote": {"nights": nights, "subtotal": subtotal, "platform_fee": platform_fee, "total": total}}), 201
+                if platform_fee > 0:
+                    post_txn(
+                        user_id=_platform_user_id(),
+                        direction="credit",
+                        amount=float(platform_fee),
+                        kind="platform_fee",
+                        reference=f"shortlet:{int(shortlet_id)}:{int(b.id)}",
+                        note="Shortlet platform fee",
+                    )
+            except Exception:
+                pass
+            return jsonify({"ok": True, "mode": "wallet", "booking": b.to_dict(), "quote": {"nights": nights, "subtotal": subtotal, "platform_fee": platform_fee, "total": total}}), 201
+
+        settings = get_settings()
+        payments_mode = _payments_mode(settings)
+        reference = f"FT-SHORTLET-{int(b.id)}-{int(datetime.utcnow().timestamp())}"
+        if payment_method == "bank_transfer_manual":
+            pi = PaymentIntent(
+                user_id=int(u.id),
+                provider="manual_company_account",
+                reference=reference,
+                purpose="order",
+                amount=float(total),
+                amount_minor=int(total_minor),
+                status=PaymentIntentStatus.INITIALIZED,
+                updated_at=datetime.utcnow(),
+                meta=json.dumps(
+                    {
+                        "purpose": "shortlet_booking",
+                        "booking_id": int(b.id),
+                        "shortlet_id": int(shortlet_id),
+                        "order_ids": [],
+                        "order_id": None,
+                    }
+                ),
+            )
+            db.session.add(pi)
+            db.session.commit()
+            transition_intent(
+                pi,
+                PaymentIntentStatus.MANUAL_PENDING,
+                actor={"type": "user", "id": int(u.id)},
+                idempotency_key=f"init:{pi.reference}:manual_pending",
+                reason="manual_initialize_shortlet",
+                metadata={"booking_id": int(b.id)},
+            )
+            b.payment_intent_id = int(pi.id)
+            b.payment_status = "manual_pending"
+            db.session.add(b)
+            db.session.commit()
+            return jsonify(
+                {
+                    "ok": True,
+                    "mode": "bank_transfer_manual",
+                    "booking": b.to_dict(),
+                    "payment_intent_id": int(pi.id),
+                    "reference": pi.reference,
+                    "manual_instructions": _manual_instructions(settings),
+                    "quote": {"nights": nights, "subtotal": subtotal, "platform_fee": platform_fee, "total": total},
+                }
+            ), 201
+
+        if payments_mode == "manual_company_account":
+            return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": "Paystack checkout disabled while manual mode is active"}), 503
+        provider = MockPaymentsProvider() if payments_mode == "mock" else None
+        if provider is None:
+            try:
+                provider = build_payments_provider(settings)
+            except IntegrationDisabledError as exc:
+                return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": str(exc)}), 503
+            except IntegrationMisconfiguredError as exc:
+                return jsonify({"ok": False, "error": "INTEGRATION_MISCONFIGURED", "message": str(exc)}), 500
+
+        pi = PaymentIntent(
+            user_id=int(u.id),
+            provider=provider.name,
+            reference=reference,
+            purpose="order",
+            amount=float(total),
+            amount_minor=int(total_minor),
+            status=PaymentIntentStatus.INITIALIZED,
+            updated_at=datetime.utcnow(),
+            meta=json.dumps(
+                {
+                    "purpose": "shortlet_booking",
+                    "booking_id": int(b.id),
+                    "shortlet_id": int(shortlet_id),
+                    "order_ids": [],
+                    "order_id": None,
+                }
+            ),
+        )
+        db.session.add(pi)
+        db.session.commit()
+        transition_intent(
+            pi,
+            PaymentIntentStatus.INITIALIZED,
+            actor={"type": "user", "id": int(u.id)},
+            idempotency_key=f"init:{pi.reference}:initialized",
+            reason="paystack_initialize_shortlet",
+            metadata={"booking_id": int(b.id)},
+        )
+        init_result = provider.initialize(
+            order_id=None,
+            amount=float(total),
+            email=(u.email or ""),
+            reference=pi.reference,
+            metadata={"booking_id": int(b.id), "shortlet_id": int(shortlet_id)},
+        )
+        if init_result.reference and init_result.reference != pi.reference:
+            pi.reference = init_result.reference
+            db.session.add(pi)
+        b.payment_intent_id = int(pi.id)
+        b.payment_status = "awaiting_payment"
+        db.session.add(b)
+        db.session.commit()
+        return jsonify(
+            {
+                "ok": True,
+                "mode": "paystack",
+                "booking": b.to_dict(),
+                "payment_intent_id": int(pi.id),
+                "reference": pi.reference,
+                "authorization_url": init_result.authorization_url,
+                "quote": {"nights": nights, "subtotal": subtotal, "platform_fee": platform_fee, "total": total},
+            }
+        ), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Booking failed", "error": str(e)}), 500

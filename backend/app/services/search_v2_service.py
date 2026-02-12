@@ -6,6 +6,7 @@ from sqlalchemy import and_, or_, text
 
 from app.extensions import db
 from app.models import Listing
+from app.services.discovery_service import ranking_for_listing
 
 
 def _dialect() -> str:
@@ -32,7 +33,7 @@ def _safe_float(raw, default: float | None = None) -> float | None:
         return default
 
 
-def _serialize_listing(row: Listing) -> dict[str, Any]:
+def _serialize_listing(row: Listing, *, ranking_score: int = 0, ranking_reason: list[str] | None = None) -> dict[str, Any]:
     created_at = getattr(row, "created_at", None)
     return {
         "id": int(row.id),
@@ -46,6 +47,12 @@ def _serialize_listing(row: Listing) -> dict[str, Any]:
         "image_path": (getattr(row, "image_path", "") or ""),
         "image_filename": (getattr(row, "image_filename", "") or ""),
         "user_id": int(getattr(row, "user_id", 0) or 0),
+        "views_count": int(getattr(row, "views_count", 0) or 0),
+        "favorites_count": int(getattr(row, "favorites_count", 0) or 0),
+        "heat_level": (getattr(row, "heat_level", "normal") or "normal"),
+        "heat_score": int(getattr(row, "heat_score", 0) or 0),
+        "ranking_score": int(ranking_score or 0),
+        "ranking_reason": ranking_reason or ["BASELINE"],
         "created_at": created_at.isoformat() if created_at else None,
     }
 
@@ -65,6 +72,8 @@ def search_listings_v2(
     limit: int = 20,
     offset: int = 0,
     include_inactive: bool = False,
+    preferred_city: str = "",
+    preferred_state: str = "",
 ) -> dict[str, Any]:
     query = Listing.query
 
@@ -169,8 +178,30 @@ def search_listings_v2(
     safe_offset = max(0, int(offset or 0))
 
     total = query.count()
-    rows = query.offset(safe_offset).limit(safe_limit).all()
-    items = [_serialize_listing(row) for row in rows]
+
+    ranking_city = preferred_city or ""
+    ranking_state = preferred_state or state or ""
+    if sort_key == "relevance":
+        max_scan = max(200, safe_offset + safe_limit + 200)
+        rows = query.limit(max_scan).all()
+        ranked_rows = []
+        for row in rows:
+            score, reasons = ranking_for_listing(row, preferred_city=ranking_city, preferred_state=ranking_state)
+            ranked_rows.append((row, int(score), reasons))
+        def _rank_key(item):
+            created = getattr(item[0], "created_at", None)
+            created_key = created.timestamp() if created is not None else 0.0
+            return (item[1], created_key)
+
+        ranked_rows.sort(key=_rank_key, reverse=True)
+        paged = ranked_rows[safe_offset : safe_offset + safe_limit]
+        items = [_serialize_listing(row, ranking_score=score, ranking_reason=reasons) for (row, score, reasons) in paged]
+    else:
+        rows = query.offset(safe_offset).limit(safe_limit).all()
+        items = []
+        for row in rows:
+            score, reasons = ranking_for_listing(row, preferred_city=ranking_city, preferred_state=ranking_state)
+            items.append(_serialize_listing(row, ranking_score=score, ranking_reason=reasons))
 
     return {
         "ok": True,

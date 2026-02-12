@@ -9,8 +9,7 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.utils.ng_locations import NIGERIA_LOCATIONS
-from app.models import User
-from app.models import Listing
+from app.models import User, Listing, ItemDictionary, UserSettings
 from app.utils.commission import compute_commission, RATES
 from app.utils.listing_caps import enforce_listing_cap
 from app.utils.jwt_utils import decode_token, get_bearer_token
@@ -18,6 +17,13 @@ from app.utils.autopilot import get_settings
 from app.services.search_v2_service import search_listings_v2
 from app.utils.rate_limit import check_limit
 from app.services.risk_engine_service import record_event
+from app.services.discovery_service import (
+    ranking_for_listing,
+    set_listing_favorite,
+    record_listing_view,
+    merchant_listing_metrics,
+    queue_item_unavailable_notifications,
+)
 
 
 market_bp = Blueprint("market_bp", __name__, url_prefix="/api")
@@ -144,6 +150,18 @@ def _is_owner(u: User | None, listing: Listing) -> bool:
     except Exception:
         pass
     return False
+
+
+def _user_preferences(user: User | None) -> tuple[str, str]:
+    if not user:
+        return "", ""
+    try:
+        s = UserSettings.query.filter_by(user_id=int(user.id)).first()
+    except Exception:
+        s = None
+    if not s:
+        return "", ""
+    return (str(getattr(s, "preferred_city", "") or "").strip(), str(getattr(s, "preferred_state", "") or "").strip())
 
 
 def _search_args():
@@ -339,6 +357,11 @@ def public_features():
             "ok": True,
             "features": {
                 "search_v2_mode": mode,
+                "city_discovery_v1": bool(getattr(settings, "city_discovery_v1", True)),
+                "views_heat_v1": bool(getattr(settings, "views_heat_v1", True)),
+                "cart_checkout_v1": bool(getattr(settings, "cart_checkout_v1", False)),
+                "shortlet_reels_v1": bool(getattr(settings, "shortlet_reels_v1", False)),
+                "watcher_notifications_v1": bool(getattr(settings, "watcher_notifications_v1", False)),
             },
         }
     ), 200
@@ -347,6 +370,13 @@ def public_features():
 @market_bp.get("/public/listings/search")
 def public_listings_search():
     args = _search_args()
+    pref_city = (request.args.get("city") or "").strip()
+    pref_state = (request.args.get("state") or "").strip()
+    u = _current_user()
+    if not pref_city and not pref_state:
+        user_city, user_state = _user_preferences(u)
+        pref_city = user_city or pref_city
+        pref_state = user_state or pref_state
     try:
         payload = search_listings_v2(
             q=args["q"],
@@ -362,6 +392,8 @@ def public_listings_search():
             limit=args["limit"],
             offset=args["offset"],
             include_inactive=False,
+            preferred_city=pref_city,
+            preferred_state=pref_state,
         )
         return jsonify(payload), 200
     except Exception:
@@ -384,6 +416,8 @@ def admin_listings_search():
     if not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
     args = _search_args()
+    pref_city = (request.args.get("city") or "").strip()
+    pref_state = (request.args.get("state") or "").strip()
     try:
         payload = search_listings_v2(
             q=args["q"],
@@ -399,6 +433,8 @@ def admin_listings_search():
             limit=args["limit"],
             offset=args["offset"],
             include_inactive=True,
+            preferred_city=pref_city,
+            preferred_state=pref_state,
         )
         return jsonify(payload), 200
     except Exception:
@@ -411,6 +447,221 @@ def admin_listings_search():
         except Exception:
             pass
         return jsonify({"ok": True, "items": [], "total": 0, "limit": args["limit"], "offset": args["offset"]}), 200
+
+
+@market_bp.get("/public/listings/recommended")
+def public_listings_recommended():
+    limit_raw = request.args.get("limit") or "20"
+    try:
+        limit = max(1, min(int(limit_raw), 60))
+    except Exception:
+        limit = 20
+    city = (request.args.get("city") or "").strip()
+    state = (request.args.get("state") or "").strip()
+    u = _current_user()
+    if not city and not state:
+        pref_city, pref_state = _user_preferences(u)
+        city = pref_city or city
+        state = pref_state or state
+    rows = _apply_listing_ordering(_apply_listing_active_filter(Listing.query)).limit(500).all()
+    ranked = []
+    for row in rows:
+        score, reasons = ranking_for_listing(row, preferred_city=city, preferred_state=state)
+        payload = row.to_dict(base_url=_base_url())
+        payload["ranking_score"] = int(score)
+        payload["ranking_reason"] = reasons
+        ranked.append(payload)
+    ranked.sort(key=lambda item: (int(item.get("ranking_score", 0)), item.get("created_at") or ""), reverse=True)
+    return jsonify({"ok": True, "items": ranked[:limit], "city": city, "state": state, "limit": limit}), 200
+
+
+@market_bp.get("/public/listings/title-suggestions")
+def listing_title_suggestions():
+    q = (request.args.get("q") or "").strip().lower()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 10), 25))
+    except Exception:
+        limit = 10
+    if not q:
+        rows = ItemDictionary.query.order_by(ItemDictionary.popularity_score.desc(), ItemDictionary.term.asc()).limit(limit).all()
+    else:
+        rows = (
+            ItemDictionary.query
+            .filter(ItemDictionary.term.ilike(f"%{q}%"))
+            .order_by(ItemDictionary.popularity_score.desc(), ItemDictionary.term.asc())
+            .limit(limit)
+            .all()
+        )
+    items = [{"term": row.term, "category": row.category, "popularity_score": int(row.popularity_score or 0)} for row in rows]
+    return jsonify({"ok": True, "items": items, "q": q, "limit": limit}), 200
+
+
+@market_bp.get("/public/search")
+def public_global_search():
+    q = (request.args.get("q") or "").strip()
+    city = (request.args.get("city") or "").strip()
+    state = (request.args.get("state") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 8), 30))
+    except Exception:
+        limit = 8
+    listings_payload = search_listings_v2(
+        q=q,
+        state=state,
+        limit=limit,
+        offset=0,
+        include_inactive=False,
+        preferred_city=city,
+        preferred_state=state,
+    )
+    listing_items = listings_payload.get("items", []) if isinstance(listings_payload, dict) else []
+    shortlet_rows = []
+    try:
+        from app.models import Shortlet, MerchantProfile
+        sq = Shortlet.query
+        if city:
+            sq = sq.filter(Shortlet.city.ilike(city))
+        elif state:
+            sq = sq.filter(Shortlet.state.ilike(state))
+        if q:
+            like = f"%{q}%"
+            sq = sq.filter(or_(Shortlet.title.ilike(like), Shortlet.description.ilike(like), Shortlet.city.ilike(like)))
+        shortlet_rows = sq.order_by(Shortlet.created_at.desc()).limit(limit).all()
+        shortlet_items = [row.to_dict(base_url=_base_url()) for row in shortlet_rows]
+        mq = MerchantProfile.query
+        if q:
+            like = f"%{q}%"
+            mq = mq.filter(or_(MerchantProfile.business_name.ilike(like), MerchantProfile.city.ilike(like), MerchantProfile.state.ilike(like)))
+        merchant_rows = mq.order_by(MerchantProfile.score.desc()).limit(limit).all()
+        merchant_items = [row.to_dict() for row in merchant_rows]
+    except Exception:
+        db.session.rollback()
+        shortlet_items = []
+        merchant_items = []
+    return jsonify({"ok": True, "items": listing_items, "shortlets": shortlet_items, "merchants": merchant_items, "q": q, "city": city, "state": state}), 200
+
+
+@market_bp.get("/public/search/suggest")
+def public_global_search_suggest():
+    q = (request.args.get("q") or "").strip().lower()
+    city = (request.args.get("city") or "").strip()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 8), 20))
+    except Exception:
+        limit = 8
+
+    terms = []
+    seen = set()
+    if q:
+        rows = (
+            ItemDictionary.query
+            .filter(ItemDictionary.term.ilike(f"%{q}%"))
+            .order_by(ItemDictionary.popularity_score.desc(), ItemDictionary.term.asc())
+            .limit(limit)
+            .all()
+        )
+    else:
+        rows = ItemDictionary.query.order_by(ItemDictionary.popularity_score.desc()).limit(limit).all()
+    for row in rows:
+        t = (row.term or "").strip()
+        if not t:
+            continue
+        key = t.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        terms.append(t)
+        if len(terms) >= limit:
+            break
+
+    if len(terms) < limit:
+        like = f"%{q}%" if q else "%"
+        rows = (
+            Listing.query
+            .filter(Listing.title.ilike(like))
+            .order_by(Listing.created_at.desc())
+            .limit(limit * 2)
+            .all()
+        )
+        for row in rows:
+            t = (row.title or "").strip()
+            if not t:
+                continue
+            key = t.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            terms.append(t)
+            if len(terms) >= limit:
+                break
+
+    return jsonify({"ok": True, "items": terms, "q": q, "city": city, "limit": limit}), 200
+
+
+@market_bp.post("/listings/<int:listing_id>/favorite")
+def favorite_listing(listing_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    try:
+        payload = set_listing_favorite(listing_id=int(listing_id), user_id=int(u.id), is_favorite=True)
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "FAVORITE_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.delete("/listings/<int:listing_id>/favorite")
+def unfavorite_listing(listing_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    try:
+        payload = set_listing_favorite(listing_id=int(listing_id), user_id=int(u.id), is_favorite=False)
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "UNFAVORITE_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.post("/listings/<int:listing_id>/view")
+def view_listing(listing_id: int):
+    u = _current_user()
+    session_key = (request.headers.get("X-Session-Key") or request.args.get("session_key") or "").strip()
+    try:
+        payload = record_listing_view(
+            listing_id=int(listing_id),
+            user_id=int(u.id) if u else None,
+            session_key=session_key,
+        )
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "VIEW_RECORD_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.get("/merchant/listings/metrics")
+def merchant_listings_metrics():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    role = (getattr(u, "role", None) or "").strip().lower()
+    if role not in ("merchant", "admin"):
+        return jsonify({"message": "Forbidden"}), 403
+    merchant_id = int(u.id)
+    if role == "admin":
+        try:
+            merchant_id = int(request.args.get("merchant_id") or merchant_id)
+        except Exception:
+            merchant_id = int(u.id)
+    items = merchant_listing_metrics(int(merchant_id))
+    return jsonify({"ok": True, "merchant_id": int(merchant_id), "items": items}), 200
 
 
 @market_bp.get("/heatmap")
@@ -739,6 +990,11 @@ def update_listing(listing_id: int):
             db.session.rollback()
         db.session.add(item)
         db.session.commit()
+        if current_active and not new_active:
+            try:
+                queue_item_unavailable_notifications(entity="listing", entity_id=int(item.id), title=item.title or "Listing")
+            except Exception:
+                db.session.rollback()
         return jsonify({"ok": True, "listing": item.to_dict(base_url=_base_url())}), 200
     except Exception as e:
         db.session.rollback()
@@ -759,6 +1015,10 @@ def delete_listing(listing_id: int):
         return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
 
     try:
+        try:
+            queue_item_unavailable_notifications(entity="listing", entity_id=int(item.id), title=item.title or "Listing")
+        except Exception:
+            db.session.rollback()
         db.session.delete(item)
         db.session.commit()
         return jsonify({"ok": True, "deleted": True, "listing_id": listing_id}), 200

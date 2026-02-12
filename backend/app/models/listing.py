@@ -39,6 +39,10 @@ class Listing(db.Model):
     image_path = db.Column(db.String(512), nullable=True)
     image_filename = db.Column(db.String(255), nullable=False, default="", server_default="")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    views_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    favorites_count = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    heat_level = db.Column(db.String(16), nullable=False, default="normal", server_default="normal")
+    heat_score = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=sa.text("now()"))
     date_posted = db.Column(db.DateTime(timezone=True), nullable=False, server_default=sa.text("now()"))
@@ -98,6 +102,10 @@ class Listing(db.Model):
             "image_path": stored,      # keep raw stored value for compatibility
             "image_filename": getattr(self, "image_filename", "") or "",
             "is_active": bool(getattr(self, "is_active", True)),
+            "views_count": int(getattr(self, "views_count", 0) or 0),
+            "favorites_count": int(getattr(self, "favorites_count", 0) or 0),
+            "heat_level": (getattr(self, "heat_level", "normal") or "normal"),
+            "heat_score": int(getattr(self, "heat_score", 0) or 0),
             "date_posted": self.date_posted.isoformat() if getattr(self, "date_posted", None) else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -144,6 +144,7 @@ class MarketplaceCatalogService {
     },
   ];
   String? _searchModeCache;
+  Map<String, dynamic>? _featuresCache;
 
   Future<List<Map<String, dynamic>>> listAll() async {
     final rows = await _listingService.listListings();
@@ -160,20 +161,115 @@ class MarketplaceCatalogService {
   }
 
   Future<String> searchV2Mode() async {
+    final features = await publicFeatures();
+    final mode = (features['search_v2_mode'] ?? 'off').toString().toLowerCase();
+    if (mode == 'off' || mode == 'shadow' || mode == 'on') {
+      _searchModeCache = mode;
+      return mode;
+    }
     if (_searchModeCache != null) return _searchModeCache!;
-    try {
-      final data = await ApiClient.instance.getJson(ApiConfig.api('/public/features'));
-      if (data is Map && data['features'] is Map) {
-        final features = Map<String, dynamic>.from(data['features'] as Map);
-        final mode = (features['search_v2_mode'] ?? 'off').toString().toLowerCase();
-        if (mode == 'off' || mode == 'shadow' || mode == 'on') {
-          _searchModeCache = mode;
-          return mode;
-        }
-      }
-    } catch (_) {}
     _searchModeCache = 'off';
     return _searchModeCache!;
+  }
+
+  Future<Map<String, dynamic>> publicFeatures({bool refresh = false}) async {
+    if (!refresh && _featuresCache != null) {
+      return Map<String, dynamic>.from(_featuresCache!);
+    }
+    try {
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api('/public/features'));
+      if (data is Map && data['features'] is Map) {
+        _featuresCache = Map<String, dynamic>.from(data['features'] as Map);
+        return Map<String, dynamic>.from(_featuresCache!);
+      }
+    } catch (_) {}
+    _featuresCache = <String, dynamic>{};
+    return <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> recommendedRemote({
+    String city = '',
+    String state = '',
+    int limit = 20,
+  }) async {
+    final qp = <String, String>{
+      'limit': '${limit < 1 ? 20 : limit > 60 ? 60 : limit}'
+    };
+    if (city.trim().isNotEmpty) qp['city'] = city.trim();
+    if (state.trim().isNotEmpty) qp['state'] = state.trim();
+    final uri = Uri(path: '/public/listings/recommended', queryParameters: qp);
+    try {
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .whereType<Map>()
+            .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
+            .toList(growable: false);
+      }
+      if (data is List) {
+        return data
+            .whereType<Map>()
+            .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
+            .toList(growable: false);
+      }
+    } catch (_) {}
+    return const <Map<String, dynamic>>[];
+  }
+
+  Future<List<String>> titleSuggestions(String query, {int limit = 8}) async {
+    if (query.trim().isEmpty) return const <String>[];
+    final uri = Uri(
+      path: '/public/listings/title-suggestions',
+      queryParameters: <String, String>{
+        'q': query.trim(),
+        'limit': '${limit < 1 ? 8 : limit > 20 ? 20 : limit}',
+      },
+    );
+    try {
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .map(
+                (item) => (item is Map ? item['term'] : item).toString().trim())
+            .where((term) => term.isNotEmpty)
+            .toList(growable: false);
+      }
+    } catch (_) {}
+    return const <String>[];
+  }
+
+  Future<Map<String, dynamic>> favoriteListing({
+    required int listingId,
+    required bool favorite,
+  }) async {
+    final path = '/listings/$listingId/favorite';
+    try {
+      final data = favorite
+          ? await ApiClient.instance
+              .postJson(ApiConfig.api(path), const <String, dynamic>{})
+          : await ApiClient.instance.dio
+              .delete(ApiConfig.api(path))
+              .then((value) => value.data);
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
+    return <String, dynamic>{'ok': false};
+  }
+
+  Future<Map<String, dynamic>> recordListingView(int listingId,
+      {String sessionKey = ''}) async {
+    final path = '/listings/$listingId/view';
+    final payload = <String, dynamic>{};
+    if (sessionKey.trim().isNotEmpty)
+      payload['session_key'] = sessionKey.trim();
+    try {
+      final data =
+          await ApiClient.instance.postJson(ApiConfig.api(path), payload);
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
+    return <String, dynamic>{'ok': false};
   }
 
   Future<List<Map<String, dynamic>>> searchRemote({
@@ -233,7 +329,8 @@ class MarketplaceCatalogService {
     if (category.trim().isNotEmpty && category.trim().toLowerCase() != 'all') {
       qp['category'] = category.trim();
     }
-    if (state.trim().isNotEmpty && state.trim().toLowerCase() != 'all nigeria') {
+    if (state.trim().isNotEmpty &&
+        state.trim().toLowerCase() != 'all nigeria') {
       qp['state'] = state.trim();
     }
     if (minPrice != null) qp['min_price'] = minPrice.toStringAsFixed(0);
@@ -255,7 +352,8 @@ class MarketplaceCatalogService {
       'inspection_required': false,
     };
     try {
-      final data = await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
       if (data is Map && data['items'] is List) {
         final items = (data['items'] as List)
             .whereType<Map>()
@@ -306,8 +404,10 @@ class MarketplaceCatalogService {
     out.sort((a, b) {
       final ap = (_asNum(a['price']) / 1000).floor();
       final bp = (_asNum(b['price']) / 1000).floor();
-      final aId = a['id'] is int ? a['id'] as int : int.tryParse('${a['id']}') ?? 0;
-      final bId = b['id'] is int ? b['id'] as int : int.tryParse('${b['id']}') ?? 0;
+      final aId =
+          a['id'] is int ? a['id'] as int : int.tryParse('${a['id']}') ?? 0;
+      final bId =
+          b['id'] is int ? b['id'] as int : int.tryParse('${b['id']}') ?? 0;
       return ((bp % 17) + bId).compareTo((ap % 17) + aId);
     });
     return out.take(limit).toList();
@@ -348,7 +448,8 @@ class MarketplaceCatalogService {
       final itemState = (item['state'] ?? '').toString();
       final price = _asNum(item['price']);
 
-      final matchesQuery = q.isEmpty || title.contains(q) || description.contains(q);
+      final matchesQuery =
+          q.isEmpty || title.contains(q) || description.contains(q);
       final matchesCategory = category == 'All' || category == itemCategory;
       final matchesState = state == 'All Nigeria' || state == itemState;
       final matchesMin = minPrice == null || price >= minPrice;
@@ -387,7 +488,8 @@ class MarketplaceCatalogService {
   Map<String, dynamic> _normalize(Map<String, dynamic> raw) {
     final id = raw['id'] is int
         ? raw['id'] as int
-        : int.tryParse(raw['id']?.toString() ?? '') ?? Random().nextInt(900000) + 1;
+        : int.tryParse(raw['id']?.toString() ?? '') ??
+            Random().nextInt(900000) + 1;
 
     return {
       ...raw,
@@ -404,7 +506,16 @@ class MarketplaceCatalogService {
       'image_path': (raw['image_path'] ?? raw['image'] ?? '').toString(),
       'is_demo': raw['is_demo'] == true,
       'is_boosted': raw['is_boosted'] == true,
-      'created_at': (raw['created_at'] ?? DateTime.now().toIso8601String()).toString(),
+      'views_count': int.tryParse('${raw['views_count'] ?? 0}') ?? 0,
+      'favorites_count': int.tryParse('${raw['favorites_count'] ?? 0}') ?? 0,
+      'heat_level': (raw['heat_level'] ?? '').toString(),
+      'heat_score': int.tryParse('${raw['heat_score'] ?? 0}') ?? 0,
+      'ranking_score': int.tryParse('${raw['ranking_score'] ?? 0}') ?? 0,
+      'ranking_reason': raw['ranking_reason'] is List
+          ? List<String>.from(raw['ranking_reason'] as List)
+          : const <String>[],
+      'created_at':
+          (raw['created_at'] ?? DateTime.now().toIso8601String()).toString(),
     };
   }
 
@@ -418,11 +529,14 @@ class MarketplaceCatalogService {
 
   double _score(Map<String, dynamic> item, {String query = ''}) {
     final boosted = item['is_boosted'] == true ? 8.0 : 0.0;
-    final agePenalty = _createdAt(item).difference(DateTime.now()).inHours.abs() / 24.0;
+    final agePenalty =
+        _createdAt(item).difference(DateTime.now()).inHours.abs() / 24.0;
     final priceBand = _asNum(item['price']) <= 100000 ? 2.0 : 0.8;
     final queryHit = query.isEmpty
         ? 0.0
-        : ((item['title'] ?? '').toString().toLowerCase().contains(query) ? 6.0 : 0.0);
+        : ((item['title'] ?? '').toString().toLowerCase().contains(query)
+            ? 6.0
+            : 0.0);
     return boosted + priceBand + queryHit - agePenalty;
   }
 

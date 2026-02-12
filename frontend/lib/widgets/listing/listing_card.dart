@@ -31,6 +31,10 @@ class ListingCard extends StatelessWidget {
     final condition = (item['condition'] ?? '').toString();
     final created = (item['created_at'] ?? '').toString();
     final image = (item['image_path'] ?? item['image'] ?? '').toString();
+    final viewsCount = int.tryParse('${item['views_count'] ?? 0}') ?? 0;
+    final favoritesCount = int.tryParse('${item['favorites_count'] ?? 0}') ?? 0;
+    final heatLevel =
+        (item['heat_level'] ?? '').toString().toLowerCase().trim();
     final boosted = item['is_boosted'] == true;
     final deliveryEnabled = item['delivery_enabled'] == true ||
         item['delivery_enabled']?.toString().toLowerCase() == 'true';
@@ -132,6 +136,21 @@ class ListingCard extends StatelessWidget {
                     spacing: 6,
                     runSpacing: 6,
                     children: [
+                      FTPill(
+                        text: '$viewsCount views',
+                        bgColor: const Color(0xFFF1F5F9),
+                      ),
+                      FTPill(
+                        text: '$favoritesCount watching',
+                        bgColor: const Color(0xFFFFF1F2),
+                      ),
+                      if (heatLevel == 'hot' || heatLevel == 'hotter')
+                        FTPill(
+                          text: heatLevel == 'hotter' ? 'Hotter' : 'Hot',
+                          bgColor: heatLevel == 'hotter'
+                              ? const Color(0xFFFFEDD5)
+                              : const Color(0xFFFEF3C7),
+                        ),
                       if (condition.trim().isNotEmpty)
                         FTPill(
                             text: condition, bgColor: const Color(0xFFF1F5F9)),
