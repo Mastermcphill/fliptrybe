@@ -4,6 +4,7 @@ import '../services/marketplace_catalog_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/wallet_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 import '../widgets/listing/listing_card.dart';
 import 'listing_detail_screen.dart';
 import 'marketplace/marketplace_search_results_screen.dart';
@@ -77,11 +78,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         _loading = false;
       });
     }
-  }
-
-  String _money(dynamic value) {
-    final parsed = double.tryParse((value ?? 0).toString()) ?? 0;
-    return parsed.toStringAsFixed(2);
   }
 
   Future<void> _toggleFavorite(Map<String, dynamic> item) async {
@@ -370,7 +366,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Current balance: ₦${_money(_wallet?['balance'])}',
+                                  'Current balance: ${formatNaira(_wallet?['balance'])}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w800),
                                 ),
@@ -379,8 +375,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                                   const Text('No recent transactions.')
                                 else
                                   ...txs.map((tx) {
-                                    final amount =
-                                        (tx['amount'] ?? 0).toString();
+                                    final amount = tx['amount'];
                                     final direction =
                                         (tx['direction'] ?? '').toString();
                                     final kind = (tx['kind'] ?? '').toString();
@@ -398,7 +393,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                                       ),
                                       title: Text(
                                           kind.isEmpty ? 'Transaction' : kind),
-                                      trailing: Text('₦$amount'),
+                                      trailing: Text(formatNaira(amount)),
                                     );
                                   }),
                               ],

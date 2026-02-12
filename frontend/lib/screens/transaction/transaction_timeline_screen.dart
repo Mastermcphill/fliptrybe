@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../services/order_service.dart';
+import '../../ui/components/ft_components.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/transaction/transaction_timeline_step.dart';
 
 class TransactionTimelineScreen extends StatefulWidget {
@@ -93,8 +95,7 @@ class _TransactionTimelineScreenState extends State<TransactionTimelineScreen> {
   }
 
   String _money(dynamic value) {
-    final parsed = double.tryParse((value ?? 0).toString()) ?? 0;
-    return '₦${parsed.toStringAsFixed(2)}';
+    return formatNaira(value);
   }
 
   String _escrowStatus() {
@@ -452,33 +453,46 @@ class _TransactionTimelineScreenState extends State<TransactionTimelineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Transaction Timeline #${widget.orderId}'),
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-        ],
+    return FTScaffold(
+      title: 'Transaction Timeline #${widget.orderId}',
+      actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      child: FTLoadStateLayout(
+        loading: _loading,
+        error: _error,
+        onRetry: _load,
+        empty: _order.isEmpty,
+        loadingState: ListView(
+          padding: const EdgeInsets.all(16),
+          children: const [
+            FTSkeleton(height: 150),
+            SizedBox(height: 10),
+            FTSkeleton(height: 120),
+            SizedBox(height: 10),
+            FTSkeleton(height: 120),
+          ],
+        ),
+        emptyState: const FTEmptyState(
+          icon: Icons.timeline_outlined,
+          title: 'No timeline data yet',
+          subtitle:
+              'This order has no transaction timeline records available right now.',
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _escrowSummaryCard(),
+            const SizedBox(height: 10),
+            const Text(
+              'Order Lifecycle',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+            ),
+            const SizedBox(height: 8),
+            ..._timelineWidgets(),
+            const SizedBox(height: 6),
+            _messagingPanel(),
+          ],
+        ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : (_error != null)
-              ? Center(child: Text(_error!))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _escrowSummaryCard(),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Order Lifecycle',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-                    ),
-                    const SizedBox(height: 8),
-                    ..._timelineWidgets(),
-                    const SizedBox(height: 6),
-                    _messagingPanel(),
-                  ],
-                ),
     );
   }
 }

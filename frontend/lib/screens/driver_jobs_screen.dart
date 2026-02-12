@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/driver_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 import 'not_available_yet_screen.dart';
 import 'order_detail_screen.dart';
 import 'transaction/transaction_timeline_screen.dart';
@@ -76,173 +77,151 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Driver Jobs'),
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-        ],
-      ),
-      body: RefreshIndicator(
+    return FTScaffold(
+      title: 'Driver Jobs',
+      actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      child: RefreshIndicator(
         onRefresh: _load,
-        child: _loading
-            ? ListView(
-                padding: const EdgeInsets.all(16),
-                children: const [
-                  FTSkeleton(height: 130),
-                  SizedBox(height: 10),
-                  FTSkeleton(height: 130),
-                  SizedBox(height: 10),
-                  FTSkeleton(height: 130),
-                ],
-              )
-            : _error != null
-                ? ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      FTErrorState(message: _error!, onRetry: _load),
-                    ],
-                  )
-                : _jobs.isEmpty
-                    ? ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: const [
-                          FTEmptyState(
-                            icon: Icons.local_shipping_outlined,
-                            title: 'No jobs assigned',
-                            subtitle:
-                                'New delivery assignments will appear here once dispatched.',
-                          ),
-                        ],
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                        itemCount: _jobs.length,
-                        itemBuilder: (_, index) {
-                          final job = _jobs[index];
-                          final orderId = _resolveOrderId(job);
-                          final status =
-                              (job['status'] ?? 'pending').toString();
-                          final pickup = (job['pickup'] ?? '').toString();
-                          final dropoff = (job['dropoff'] ?? '').toString();
-                          final fee = (job['delivery_fee'] ?? job['fee'] ?? 0)
-                              .toString();
+        child: FTLoadStateLayout(
+          loading: _loading,
+          error: _error,
+          onRetry: _load,
+          empty: _jobs.isEmpty,
+          loadingState: ListView(
+            padding: const EdgeInsets.all(16),
+            children: const [
+              FTListCardSkeleton(withImage: false),
+              SizedBox(height: 10),
+              FTListCardSkeleton(withImage: false),
+              SizedBox(height: 10),
+              FTListCardSkeleton(withImage: false),
+            ],
+          ),
+          emptyState: const FTEmptyState(
+            icon: Icons.local_shipping_outlined,
+            title: 'No jobs assigned',
+            subtitle:
+                'New delivery assignments will appear here once dispatched.',
+          ),
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+            itemCount: _jobs.length,
+            itemBuilder: (_, index) {
+              final job = _jobs[index];
+              final orderId = _resolveOrderId(job);
+              final status = (job['status'] ?? 'pending').toString();
+              final pickup = (job['pickup'] ?? '').toString();
+              final dropoff = (job['dropoff'] ?? '').toString();
+              final fee = job['delivery_fee'] ?? job['fee'] ?? 0;
 
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 10),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Job #${job['id'] ?? '-'}',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w800),
-                                      ),
-                                      const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10, vertical: 5),
-                                        decoration: BoxDecoration(
-                                          color: _statusColor(status)
-                                              .withValues(alpha: 0.12),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: Text(
-                                          _statusLabel(status),
-                                          style: TextStyle(
-                                            color: _statusColor(status),
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  if (pickup.isNotEmpty)
-                                    Text('Pickup: $pickup'),
-                                  if (dropoff.isNotEmpty)
-                                    Text('Dropoff: $dropoff'),
-                                  const SizedBox(height: 4),
-                                  Text('Payout estimate: ₦$fee'),
-                                  const SizedBox(height: 10),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      OutlinedButton(
-                                        onPressed: orderId == null
-                                            ? () => Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        const NotAvailableYetScreen(
-                                                      title: 'Order Not Linked',
-                                                      reason:
-                                                          'This job has no linked order ID yet.',
-                                                    ),
-                                                  ),
-                                                )
-                                            : () => Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        OrderDetailScreen(
-                                                            orderId: orderId),
-                                                  ),
-                                                ),
-                                        child: const Text('View'),
-                                      ),
-                                      OutlinedButton(
-                                        onPressed: orderId == null
-                                            ? () => Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        const NotAvailableYetScreen(
-                                                      title:
-                                                          'Timeline Not Linked',
-                                                      reason:
-                                                          'Timeline is unavailable because this job has no linked order ID.',
-                                                    ),
-                                                  ),
-                                                )
-                                            : () => Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        TransactionTimelineScreen(
-                                                      orderId: orderId,
-                                                    ),
-                                                  ),
-                                                ),
-                                        child: const Text('Timeline'),
-                                      ),
-                                      OutlinedButton(
-                                        onPressed: () =>
-                                            Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const NotAvailableYetScreen(
-                                              title: 'Navigation',
-                                              reason:
-                                                  'Map navigation integration is not enabled yet.',
-                                            ),
-                                          ),
-                                        ),
-                                        child: const Text('Navigate'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Job #${job['id'] ?? '-'}',
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color:
+                                  _statusColor(status).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              _statusLabel(status),
+                              style: TextStyle(
+                                color: _statusColor(status),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 8),
+                      if (pickup.isNotEmpty) Text('Pickup: $pickup'),
+                      if (dropoff.isNotEmpty) Text('Dropoff: $dropoff'),
+                      const SizedBox(height: 4),
+                      Text('Payout estimate: ${formatNaira(fee)}'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          OutlinedButton(
+                            onPressed: orderId == null
+                                ? () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const NotAvailableYetScreen(
+                                          title: 'Order Not Linked',
+                                          reason:
+                                              'This job has no linked order ID yet.',
+                                        ),
+                                      ),
+                                    )
+                                : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            OrderDetailScreen(orderId: orderId),
+                                      ),
+                                    ),
+                            child: const Text('View'),
+                          ),
+                          OutlinedButton(
+                            onPressed: orderId == null
+                                ? () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const NotAvailableYetScreen(
+                                          title: 'Timeline Not Linked',
+                                          reason:
+                                              'Timeline is unavailable because this job has no linked order ID.',
+                                        ),
+                                      ),
+                                    )
+                                : () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            TransactionTimelineScreen(
+                                          orderId: orderId,
+                                        ),
+                                      ),
+                                    ),
+                            child: const Text('Timeline'),
+                          ),
+                          OutlinedButton(
+                            onPressed: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const NotAvailableYetScreen(
+                                  title: 'Navigation',
+                                  reason:
+                                      'Map navigation integration is not enabled yet.',
+                                ),
+                              ),
+                            ),
+                            child: const Text('Navigate'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

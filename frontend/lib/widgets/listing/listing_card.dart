@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../ui/components/ft_components.dart';
 import '../../ui/theme/ft_tokens.dart';
+import '../../utils/formatters.dart';
 import '../safe_image.dart';
 
 class ListingCard extends StatelessWidget {
@@ -19,25 +20,6 @@ class ListingCard extends StatelessWidget {
     required this.onToggleFavorite,
     this.compact = false,
   });
-
-  String _price(dynamic value) {
-    final p = value is num
-        ? value.toDouble()
-        : double.tryParse(value.toString()) ?? 0;
-    return '₦${p.toStringAsFixed(0)}';
-  }
-
-  String _timeAgo(String raw) {
-    try {
-      final dt = DateTime.parse(raw).toLocal();
-      final diff = DateTime.now().difference(dt);
-      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-      if (diff.inHours < 24) return '${diff.inHours}h ago';
-      return '${diff.inDays}d ago';
-    } catch (_) {
-      return 'recent';
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +110,7 @@ class ListingCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _price(item['price']),
+                    formatNaira(item['price'], decimals: 0),
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 17,
@@ -151,7 +133,8 @@ class ListingCard extends StatelessWidget {
                     runSpacing: 6,
                     children: [
                       if (condition.trim().isNotEmpty)
-                        FTPill(text: condition, bgColor: const Color(0xFFF1F5F9)),
+                        FTPill(
+                            text: condition, bgColor: const Color(0xFFF1F5F9)),
                       if (deliveryEnabled)
                         const FTPill(
                           text: 'Delivery',
@@ -177,7 +160,7 @@ class ListingCard extends StatelessWidget {
                   ],
                   const SizedBox(height: 4),
                   Text(
-                    _timeAgo(created),
+                    formatRelativeTime(created),
                     style: const TextStyle(
                       color: FTTokens.textSecondary,
                       fontSize: 11,

@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/kyc_service.dart';
 import '../services/leaderboard_service.dart';
+import '../ui/components/ft_components.dart';
 import 'not_available_yet_screen.dart';
 
 class AdminOverviewScreen extends StatefulWidget {
@@ -157,22 +158,9 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
 
   Widget _metricTile(String label, int value) {
     return Expanded(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 12, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Text('$value',
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w900)),
-            ],
-          ),
-        ),
+      child: FTMetricTile(
+        label: label,
+        value: '$value',
       ),
     );
   }
@@ -209,155 +197,151 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     final queueQueued = _queueCountByStatus('queued');
     final queueDead = _queueCountByStatus('dead');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Overview'),
-        actions: [
-          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
+    return FTScaffold(
+      title: 'Admin Overview',
+      actions: [
+        IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
+      ],
+      child: FTLoadStateLayout(
+        loading: _loading,
+        error: _error,
+        onRetry: _reload,
+        empty: false,
+        loadingState: ListView(
+          padding: const EdgeInsets.all(16),
+          children: const [
+            FTMetricSkeletonTile(),
+            SizedBox(height: 10),
+            FTMetricSkeletonTile(),
+            SizedBox(height: 10),
+            FTListCardSkeleton(withImage: false),
+          ],
+        ),
+        emptyState: const SizedBox.shrink(),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            FTSectionContainer(
+              title: 'System Health',
+              subtitle: 'Integration mode, provider, and configuration status',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Mode: $mode'),
+                  Text('Payments provider: $payProvider'),
+                  Text('Paystack enabled: $paystackEnabled'),
+                  Text('Termii SMS enabled: $smsEnabled'),
+                  Text('Termii WhatsApp enabled: $waEnabled'),
+                  if (missing.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Missing keys: ${missing.join(', ')}'),
+                  ],
+                ],
+              ),
+            ),
+            if (mode.toLowerCase() == 'live' && missing.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: const Text(
+                  'Live mode is active with missing integration keys. Fix env configuration before processing payments/notifications.',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            const SizedBox(height: 16),
+            const FTSectionHeader(
+              title: 'Operational Counters',
+              subtitle: 'Queue health and pending admin approvals',
+            ),
+            const SizedBox(height: 8),
+            Row(
               children: [
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(_error!,
-                        style: const TextStyle(color: Colors.redAccent)),
-                  ),
-                const Text('System Health',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Mode: $mode'),
-                        Text('Payments provider: $payProvider'),
-                        Text('Paystack enabled: $paystackEnabled'),
-                        Text('Termii SMS enabled: $smsEnabled'),
-                        Text('Termii WhatsApp enabled: $waEnabled'),
-                        if (missing.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text('Missing keys: ${missing.join(', ')}'),
-                        ],
-                      ],
+                _metricTile('Queue (queued)', queueQueued),
+                const SizedBox(width: 8),
+                _metricTile('Queue (dead)', queueDead),
+              ],
+            ),
+            Row(
+              children: [
+                _metricTile('Pending Roles', _pendingRoles.length),
+                const SizedBox(width: 8),
+                _metricTile('Inspector Requests', _pendingInspectors.length),
+              ],
+            ),
+            Row(
+              children: [
+                _metricTile('Pending KYC', _pendingKyc.length),
+                const SizedBox(width: 8),
+                _metricTile('Pending Payouts', _pendingPayouts.length),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FTSectionContainer(
+              title: 'Leaderboard Snapshot',
+              subtitle: 'Top ranked merchants by current scoring logic',
+              child: _topLeaders.isEmpty
+                  ? const Text('No leaderboard data available.')
+                  : Column(
+                      children: _topLeaders.take(5).whereType<Map>().map((raw) {
+                        final row = Map<String, dynamic>.from(raw);
+                        final name =
+                            (row['shop_name'] ?? row['name'] ?? 'Merchant')
+                                .toString();
+                        final score = (row['score'] ?? 0).toString();
+                        final state = (row['state'] ?? '-').toString();
+                        return ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(name),
+                          subtitle: Text('State: $state'),
+                          trailing: Text('Score $score'),
+                        );
+                      }).toList(),
                     ),
-                  ),
+            ),
+            const SizedBox(height: 16),
+            const FTSectionHeader(
+              title: 'Quick Admin Actions',
+              subtitle: 'Seed data and automation control shortcuts',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      _seed('/admin/demo/seed-nationwide', 'Seed Nationwide'),
+                  icon: const Icon(Icons.public_outlined),
+                  label: const Text('Seed Nationwide'),
                 ),
-                if (mode.toLowerCase() == 'live' && missing.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: const Text(
-                      'Live mode is active with missing integration keys. Fix env configuration before processing payments/notifications.',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                const Text('Operational Counters',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _metricTile('Queue (queued)', queueQueued),
-                    const SizedBox(width: 8),
-                    _metricTile('Queue (dead)', queueDead),
-                  ],
+                OutlinedButton.icon(
+                  onPressed: () => _seed(
+                      '/admin/demo/seed-leaderboards', 'Seed Leaderboards'),
+                  icon: const Icon(Icons.emoji_events_outlined),
+                  label: const Text('Seed Leaderboards'),
                 ),
-                Row(
-                  children: [
-                    _metricTile('Pending Roles', _pendingRoles.length),
-                    const SizedBox(width: 8),
-                    _metricTile(
-                        'Inspector Requests', _pendingInspectors.length),
-                  ],
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      _seed('/admin/autopilot/tick', 'Run Notify Queue Demo'),
+                  icon: const Icon(Icons.notifications_active_outlined),
+                  label: const Text('Run Notify Queue Demo'),
                 ),
-                Row(
-                  children: [
-                    _metricTile('Pending KYC', _pendingKyc.length),
-                    const SizedBox(width: 8),
-                    _metricTile('Pending Payouts', _pendingPayouts.length),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Text('Leaderboard Snapshot',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                const SizedBox(height: 8),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: _topLeaders.isEmpty
-                        ? const Text('No leaderboard data available.')
-                        : Column(
-                            children:
-                                _topLeaders.take(5).whereType<Map>().map((raw) {
-                              final row = Map<String, dynamic>.from(raw);
-                              final name = (row['shop_name'] ??
-                                      row['name'] ??
-                                      'Merchant')
-                                  .toString();
-                              final score = (row['score'] ?? 0).toString();
-                              final state = (row['state'] ?? '-').toString();
-                              return ListTile(
-                                dense: true,
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(name),
-                                subtitle: Text('State: $state'),
-                                trailing: Text('Score $score'),
-                              );
-                            }).toList(),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text('Quick Admin Actions',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => _seed(
-                          '/admin/demo/seed-nationwide', 'Seed Nationwide'),
-                      icon: const Icon(Icons.public_outlined),
-                      label: const Text('Seed Nationwide'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => _seed(
-                          '/admin/demo/seed-leaderboards', 'Seed Leaderboards'),
-                      icon: const Icon(Icons.emoji_events_outlined),
-                      label: const Text('Seed Leaderboards'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: () => _seed(
-                          '/admin/autopilot/tick', 'Run Notify Queue Demo'),
-                      icon: const Icon(Icons.notifications_active_outlined),
-                      label: const Text('Run Notify Queue Demo'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _toggleAutopilot,
-                      icon: const Icon(Icons.toggle_on_outlined),
-                      label: const Text('Toggle Autopilot'),
-                    ),
-                  ],
+                OutlinedButton.icon(
+                  onPressed: _toggleAutopilot,
+                  icon: const Icon(Icons.toggle_on_outlined),
+                  label: const Text('Toggle Autopilot'),
                 ),
               ],
             ),
+          ],
+        ),
+      ),
     );
   }
 }

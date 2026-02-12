@@ -8,6 +8,7 @@ import '../../models/saved_search_record.dart';
 import '../../services/marketplace_catalog_service.dart';
 import '../../services/marketplace_prefs_service.dart';
 import '../../ui/components/ft_components.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/listing/listing_card.dart';
 import '../listing_detail_screen.dart';
 
@@ -168,10 +169,10 @@ class _MarketplaceSearchResultsScreenState
   }
 
   Future<void> _openFilters() async {
-    final minCtrl =
-        TextEditingController(text: _queryState.minPrice?.toStringAsFixed(0) ?? '');
-    final maxCtrl =
-        TextEditingController(text: _queryState.maxPrice?.toStringAsFixed(0) ?? '');
+    final minCtrl = TextEditingController(
+        text: _queryState.minPrice?.toStringAsFixed(0) ?? '');
+    final maxCtrl = TextEditingController(
+        text: _queryState.maxPrice?.toStringAsFixed(0) ?? '');
     String draftCategory = _queryState.category;
     String draftState = _queryState.state;
     final draftConditions = <String>{..._queryState.conditions};
@@ -377,7 +378,7 @@ class _MarketplaceSearchResultsScreenState
     if (_queryState.minPrice != null || _queryState.maxPrice != null) {
       chips.add(FTChip(
           label:
-              '₦${_queryState.minPrice?.toStringAsFixed(0) ?? '0'} - ₦${_queryState.maxPrice?.toStringAsFixed(0) ?? '∞'}',
+              '${formatNaira(_queryState.minPrice ?? 0, decimals: 0)} - ${_queryState.maxPrice == null ? "₦∞" : formatNaira(_queryState.maxPrice!, decimals: 0)}',
           selected: true,
           onTap: () {
             setState(() {
@@ -465,7 +466,8 @@ class _MarketplaceSearchResultsScreenState
                                               .map((entry) =>
                                                   RadioListTile<String>(
                                                     value: entry.key,
-                                                    groupValue: _queryState.sort,
+                                                    groupValue:
+                                                        _queryState.sort,
                                                     onChanged: (value) {
                                                       Navigator.of(context)
                                                           .pop(value);

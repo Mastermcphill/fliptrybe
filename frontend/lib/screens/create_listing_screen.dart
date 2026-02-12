@@ -9,6 +9,7 @@ import '../constants/ng_states.dart';
 import '../services/api_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
+import '../utils/formatters.dart';
 import '../widgets/email_verification_dialog.dart';
 
 class CreateListingScreen extends StatefulWidget {
@@ -718,7 +719,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '₦${(double.tryParse(_priceCtrl.text.trim()) ?? 0).toStringAsFixed(2)}',
+                      formatNaira(double.tryParse(_priceCtrl.text.trim()) ?? 0),
                       style: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w700),
                     ),

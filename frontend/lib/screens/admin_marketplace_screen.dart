@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../constants/ng_states.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 
 class AdminMarketplaceScreen extends StatefulWidget {
   const AdminMarketplaceScreen({super.key});
@@ -81,7 +83,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Listing ID: ${(item['id'] ?? '').toString()}'),
-              Text('Price: ₦${(item['price'] ?? 0).toString()}'),
+              Text('Price: ${formatNaira(item['price'])}'),
               Text('State: ${(item['state'] ?? '').toString()}'),
               Text('City: ${(item['city'] ?? '').toString()}'),
               Text('Category: ${(item['category'] ?? '').toString()}'),
@@ -108,14 +110,10 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Marketplace'),
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
-        ],
-      ),
-      body: Column(
+    return FTScaffold(
+      title: 'Admin Marketplace',
+      actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
@@ -158,9 +156,11 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                           DropdownMenuItem(
                               value: 'oldest', child: Text('Oldest')),
                           DropdownMenuItem(
-                              value: 'price_asc', child: Text('Price ↑')),
+                              value: 'price_asc',
+                              child: Text('Price Low→High')),
                           DropdownMenuItem(
-                              value: 'price_desc', child: Text('Price ↓')),
+                              value: 'price_desc',
+                              child: Text('Price High→Low')),
                         ],
                         decoration: const InputDecoration(
                             border: OutlineInputBorder(), labelText: 'Sort'),
@@ -209,39 +209,53 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
             ),
           ),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(child: Text(_error!))
-                    : _items.isEmpty
-                        ? const Center(
-                            child:
-                                Text('No listings found for current filters.'))
-                        : ListView.separated(
-                            itemCount: _items.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
-                            itemBuilder: (_, index) {
-                              final item = _items[index];
-                              final title =
-                                  (item['title'] ?? 'Listing').toString();
-                              final merchantName = (item['merchant'] is Map)
-                                  ? (item['merchant']['name'] ?? '').toString()
-                                  : '';
-                              final state = (item['state'] ?? '').toString();
-                              final city = (item['city'] ?? '').toString();
-                              final price = (item['price'] ?? 0).toString();
-                              return ListTile(
-                                title: Text(title),
-                                subtitle: Text(
-                                    '₦$price • $city, $state\nSeller: $merchantName'),
-                                isThreeLine: true,
-                                trailing:
-                                    const Icon(Icons.open_in_new_outlined),
-                                onTap: () => _showDetails(item),
-                              );
-                            },
-                          ),
+            child: FTLoadStateLayout(
+              loading: _loading,
+              error: _error,
+              onRetry: _load,
+              empty: _items.isEmpty,
+              loadingState: ListView(
+                padding: const EdgeInsets.all(16),
+                children: const [
+                  FTListCardSkeleton(),
+                  SizedBox(height: 10),
+                  FTListCardSkeleton(),
+                  SizedBox(height: 10),
+                  FTListCardSkeleton(),
+                ],
+              ),
+              emptyState: const FTEmptyState(
+                icon: Icons.storefront_outlined,
+                title: 'No listings found',
+                subtitle: 'Adjust search text or filters and try again.',
+              ),
+              child: ListView.separated(
+                itemCount: _items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, index) {
+                  final item = _items[index];
+                  final title = (item['title'] ?? 'Listing').toString();
+                  final merchantName = (item['merchant'] is Map)
+                      ? (item['merchant']['name'] ?? '').toString()
+                      : '';
+                  final state = (item['state'] ?? '').toString();
+                  final city = (item['city'] ?? '').toString();
+                  final location = [city, state]
+                      .where((value) => value.trim().isNotEmpty)
+                      .join(', ');
+                  final price = formatNaira(item['price']);
+                  return ListTile(
+                    title: Text(title),
+                    subtitle: Text(
+                      '$price • ${location.isEmpty ? "Location not set" : location}\nSeller: $merchantName',
+                    ),
+                    isThreeLine: true,
+                    trailing: const Icon(Icons.open_in_new_outlined),
+                    onTap: () => _showDetails(item),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),

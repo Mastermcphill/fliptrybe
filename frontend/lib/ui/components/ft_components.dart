@@ -7,6 +7,7 @@ class FTScaffold extends StatelessWidget {
   final Widget child;
   final List<Widget>? actions;
   final FloatingActionButton? floatingActionButton;
+  final Widget? bottomNavigationBar;
 
   const FTScaffold({
     super.key,
@@ -14,6 +15,7 @@ class FTScaffold extends StatelessWidget {
     required this.child,
     this.actions,
     this.floatingActionButton,
+    this.bottomNavigationBar,
   });
 
   @override
@@ -26,6 +28,7 @@ class FTScaffold extends StatelessWidget {
       ),
       body: SafeArea(child: child),
       floatingActionButton: floatingActionButton,
+      bottomNavigationBar: bottomNavigationBar,
     );
   }
 }
@@ -424,5 +427,93 @@ class FTMetricTile extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class FTMetricSkeletonTile extends StatelessWidget {
+  const FTMetricSkeletonTile({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const FTCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FTSkeleton(height: 12, width: 90),
+          SizedBox(height: 8),
+          FTSkeleton(height: 20, width: 110),
+          SizedBox(height: 6),
+          FTSkeleton(height: 10, width: 140),
+        ],
+      ),
+    );
+  }
+}
+
+class FTListCardSkeleton extends StatelessWidget {
+  const FTListCardSkeleton({super.key, this.withImage = true});
+
+  final bool withImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return FTCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (withImage) ...[
+            const FTSkeleton(height: 72, width: 72),
+            const SizedBox(width: 10),
+          ],
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FTSkeleton(height: 14, width: 150),
+                SizedBox(height: 8),
+                FTSkeleton(height: 12),
+                SizedBox(height: 6),
+                FTSkeleton(height: 12, width: 120),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class FTLoadStateLayout extends StatelessWidget {
+  const FTLoadStateLayout({
+    super.key,
+    required this.loading,
+    required this.error,
+    required this.onRetry,
+    required this.empty,
+    required this.emptyState,
+    required this.loadingState,
+    required this.child,
+  });
+
+  final bool loading;
+  final String? error;
+  final VoidCallback onRetry;
+  final bool empty;
+  final Widget emptyState;
+  final Widget loadingState;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return loadingState;
+    }
+    if (error != null) {
+      return FTErrorState(message: error!, onRetry: onRetry);
+    }
+    if (empty) {
+      return emptyState;
+    }
+    return child;
   }
 }

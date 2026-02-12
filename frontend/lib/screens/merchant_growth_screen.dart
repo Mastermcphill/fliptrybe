@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/merchant_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 import 'growth/growth_analytics_screen.dart';
 import 'leaderboards_screen.dart';
 import 'merchant_followers_screen.dart';
@@ -53,10 +54,7 @@ class _MerchantGrowthScreenState extends State<MerchantGrowthScreen> {
     }
   }
 
-  String _money(dynamic value) {
-    final parsed = double.tryParse((value ?? 0).toString()) ?? 0;
-    return '₦${parsed.toStringAsFixed(2)}';
-  }
+  String _money(dynamic value) => formatNaira(value);
 
   int _topRank() {
     if (_leaders.isEmpty) return 0;

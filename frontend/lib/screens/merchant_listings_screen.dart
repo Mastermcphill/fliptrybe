@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/listing_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
 import 'not_available_yet_screen.dart';
@@ -111,15 +112,13 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
     return _items.where((item) => _statusOf(item) == target).toList();
   }
 
-  String _money(dynamic value) {
-    final parsed = double.tryParse((value ?? 0).toString()) ?? 0;
-    return '₦${parsed.toStringAsFixed(2)}';
-  }
+  String _money(dynamic value) => formatNaira(value);
 
   @override
   Widget build(BuildContext context) {
     final rows = _filteredForTab();
-    final activeCount = _items.where((item) => _statusOf(item) == 'active').length;
+    final activeCount =
+        _items.where((item) => _statusOf(item) == 'active').length;
     final pendingCount =
         _items.where((item) => _statusOf(item) == 'pending').length;
     final soldCount = _items.where((item) => _statusOf(item) == 'sold').length;

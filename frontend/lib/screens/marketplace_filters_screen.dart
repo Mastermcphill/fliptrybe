@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/ng_states.dart';
+import '../ui/components/ft_components.dart';
 
 class MarketplaceFiltersScreen extends StatefulWidget {
   final List<String> categories;
@@ -20,7 +21,8 @@ class MarketplaceFiltersScreen extends StatefulWidget {
   });
 
   @override
-  State<MarketplaceFiltersScreen> createState() => _MarketplaceFiltersScreenState();
+  State<MarketplaceFiltersScreen> createState() =>
+      _MarketplaceFiltersScreenState();
 }
 
 class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
@@ -35,10 +37,14 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
     super.initState();
     _queryCtrl = TextEditingController(text: widget.initialQuery);
     _minCtrl = TextEditingController(
-      text: widget.initialMinPrice == null ? '' : widget.initialMinPrice!.toStringAsFixed(0),
+      text: widget.initialMinPrice == null
+          ? ''
+          : widget.initialMinPrice!.toStringAsFixed(0),
     );
     _maxCtrl = TextEditingController(
-      text: widget.initialMaxPrice == null ? '' : widget.initialMaxPrice!.toStringAsFixed(0),
+      text: widget.initialMaxPrice == null
+          ? ''
+          : widget.initialMaxPrice!.toStringAsFixed(0),
     );
     _category = widget.selectedCategory;
     _state = widget.initialState;
@@ -63,7 +69,8 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
     final maxPrice = _toDouble(_maxCtrl.text);
     if (minPrice != null && maxPrice != null && minPrice > maxPrice) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Min price cannot be greater than max price.')),
+        const SnackBar(
+            content: Text('Min price cannot be greater than max price.')),
       );
       return;
     }
@@ -88,9 +95,9 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Marketplace Filters')),
-      body: ListView(
+    return FTScaffold(
+      title: 'Marketplace Filters',
+      child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           TextField(
@@ -155,16 +162,16 @@ class _MarketplaceFiltersScreenState extends State<MarketplaceFiltersScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton(
+                child: FTSecondaryButton(
+                  label: 'Clear',
                   onPressed: _clear,
-                  child: const Text('Clear'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: ElevatedButton(
+                child: FTPrimaryButton(
+                  label: 'Apply',
                   onPressed: _apply,
-                  child: const Text('Apply'),
                 ),
               ),
             ],

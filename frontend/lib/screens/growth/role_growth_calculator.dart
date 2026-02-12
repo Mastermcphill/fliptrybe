@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../ui/components/ft_components.dart';
+import '../../utils/formatters.dart';
 import '../../widgets/growth/moneybox_projection_table.dart';
 import '../../widgets/growth/projection_table.dart';
 
@@ -45,18 +46,7 @@ class _RoleGrowthCalculatorState extends State<RoleGrowthCalculator> {
   bool get _isDriver => widget.role.toLowerCase() == 'driver';
   bool get _isInspector => widget.role.toLowerCase() == 'inspector';
 
-  String _money(num value) {
-    final fixed = value.toStringAsFixed(2);
-    final parts = fixed.split('.');
-    final chars = parts[0].split('').reversed.toList();
-    final out = <String>[];
-    for (int i = 0; i < chars.length; i++) {
-      if (i > 0 && i % 3 == 0) out.add(',');
-      out.add(chars[i]);
-    }
-    final grouped = out.reversed.join();
-    return '₦$grouped.${parts[1]}';
-  }
+  String _money(num value) => formatNaira(value);
 
   String _amountLabel() {
     if (_isMerchant) return 'Avg item price (₦)';

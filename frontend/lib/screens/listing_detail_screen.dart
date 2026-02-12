@@ -6,6 +6,8 @@ import '../services/listing_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/merchant_service.dart';
 import '../services/order_service.dart';
+import '../utils/formatters.dart';
+import '../ui/components/ft_components.dart';
 import '../widgets/email_verification_dialog.dart';
 import '../widgets/listing/listing_card.dart';
 import '../widgets/safe_image.dart';
@@ -225,10 +227,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     return double.tryParse(v?.toString() ?? '') ?? 0;
   }
 
-  String _money(dynamic value) {
-    final p = _asDouble(value);
-    return '₦${p.toStringAsFixed(2)}';
-  }
+  String _money(dynamic value) => formatNaira(_asDouble(value));
 
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -336,6 +335,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       (_detail['city'] ?? '').toString(),
       (_detail['state'] ?? '').toString(),
     ].where((v) => v.trim().isNotEmpty).join(', ');
+    final posted = formatRelativeTime(_detail['created_at']);
     final merchantName =
         (_detail['merchant_name'] ?? _detail['shop_name'] ?? 'Merchant')
             .toString();
@@ -345,29 +345,21 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     final isOwnListing =
         _viewerId != null && merchantId != null && merchantId == _viewerId;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Listing Details'),
-        actions: [
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-        ],
-      ),
-      body: ListView(
+    return FTScaffold(
+      title: 'Listing Details',
+      actions: [
+        IconButton(
+          onPressed: _loading ? null : _loadDetail,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
           if (_error != null) ...[
-            Text(
-              'Detail refresh failed: $_error',
-              style: const TextStyle(color: Colors.redAccent),
-            ),
+            FTErrorState(
+                message: 'Detail refresh failed: $_error',
+                onRetry: _loadDetail),
             const SizedBox(height: 8),
           ],
           AspectRatio(
@@ -436,103 +428,80 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               _metaChip(Icons.location_on_outlined,
                   location.trim().isEmpty ? 'Location not set' : location),
               _metaChip(Icons.sell_outlined, condition),
+              _metaChip(Icons.schedule_outlined, posted),
             ],
           ),
           const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Seller',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      backgroundColor: const Color(0xFFE2E8F0),
-                      child: Text(
-                        merchantName.isEmpty
-                            ? 'M'
-                            : merchantName[0].toUpperCase(),
-                      ),
-                    ),
-                    title: Text(merchantName),
-                    subtitle: Text(
-                        'Seller #${merchantId?.toString() ?? '-'} • Rating 4.8 • $_followersCount followers'),
-                    trailing: OutlinedButton(
-                      onPressed: _followBusy ? null : _toggleFollow,
-                      child: Text(_following ? 'Following' : 'Follow'),
-                    ),
-                  ),
-                ],
+          FTSectionContainer(
+            title: 'Seller',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                backgroundColor: const Color(0xFFE2E8F0),
+                child: Text(
+                  merchantName.isEmpty ? 'M' : merchantName[0].toUpperCase(),
+                ),
+              ),
+              title: Text(merchantName),
+              subtitle: Text(
+                'Seller #${merchantId?.toString() ?? '-'} • Rating 4.8 • $_followersCount followers',
+              ),
+              trailing: OutlinedButton(
+                onPressed: _followBusy ? null : _toggleFollow,
+                child: Text(_following ? 'Following' : 'Follow'),
               ),
             ),
           ),
           const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('About this listing',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  Text(description.trim().isEmpty
-                      ? 'No description provided by merchant.'
-                      : description),
-                ],
-              ),
+          FTSectionContainer(
+            title: 'About this listing',
+            child: Text(
+              description.trim().isEmpty
+                  ? 'No description provided by merchant.'
+                  : description,
             ),
           ),
           const SizedBox(height: 10),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Delivery and inspection',
-                      style: TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _pickupCtrl,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Pickup',
-                      border: OutlineInputBorder(),
-                    ),
+          FTSectionContainer(
+            title: 'Delivery and inspection',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _pickupCtrl,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Pickup',
+                    border: OutlineInputBorder(),
                   ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _dropoffCtrl,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Dropoff',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _deliveryFeeCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Delivery fee (₦)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (isOwnListing) ...[
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: _dropoffCtrl,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Dropoff',
-                      border: OutlineInputBorder(),
-                    ),
+                  const Text(
+                    "You can't purchase your own listing.",
+                    style: TextStyle(color: Colors.redAccent),
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _deliveryFeeCtrl,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Delivery fee (₦)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  if (isOwnListing) ...[
-                    const SizedBox(height: 10),
-                    const Text(
-                      "You can't purchase your own listing.",
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -547,7 +516,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          if (_similar.isEmpty)
+          if (_loadingSimilar)
+            SizedBox(
+              height: 210,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                separatorBuilder: (_, __) => const SizedBox(width: 10),
+                itemBuilder: (_, __) => const SizedBox(
+                  width: 205,
+                  child: FTListCardSkeleton(),
+                ),
+              ),
+            )
+          else if (_similar.isEmpty)
             const Card(
               child: Padding(
                 padding: EdgeInsets.all(12),
@@ -567,7 +549,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     width: 205,
                     child: ListingCard(
                       item: item,
-                      isFavorite: _favoriteIds.contains(_asInt(item['id']) ?? -1),
+                      isFavorite:
+                          _favoriteIds.contains(_asInt(item['id']) ?? -1),
                       onToggleFavorite: () => _toggleFavorite(item),
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(

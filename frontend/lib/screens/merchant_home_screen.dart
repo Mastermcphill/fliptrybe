@@ -10,6 +10,7 @@ import '../services/listing_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 import '../utils/auth_navigation.dart';
 import '../widgets/email_verification_dialog.dart';
 import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
@@ -134,7 +135,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     return double.tryParse((value ?? '').toString()) ?? 0;
   }
 
-  String _money(dynamic value) => '₦${_num(value).toStringAsFixed(2)}';
+  String _money(dynamic value) => formatNaira(value);
 
   int _int(dynamic value) => int.tryParse((value ?? 0).toString()) ?? 0;
 
@@ -240,12 +241,27 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       child: _loading
           ? ListView(
               padding: const EdgeInsets.all(16),
-              children: const [
-                FTSkeleton(height: 90),
-                SizedBox(height: 10),
-                FTSkeleton(height: 190),
-                SizedBox(height: 10),
-                FTSkeleton(height: 220),
+              children: [
+                GridView.count(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.5,
+                  children: const [
+                    FTMetricSkeletonTile(),
+                    FTMetricSkeletonTile(),
+                    FTMetricSkeletonTile(),
+                    FTMetricSkeletonTile(),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const FTSkeleton(height: 190),
+                const SizedBox(height: 10),
+                const FTListCardSkeleton(withImage: false),
+                const SizedBox(height: 10),
+                const FTListCardSkeleton(withImage: false),
               ],
             )
           : RefreshIndicator(
@@ -290,7 +306,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                         icon: Icons.inventory_2_outlined,
                       ),
                       FTMetricTile(
-                        label: _rank > 0 ? 'Leaderboard Rank' : 'Merchant Reach',
+                        label:
+                            _rank > 0 ? 'Leaderboard Rank' : 'Merchant Reach',
                         value: _rank > 0 ? '#$_rank' : 'Unranked',
                         subtitle: 'Balance: ${_money(_wallet['balance'])}',
                         icon: Icons.emoji_events_outlined,
