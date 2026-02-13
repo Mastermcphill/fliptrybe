@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 
 import '../foundation/app_tokens.dart';
 import '../foundation/app_typography.dart';
-import 'ft_badge.dart';
 import 'ft_button.dart';
 import 'ft_card.dart';
 import 'ft_empty_state.dart';
@@ -185,10 +184,27 @@ class FTLoadStateLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return loadingState;
-    if (error != null) return FTErrorState(message: error!, onRetry: onRetry);
-    if (empty) return emptyState;
-    return child;
+    final Widget currentChild;
+    final String stateKey;
+    if (loading) {
+      currentChild = loadingState;
+      stateKey = 'loading';
+    } else if (error != null) {
+      currentChild = FTErrorState(message: error!, onRetry: onRetry);
+      stateKey = 'error';
+    } else if (empty) {
+      currentChild = emptyState;
+      stateKey = 'empty';
+    } else {
+      currentChild = child;
+      stateKey = 'data';
+    }
+    return AnimatedSwitcher(
+      duration: AppTokens.d200,
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: KeyedSubtree(key: ValueKey<String>(stateKey), child: currentChild),
+    );
   }
 }
 

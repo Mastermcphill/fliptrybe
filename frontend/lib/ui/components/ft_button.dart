@@ -9,7 +9,7 @@ enum FTButtonVariant {
   destructive,
 }
 
-class FTButton extends StatelessWidget {
+class FTButton extends StatefulWidget {
   const FTButton({
     super.key,
     required this.label,
@@ -28,15 +28,22 @@ class FTButton extends StatelessWidget {
   final bool expand;
 
   @override
+  State<FTButton> createState() => _FTButtonState();
+}
+
+class _FTButtonState extends State<FTButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    final bool enabled = onPressed != null && !loading;
+    final bool enabled = widget.onPressed != null && !widget.loading;
     final child = Row(
-      mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisSize: widget.expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (loading) ...[
+        if (widget.loading) ...[
           SizedBox(
             width: 16,
             height: 16,
@@ -46,23 +53,33 @@ class FTButton extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppTokens.s8),
-        ] else if (icon != null) ...[
-          Icon(icon, size: 18),
+        ] else if (widget.icon != null) ...[
+          Icon(widget.icon, size: 18),
           const SizedBox(width: AppTokens.s8),
         ],
-        Text(label),
+        Text(widget.label),
       ],
     );
 
     return SizedBox(
       height: 48,
-      width: expand ? double.infinity : null,
-      child: _buildButton(context, child, enabled),
+      width: widget.expand ? double.infinity : null,
+      child: Listener(
+        onPointerDown: enabled ? (_) => setState(() => _pressed = true) : null,
+        onPointerUp: enabled ? (_) => setState(() => _pressed = false) : null,
+        onPointerCancel: enabled ? (_) => setState(() => _pressed = false) : null,
+        child: AnimatedScale(
+          duration: AppTokens.d150,
+          curve: Curves.easeOut,
+          scale: _pressed && enabled ? 0.98 : 1,
+          child: _buildButton(context, child, enabled),
+        ),
+      ),
     );
   }
 
   Color _foregroundColor(ColorScheme scheme) {
-    switch (variant) {
+    switch (widget.variant) {
       case FTButtonVariant.primary:
         return scheme.onPrimary;
       case FTButtonVariant.secondary:
@@ -75,7 +92,7 @@ class FTButton extends StatelessWidget {
   }
 
   Color _backgroundColor(ColorScheme scheme) {
-    switch (variant) {
+    switch (widget.variant) {
       case FTButtonVariant.primary:
         return scheme.primary;
       case FTButtonVariant.secondary:
@@ -91,13 +108,13 @@ class FTButton extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(AppTokens.r12),
-      side: variant == FTButtonVariant.ghost
+      side: widget.variant == FTButtonVariant.ghost
           ? BorderSide(color: scheme.outlineVariant)
           : BorderSide.none,
     );
 
     return TextButton(
-      onPressed: enabled ? onPressed : null,
+      onPressed: enabled ? widget.onPressed : null,
       style: ButtonStyle(
         shape: WidgetStatePropertyAll<OutlinedBorder>(shape),
         backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
