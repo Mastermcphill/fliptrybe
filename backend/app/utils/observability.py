@@ -131,24 +131,45 @@ def init_otel(app, *, enabled: bool) -> None:
 
 
 def install_request_observers(app) -> None:
+    def _incoming_request_id() -> str:
+        value = (
+            request.headers.get("X-Request-ID")
+            or request.headers.get("X-Request-Id")
+            or ""
+        ).strip()
+        return value[:80]
+
     @app.before_request
     def _request_observer_begin():
-        rid = (request.headers.get("X-Request-Id") or "").strip()
+        rid = _incoming_request_id()
         if not rid:
-            rid = uuid.uuid4().hex
+            rid = str(uuid.uuid4())
         g.request_id = rid
         g.request_started_at = time.perf_counter()
         try:
             import sentry_sdk
 
             sentry_sdk.set_tag("request_id", rid)
+            sentry_sdk.add_breadcrumb(
+                category="request.lifecycle",
+                level="info",
+                message="request_start",
+                data={"request_id": rid, "path": request.path, "method": request.method},
+            )
         except Exception:
             pass
 
     @app.after_request
     def _request_observer_end(response):
-        rid = getattr(g, "request_id", "") or uuid.uuid4().hex
+        rid = getattr(g, "request_id", "") or str(uuid.uuid4())
+        response.headers["X-Request-ID"] = rid
         response.headers["X-Request-Id"] = rid
+        if int(response.status_code or 0) >= 400 and response.is_json:
+            payload = response.get_json(silent=True)
+            if isinstance(payload, dict) and "trace_id" not in payload:
+                payload["trace_id"] = rid
+                response.set_data(json.dumps(payload, separators=(",", ":"), ensure_ascii=False))
+                response.headers["Content-Type"] = "application/json"
         started = getattr(g, "request_started_at", None)
         latency_ms = None
         if started is not None:
@@ -169,4 +190,20 @@ def install_request_observers(app) -> None:
             "user_agent": (request.user_agent.string or "")[:180],
         }
         app.logger.info(json.dumps(payload))
+        try:
+            import sentry_sdk
+
+            sentry_sdk.add_breadcrumb(
+                category="request.lifecycle",
+                level="info",
+                message="request_end",
+                data={
+                    "request_id": rid,
+                    "status": int(response.status_code or 0),
+                    "path": request.path,
+                    "method": request.method,
+                },
+            )
+        except Exception:
+            pass
         return response

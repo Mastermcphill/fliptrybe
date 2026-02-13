@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import PlatformEvent
+from app.utils.observability import get_request_id
 
 
 def _safe_value(value: Any):
@@ -57,6 +58,8 @@ def log_event(
     Never raises to caller; failures are swallowed by design.
     """
     try:
+        if not request_id:
+            request_id = get_request_id()
         key = (idempotency_key or "").strip()[:180] or None
         if key:
             existing = PlatformEvent.query.filter_by(idempotency_key=key).first()
