@@ -396,3 +396,12 @@ def run_escrow_automation(*, limit: int = 500) -> dict:
         "errors": errors,
         "ts": _now().isoformat(),
     }
+
+
+def run_once(*, limit: int = 500) -> dict:
+    """Backward-compatible alias used by smoke scripts."""
+    from app import create_app
+
+    app = create_app()
+    with app.app_context():
+        return run_escrow_automation(limit=limit)
