@@ -14,6 +14,7 @@ from app.utils.jwt_utils import decode_token
 from app.utils.paystack_client import verify_signature
 from app.utils.wallets import post_txn
 from app.utils.autopilot import get_settings
+from app.utils.feature_flags import is_enabled
 from app.utils.rate_limit import check_limit
 from app.utils.idempotency import lookup_response, store_response
 from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
@@ -295,6 +296,8 @@ def _payments_mode_payload(settings) -> dict:
 
 
 def _paystack_is_available(settings) -> bool:
+    if not is_enabled("payments.paystack_enabled", default=bool(getattr(settings, "paystack_enabled", False)), settings=settings):
+        return False
     mode = _payments_mode(settings)
     if mode == "mock":
         return True

@@ -13,6 +13,10 @@ from app.utils.commission import (
     money_minor_to_major,
     snapshot_to_order_columns,
 )
+from app.utils.autopilot import get_settings
+from app.utils.feature_flags import is_enabled
+from app.utils.job_runs import record_job_run
+from app.utils.events import log_event
 import os
 
 
@@ -189,6 +193,13 @@ def _hold_order_into_escrow(order: Order) -> None:
     elif not (order.release_condition or "").strip():
         order.release_condition = "BUYER_CONFIRM"
     order.updated_at = _now()
+    log_event(
+        "escrow_funded",
+        subject_type="order",
+        subject_id=int(order.id) if getattr(order, "id", None) is not None else None,
+        idempotency_key=f"escrow_funded:{int(order.id)}" if getattr(order, "id", None) is not None else None,
+        metadata={"escrow_hold_amount": float(order.escrow_hold_amount or 0.0)},
+    )
 
 
 def _release_escrow(order: Order) -> None:
@@ -212,6 +223,13 @@ def _release_escrow(order: Order) -> None:
     order.escrow_release_at = _now()
     order.updated_at = _now()
     _event_once(int(order.id), "escrow_released", "Escrow released")
+    log_event(
+        "settlement_applied",
+        subject_type="order",
+        subject_id=int(order.id),
+        idempotency_key=f"settlement_applied:{int(order.id)}:released",
+        metadata={"escrow_status": "RELEASED"},
+    )
 
 
 def _refund_escrow(order: Order) -> None:
@@ -234,6 +252,13 @@ def _refund_escrow(order: Order) -> None:
     order.escrow_refund_at = _now()
     order.updated_at = _now()
     _event_once(int(order.id), "escrow_refunded", "Escrow refunded")
+    log_event(
+        "settlement_applied",
+        subject_type="order",
+        subject_id=int(order.id),
+        idempotency_key=f"settlement_applied:{int(order.id)}:refunded",
+        metadata={"escrow_status": "REFUNDED"},
+    )
 
 
 def _event_once(order_id: int, event: str, note: str = "") -> None:
@@ -302,6 +327,30 @@ def run_escrow_automation(*, limit: int = 500) -> dict:
       - If inspection_outcome == PASS and release_condition == TIMEOUT: release after timeout.
       - Otherwise: do nothing.
     """
+
+    started_at = _now()
+    try:
+        settings = get_settings()
+    except Exception:
+        settings = None
+    if settings is not None and not is_enabled("jobs.escrow_runner_enabled", default=True, settings=settings):
+        result = {
+            "ok": False,
+            "disabled": True,
+            "processed": 0,
+            "released": 0,
+            "refunded": 0,
+            "skipped": 0,
+            "errors": 0,
+            "ts": _now().isoformat(),
+        }
+        record_job_run(
+            job_name="escrow_runner",
+            ok=False,
+            started_at=started_at,
+            error="disabled_by_flag",
+        )
+        return result
 
     processed = 0
     released = 0
@@ -387,7 +436,7 @@ def run_escrow_automation(*, limit: int = 500) -> dict:
         db.session.rollback()
         errors += 1
 
-    return {
+    result = {
         "ok": True,
         "processed": processed,
         "released": released,
@@ -396,6 +445,13 @@ def run_escrow_automation(*, limit: int = 500) -> dict:
         "errors": errors,
         "ts": _now().isoformat(),
     }
+    record_job_run(
+        job_name="escrow_runner",
+        ok=errors == 0,
+        started_at=started_at,
+        error=None if errors == 0 else f"errors={errors}",
+    )
+    return result
 
 
 def run_once(*, limit: int = 500) -> dict:

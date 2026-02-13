@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from flask import g, request
 
@@ -27,6 +29,7 @@ def init_sentry(app) -> None:
     try:
         import sentry_sdk
         from sentry_sdk.integrations.flask import FlaskIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
 
         traces_rate_raw = (os.getenv("SENTRY_TRACES_SAMPLE_RATE") or "0.0").strip()
         try:
@@ -34,18 +37,40 @@ def init_sentry(app) -> None:
         except Exception:
             traces_rate = 0.0
 
+        logging_integration = LoggingIntegration(level=None, event_level=logging.ERROR)
+        release = (os.getenv("SENTRY_RELEASE") or os.getenv("GIT_SHA") or os.getenv("RENDER_GIT_COMMIT") or "unknown").strip()
+        alembic_head = _resolve_alembic_head()
+
         sentry_sdk.init(
             dsn=dsn,
             environment=(os.getenv("SENTRY_ENVIRONMENT") or os.getenv("FLIPTRYBE_ENV") or "dev"),
-            release=(os.getenv("GIT_SHA") or os.getenv("RENDER_GIT_COMMIT") or "unknown"),
-            integrations=[FlaskIntegration()],
+            release=release,
+            integrations=[FlaskIntegration(), logging_integration],
             send_default_pii=False,
             traces_sample_rate=max(0.0, min(traces_rate, 1.0)),
             before_send=_before_send_scrub,
         )
+        sentry_sdk.set_tag("git_sha", release)
+        sentry_sdk.set_tag("alembic_head", alembic_head)
         app.logger.info("sentry_enabled")
     except Exception as e:
         app.logger.warning("sentry_init_failed err=%s", e)
+
+
+def _resolve_alembic_head() -> str:
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        migrations_dir = Path(__file__).resolve().parents[2] / "migrations"
+        config_path = migrations_dir / "alembic.ini"
+        cfg = Config(str(config_path))
+        cfg.set_main_option("script_location", str(migrations_dir))
+        script = ScriptDirectory.from_config(cfg)
+        heads = script.get_heads()
+        return heads[0] if heads else "unknown"
+    except Exception:
+        return "unknown"
 
 
 def _before_send_scrub(event, hint):
@@ -57,6 +82,15 @@ def _before_send_scrub(event, hint):
             if kl in ("authorization", "x-api-key", "cookie", "set-cookie"):
                 headers[key] = "[REDACTED]"
         req["headers"] = headers
+        if "data" in req and isinstance(req["data"], dict):
+            redacted = {}
+            for key, value in req["data"].items():
+                key_lower = str(key).lower()
+                if any(s in key_lower for s in ("password", "token", "authorization", "secret", "card", "account")):
+                    redacted[key] = "[REDACTED]"
+                else:
+                    redacted[key] = value
+            req["data"] = redacted
         event["request"] = req
     except Exception:
         pass
@@ -104,6 +138,12 @@ def install_request_observers(app) -> None:
             rid = uuid.uuid4().hex
         g.request_id = rid
         g.request_started_at = time.perf_counter()
+        try:
+            import sentry_sdk
+
+            sentry_sdk.set_tag("request_id", rid)
+        except Exception:
+            pass
 
     @app.after_request
     def _request_observer_end(response):

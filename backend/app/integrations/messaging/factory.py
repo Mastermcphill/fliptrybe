@@ -6,9 +6,12 @@ from app.integrations.common import IntegrationDisabledError, IntegrationMisconf
 from app.integrations.messaging.base import MessagingProvider
 from app.integrations.messaging.mock_provider import MockMessagingProvider
 from app.integrations.messaging.termii_provider import TermiiMessagingProvider, termii_health
+from app.utils.feature_flags import is_enabled
 
 
 def build_messaging_provider(settings, *, channel: str) -> MessagingProvider:
+    if not is_enabled("notifications.termii_enabled", default=False, settings=settings):
+        raise IntegrationDisabledError("INTEGRATION_DISABLED:termii")
     mode = (getattr(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
     if mode == "disabled":
         raise IntegrationDisabledError(f"INTEGRATION_DISABLED:{channel}")
@@ -38,12 +41,15 @@ def build_messaging_provider(settings, *, channel: str) -> MessagingProvider:
 
 
 def messaging_health(settings) -> dict:
+    termii_flag_enabled = is_enabled("notifications.termii_enabled", default=False, settings=settings)
     mode = (getattr(settings, "integrations_mode", "disabled") or "disabled").strip().lower()
     sms_enabled = bool(getattr(settings, "termii_enabled_sms", False))
     wa_enabled = bool(getattr(settings, "termii_enabled_wa", False))
     env = termii_health()
     missing = env.get("missing", [])
-    if mode == "disabled" or (not sms_enabled and not wa_enabled):
+    if not termii_flag_enabled:
+        status = "disabled"
+    elif mode == "disabled" or (not sms_enabled and not wa_enabled):
         status = "disabled"
     elif missing:
         status = "misconfigured"
@@ -52,8 +58,8 @@ def messaging_health(settings) -> dict:
     return {
         "status": status,
         "mode": mode,
+        "termii_flag_enabled": bool(termii_flag_enabled),
         "sms_enabled": sms_enabled,
         "wa_enabled": wa_enabled,
         "missing": missing,
     }
-

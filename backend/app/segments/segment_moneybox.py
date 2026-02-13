@@ -9,6 +9,10 @@ from app.extensions import db
 from sqlalchemy.exc import IntegrityError
 from app.models import User, MoneyBoxAccount, MoneyBoxLedger, RoleChangeRequest
 from app.utils.jwt_utils import decode_token
+from app.utils.autopilot import get_settings
+from app.utils.feature_flags import is_enabled
+from app.utils.events import log_event
+from app.utils.observability import get_request_id
 from app.utils.moneybox import (
     TIER_CONFIG,
     get_or_create_account,
@@ -36,6 +40,28 @@ def _ensure_tables_once():
     except Exception:
         pass
     _INIT = True
+
+
+def _moneybox_enabled() -> bool:
+    try:
+        settings = get_settings()
+    except Exception:
+        return True
+    return is_enabled("features.moneybox_enabled", default=True, settings=settings)
+
+
+@moneybox_bp.before_request
+def _guard_moneybox_feature():
+    if _moneybox_enabled():
+        return None
+    return jsonify({"ok": False, "error": "MONEYBOX_DISABLED", "message": "MoneyBox is disabled by feature flag"}), 503
+
+
+@moneybox_system_bp.before_request
+def _guard_moneybox_system_feature():
+    if _moneybox_enabled():
+        return None
+    return jsonify({"ok": False, "error": "MONEYBOX_DISABLED", "message": "MoneyBox is disabled by feature flag"}), 503
 
 
 def _bearer_token() -> str | None:
@@ -353,6 +379,18 @@ def autosave_settings_post():
     try:
         db.session.add(acct)
         db.session.commit()
+        log_event(
+            "moneybox_autosave",
+            actor_user_id=int(u.id),
+            subject_type="moneybox_account",
+            subject_id=int(acct.id),
+            request_id=get_request_id(),
+            idempotency_key=f"moneybox_autosave_settings:{int(u.id)}:{int(round(float(acct.autosave_percent or 0.0)))}:{int(bool(acct.autosave_enabled))}",
+            metadata={
+                "autosave_enabled": bool(acct.autosave_enabled),
+                "autosave_percent": int(round(float(acct.autosave_percent or 0.0))),
+            },
+        )
         return jsonify(_autosave_settings_payload(acct, role_eligible=True)), 200
     except Exception as e:
         db.session.rollback()
@@ -426,6 +464,30 @@ def withdraw():
             post_txn(user_id=1, direction="credit", amount=float(penalty_amount), kind="moneybox_penalty", reference=ref, note="MoneyBox early-withdraw penalty", idempotency_key=f"platform_penalty:{ref}")
     except Exception:
         pass
+
+    log_event(
+        "moneybox_withdraw",
+        actor_user_id=int(u.id),
+        subject_type="moneybox_account",
+        subject_id=int(acct.id),
+        request_id=get_request_id(),
+        idempotency_key=f"moneybox_withdraw:{int(acct.id)}:{ref}",
+        metadata={
+            "payout_amount": float(payout_amount),
+            "penalty_amount": float(penalty_amount),
+            "penalty_rate": float(penalty_rate),
+        },
+    )
+    if float(penalty_amount) > 0:
+        log_event(
+            "moneybox_penalty_applied",
+            actor_user_id=int(u.id),
+            subject_type="moneybox_account",
+            subject_id=int(acct.id),
+            request_id=get_request_id(),
+            idempotency_key=f"moneybox_penalty:{int(acct.id)}:{ref}",
+            metadata={"penalty_amount": float(penalty_amount), "penalty_rate": float(penalty_rate)},
+        )
 
     return jsonify({
         "ok": True,

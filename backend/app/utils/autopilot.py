@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import os
+import json
+from sqlalchemy import text
 
 from app.extensions import db
 from app.models import AutopilotSettings, PayoutRequest, NotificationQueue, User, Order, DriverJobOffer, PayoutRecipient
@@ -13,7 +15,26 @@ from app.integrations.messaging.factory import build_messaging_provider
 
 def get_settings() -> AutopilotSettings:
     env = (os.getenv("FLIPTRYBE_ENV") or os.getenv("FLASK_ENV") or "dev").strip().lower()
-    row = AutopilotSettings.query.first()
+    try:
+        row = AutopilotSettings.query.first()
+    except Exception as e:
+        message = str(e).lower()
+        if "feature_flags_json" in message and "autopilot_settings" in message:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.execute(text("ALTER TABLE autopilot_settings ADD COLUMN feature_flags_json TEXT DEFAULT '{}'"))
+                db.session.commit()
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+            row = AutopilotSettings.query.first()
+        else:
+            raise
     if not row:
         row = AutopilotSettings(enabled=True)
         row.payments_provider = "mock"
@@ -36,6 +57,7 @@ def get_settings() -> AutopilotSettings:
         row.cart_checkout_v1 = False
         row.shortlet_reels_v1 = False
         row.watcher_notifications_v1 = False
+        row.feature_flags_json = "{}"
         db.session.add(row)
         db.session.commit()
     changed = False
@@ -99,6 +121,9 @@ def get_settings() -> AutopilotSettings:
     if getattr(row, "watcher_notifications_v1", None) is None:
         row.watcher_notifications_v1 = False
         changed = True
+    if getattr(row, "feature_flags_json", None) is None:
+        row.feature_flags_json = "{}"
+        changed = True
     if changed:
         db.session.add(row)
         db.session.commit()
@@ -106,11 +131,30 @@ def get_settings() -> AutopilotSettings:
 
 
 def should_run(settings: AutopilotSettings, min_interval_seconds: int = 25) -> bool:
+    if not _flag_enabled(settings, "jobs.autopilot_enabled", bool(getattr(settings, "enabled", True))):
+        return False
     if not settings.enabled:
         return False
     if not settings.last_run_at:
         return True
     return (datetime.utcnow() - settings.last_run_at) >= timedelta(seconds=min_interval_seconds)
+
+
+def _flag_enabled(settings: AutopilotSettings, key: str, default: bool) -> bool:
+    raw = getattr(settings, "feature_flags_json", None) or "{}"
+    try:
+        payload = json.loads(raw)
+        if isinstance(payload, dict) and key in payload:
+            value = payload.get(key)
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, (int, float)):
+                return int(value) == 1
+            if isinstance(value, str):
+                return value.strip().lower() in ("1", "true", "yes", "y", "on")
+    except Exception:
+        pass
+    return bool(default)
 
 
 def _simulate_transfer(payout: PayoutRequest) -> dict:

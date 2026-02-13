@@ -45,6 +45,7 @@ class AutopilotSettings(db.Model):
     cart_checkout_v1 = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
     shortlet_reels_v1 = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
     watcher_notifications_v1 = db.Column(db.Boolean, nullable=False, default=False, server_default=sa.text("false"))
+    feature_flags_json = db.Column(db.Text, nullable=False, default="{}", server_default="{}")
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -77,5 +78,6 @@ class AutopilotSettings(db.Model):
             "cart_checkout_v1": bool(self.cart_checkout_v1),
             "shortlet_reels_v1": bool(self.shortlet_reels_v1),
             "watcher_notifications_v1": bool(self.watcher_notifications_v1),
+            "feature_flags_json": (self.feature_flags_json or "{}"),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

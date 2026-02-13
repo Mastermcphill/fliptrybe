@@ -7,6 +7,8 @@ from flask import Blueprint, jsonify, request
 from app.extensions import db
 from app.models import User, RoleChangeRequest, MerchantProfile
 from app.utils.jwt_utils import decode_token, get_bearer_token
+from app.utils.events import log_event
+from app.utils.observability import get_request_id
 
 role_change_bp = Blueprint("role_change_bp", __name__, url_prefix="/api")
 
@@ -103,6 +105,15 @@ def request_role_change():
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_submitted",
+            actor_user_id=int(u.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_submitted:{int(req.id)}",
+            metadata={"requested_role": req.requested_role or "", "current_role": req.current_role or ""},
+        )
         return jsonify({"ok": True, "request": req.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
@@ -183,6 +194,15 @@ def approve_role_request(req_id: int):
         db.session.add(target)
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_approved",
+            actor_user_id=int(u.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_approved:{int(req.id)}",
+            metadata={"user_id": int(target.id), "requested_role": req.requested_role or ""},
+        )
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500
@@ -226,6 +246,15 @@ def reject_role_request(req_id: int):
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_rejected",
+            actor_user_id=int(u.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_rejected:{int(req.id)}",
+            metadata={"requested_role": req.requested_role or "", "admin_note": req.admin_note or ""},
+        )
         return jsonify({"ok": True, "request": req.to_dict()}), 200
     except Exception as e:
         db.session.rollback()

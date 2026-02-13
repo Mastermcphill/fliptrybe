@@ -51,6 +51,7 @@ from app.segments.segment_role_change import role_change_bp
 from app.segments.segment_moneybox import moneybox_bp, moneybox_system_bp
 from app.segments.segment_public_feed import public_bp
 from app.segments.segment_admin_ops import admin_ops_bp
+from app.segments.segment_feature_flags import flags_bp
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.observability import init_sentry, init_otel, install_request_observers
@@ -161,6 +162,7 @@ def create_app():
     app.register_blueprint(public_bp)
     app.register_blueprint(public_payments_bp)
     app.register_blueprint(admin_ops_bp)
+    app.register_blueprint(flags_bp)
 
     # Health check
     @app.get("/api/health")
@@ -317,6 +319,12 @@ def create_app():
     def _capture_auth_context():
         g.auth_user_id = None
         g.auth_role = None
+        try:
+            import sentry_sdk
+
+            sentry_sdk.set_user(None)
+        except Exception:
+            pass
         header = request.headers.get("Authorization", "")
         token = get_bearer_token(header)
         if not token and header.lower().startswith("token "):
@@ -336,6 +344,18 @@ def create_app():
             user = db.session.get(User, uid)
             if user:
                 g.auth_role = (getattr(user, "role", None) or "buyer").strip().lower()
+                try:
+                    import sentry_sdk
+
+                    sentry_sdk.set_user(
+                        {
+                            "id": str(uid),
+                            "email": (getattr(user, "email", None) or "").strip() or None,
+                        }
+                    )
+                    sentry_sdk.set_tag("auth_role", g.auth_role or "buyer")
+                except Exception:
+                    pass
         except Exception:
             try:
                 db.session.rollback()

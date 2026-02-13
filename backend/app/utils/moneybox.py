@@ -8,6 +8,7 @@ from app.extensions import db
 from sqlalchemy.exc import IntegrityError
 from app.models import MoneyBoxAccount, MoneyBoxLedger, User, MerchantProfile, DriverProfile, InspectorProfile
 from app.models.merchant import DisabledUser
+from app.utils.events import log_event
 
 TIER_CONFIG = {
     1: {"lock_days": 30, "bonus_rate": 0.0},
@@ -218,6 +219,20 @@ def autosave_from_commission(*, user_id: int, amount: float, kind: str, referenc
         db.session.rollback()
         return 0.0
 
+    log_event(
+        "moneybox_autosave",
+        actor_user_id=int(user_id),
+        subject_type="moneybox_account",
+        subject_id=int(acct.id),
+        idempotency_key=f"moneybox_autosave:{int(user_id)}:{reference}",
+        metadata={
+            "amount": float(sweep),
+            "percent": float(percent),
+            "kind": kind,
+            "reference": reference,
+        },
+    )
+
     return float(sweep)
 
 
@@ -310,5 +325,15 @@ def liquidate_to_wallet(acct: MoneyBoxAccount, *, reason: str, reference: str | 
             post_txn(user_id=int(acct.user_id), direction="credit", amount=float(owner_credit), kind="moneybox_liquidation", reference=ref, note="MoneyBox liquidation")
     except Exception:
         pass
+
+    if penalty_amount > 0 and credit_target:
+        log_event(
+            "moneybox_penalty_applied",
+            actor_user_id=int(acct.user_id),
+            subject_type="moneybox_account",
+            subject_id=int(acct.id),
+            idempotency_key=f"moneybox_penalty:{int(acct.id)}:{ref}",
+            metadata={"penalty_amount": float(penalty_amount), "target_user_id": int(credit_target)},
+        )
 
     return {"ok": True, "penalty": penalty_amount, "owner_credit": owner_credit}

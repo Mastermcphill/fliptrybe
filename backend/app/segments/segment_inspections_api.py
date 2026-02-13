@@ -15,6 +15,7 @@ from app.utils.escrow_unlocks import ensure_unlock, set_code_if_missing, verify_
 from app.utils.notify import queue_sms, queue_whatsapp
 from app.jobs.escrow_runner import _hold_order_into_escrow, run_escrow_automation
 from app.escrow import release_inspector_payout
+from app.utils.events import log_event
 from app.utils.bonding import (
     get_or_create_bond,
     refresh_bond_required_for_tier,
@@ -97,6 +98,21 @@ def _event(order_id: int, actor_id: int | None, event: str, note: str = "") -> N
         )
         db.session.add(e)
         db.session.commit()
+        mapped = None
+        ev = (event or "").strip().lower()
+        if "inspection_requested" in ev:
+            mapped = "inspection_requested"
+        elif ev in ("inspection_inspected", "inspection_completed", "inspected", "inspection_closed"):
+            mapped = "inspection_completed"
+        if mapped:
+            log_event(
+                mapped,
+                actor_user_id=actor_id,
+                subject_type="order",
+                subject_id=int(order_id),
+                idempotency_key=f"inspection_event:{int(order_id)}:{mapped}:{int(actor_id) if actor_id is not None else 'system'}",
+                metadata={"event": event, "note": note},
+            )
     except Exception:
         try:
             db.session.rollback()

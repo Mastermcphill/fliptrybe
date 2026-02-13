@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
+import os
+import subprocess
 
 from flask import Blueprint, jsonify, request
 from sqlalchemy import or_
@@ -19,9 +21,14 @@ from app.models import (
     User,
     WalletTxn,
     WebhookEvent,
+    PlatformEvent,
+    JobRun,
+    NotificationQueue,
+    PayoutRequest,
 )
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
+from app.utils.feature_flags import get_all_flags
 
 admin_ops_bp = Blueprint("admin_ops_bp", __name__, url_prefix="/api/admin")
 
@@ -110,6 +117,164 @@ def _parse_manual_proof(meta_raw) -> dict:
     if isinstance(proof, dict):
         return proof
     return {}
+
+
+def _alembic_head() -> str:
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        migrations_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "migrations"))
+        cfg = Config(os.path.join(migrations_dir, "alembic.ini"))
+        cfg.set_main_option("script_location", migrations_dir)
+        script = ScriptDirectory.from_config(cfg)
+        heads = script.get_heads()
+        return heads[0] if heads else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _git_sha() -> str:
+    try:
+        app_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=app_root, stderr=subprocess.DEVNULL)
+        return out.decode().strip()
+    except Exception:
+        return (os.getenv("GIT_SHA") or os.getenv("RENDER_GIT_COMMIT") or "unknown").strip() or "unknown"
+
+
+@admin_ops_bp.get("/events")
+def admin_events():
+    _, err = _require_admin()
+    if err:
+        return err
+    event_type = (request.args.get("event_type") or "").strip()
+    subject_type = (request.args.get("subject_type") or "").strip()
+    subject_id = (request.args.get("subject_id") or "").strip()
+    try:
+        limit = int(request.args.get("limit") or 50)
+    except Exception:
+        limit = 50
+    limit = max(1, min(limit, 200))
+    cursor = (request.args.get("cursor") or "").strip()
+
+    query = PlatformEvent.query
+    if event_type:
+        query = query.filter_by(event_type=event_type)
+    if subject_type:
+        query = query.filter_by(subject_type=subject_type)
+    if subject_id:
+        query = query.filter_by(subject_id=subject_id)
+    if cursor:
+        try:
+            query = query.filter(PlatformEvent.id < int(cursor))
+        except Exception:
+            pass
+
+    rows = query.order_by(PlatformEvent.id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    next_cursor = str(rows[-1].id) if has_more and rows else None
+
+    return jsonify(
+        {
+            "ok": True,
+            "items": [r.to_dict() for r in rows],
+            "next_cursor": next_cursor,
+            "has_more": bool(has_more),
+            "limit": int(limit),
+        }
+    ), 200
+
+
+@admin_ops_bp.get("/events/summary")
+def admin_events_summary():
+    _, err = _require_admin()
+    if err:
+        return err
+    now = datetime.utcnow()
+    cutoff_24h = now - timedelta(hours=24)
+    cutoff_7d = now - timedelta(days=7)
+
+    rows_24h = PlatformEvent.query.filter(PlatformEvent.created_at >= cutoff_24h).all()
+    rows_7d = PlatformEvent.query.filter(PlatformEvent.created_at >= cutoff_7d).all()
+    by_type_24h: dict[str, int] = {}
+    by_type_7d: dict[str, int] = {}
+    for row in rows_24h:
+        key = (row.event_type or "unknown").strip() or "unknown"
+        by_type_24h[key] = int(by_type_24h.get(key, 0) + 1)
+    for row in rows_7d:
+        key = (row.event_type or "unknown").strip() or "unknown"
+        by_type_7d[key] = int(by_type_7d.get(key, 0) + 1)
+    return jsonify({"ok": True, "last_24h": by_type_24h, "last_7d": by_type_7d}), 200
+
+
+@admin_ops_bp.get("/health/summary")
+def admin_health_summary():
+    _, err = _require_admin()
+    if err:
+        return err
+    now = datetime.utcnow()
+    settings = get_settings()
+    flags = get_all_flags(settings)
+
+    queued = NotificationQueue.query.filter(NotificationQueue.status == "queued")
+    failed = NotificationQueue.query.filter(NotificationQueue.status == "failed")
+    notify_queue_pending = queued.count()
+    notify_queue_failed = failed.count()
+    oldest_pending = queued.order_by(NotificationQueue.created_at.asc()).first()
+    oldest_pending_age_sec = (
+        int((now - oldest_pending.created_at).total_seconds()) if oldest_pending and oldest_pending.created_at else None
+    )
+
+    escrow_job = (
+        JobRun.query.filter_by(job_name="escrow_runner")
+        .order_by(JobRun.ran_at.desc(), JobRun.id.desc())
+        .first()
+    )
+    escrow_runner_last_run_at = escrow_job.ran_at.isoformat() if escrow_job and escrow_job.ran_at else None
+    escrow_runner_last_ok = bool(escrow_job.ok) if escrow_job is not None else None
+    escrow_runner_last_error = (escrow_job.error or "") if escrow_job else ""
+
+    escrow_pending_settlements_count = Order.query.filter_by(escrow_status="HELD").count()
+
+    payouts_pending_q = PayoutRequest.query.filter_by(status="pending")
+    payouts_pending_count = payouts_pending_q.count()
+    oldest_payout = payouts_pending_q.order_by(PayoutRequest.created_at.asc()).first()
+    payouts_oldest_age_sec = (
+        int((now - oldest_payout.created_at).total_seconds()) if oldest_payout and oldest_payout.created_at else None
+    )
+
+    cutoff_1h = now - timedelta(hours=1)
+    cutoff_24h = now - timedelta(hours=24)
+    events_last_1h_errors = PlatformEvent.query.filter(
+        PlatformEvent.created_at >= cutoff_1h, PlatformEvent.severity == "ERROR"
+    ).count()
+    events_last_24h_errors = PlatformEvent.query.filter(
+        PlatformEvent.created_at >= cutoff_24h, PlatformEvent.severity == "ERROR"
+    ).count()
+
+    payload = {
+        "ok": True,
+        "server_time": now.isoformat(),
+        "git_sha": _git_sha(),
+        "alembic_head": _alembic_head(),
+        "notify_queue_pending": int(notify_queue_pending),
+        "notify_queue_failed": int(notify_queue_failed),
+        "oldest_pending_age_sec": oldest_pending_age_sec,
+        "escrow_runner_last_run_at": escrow_runner_last_run_at,
+        "escrow_runner_last_ok": escrow_runner_last_ok,
+        "escrow_runner_last_error": escrow_runner_last_error,
+        "escrow_pending_settlements_count": int(escrow_pending_settlements_count),
+        "payouts_pending_count": int(payouts_pending_count),
+        "payouts_oldest_age_sec": payouts_oldest_age_sec,
+        "events_last_1h_errors": int(events_last_1h_errors),
+        "events_last_24h_errors": int(events_last_24h_errors),
+        "paystack_mode": (getattr(settings, "payments_mode", None) or "mock"),
+        "termii_enabled": bool(flags.get("notifications.termii_enabled", False)),
+        "cloudinary_enabled": bool(flags.get("media.cloudinary_enabled", False)),
+    }
+    return jsonify(payload), 200
 
 
 @admin_ops_bp.get("/search")

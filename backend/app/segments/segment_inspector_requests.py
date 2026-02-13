@@ -12,6 +12,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models import InspectorRequest, User, PasswordResetToken, AuditLog
 from app.utils.jwt_utils import decode_token, get_bearer_token
+from app.utils.events import log_event
+from app.utils.observability import get_request_id
 
 inspector_req_bp = Blueprint("inspector_req_bp", __name__, url_prefix="/api/public")
 inspector_req_admin_bp = Blueprint("inspector_req_admin_bp", __name__, url_prefix="/api/admin")
@@ -130,6 +132,15 @@ def create_inspector_request():
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_submitted",
+            actor_user_id=int(token_user.id) if token_user is not None else None,
+            subject_type="inspector_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"inspector_request_submitted:{int(req.id)}",
+            metadata={"email": req.email or "", "phone": req.phone or ""},
+        )
         return jsonify({"ok": True, "message": "Request submitted", "request": req.to_dict()}), 201
     except SQLAlchemyError:
         db.session.rollback()
@@ -217,6 +228,15 @@ def admin_approve_inspector(req_id: int):
         db.session.add(req)
         db.session.add(user)
         db.session.commit()
+        log_event(
+            "role_request_approved",
+            actor_user_id=int(u.id),
+            subject_type="inspector_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"inspector_request_approved:{int(req.id)}",
+            metadata={"user_id": int(user.id), "created": bool(created)},
+        )
 
         try:
             db.session.add(AuditLog(
@@ -267,6 +287,15 @@ def admin_reject_inspector(req_id: int):
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_rejected",
+            actor_user_id=int(u.id),
+            subject_type="inspector_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"inspector_request_rejected:{int(req.id)}",
+            metadata={"email": req.email or ""},
+        )
         return jsonify({"ok": True, "request": req.to_dict()}), 200
     except SQLAlchemyError:
         db.session.rollback()

@@ -64,11 +64,14 @@ from app.jobs.availability_runner import run_availability_timeouts
 from app.services.escrow_service import transition_escrow, EscrowStatus
 from app.services.risk_engine_service import record_event
 from app.utils.autopilot import get_settings
+from app.utils.feature_flags import is_enabled
 from app.integrations.payments.factory import build_payments_provider
 from app.integrations.payments.mock_provider import MockPaymentsProvider
 from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
 from app.services.payment_intent_service import transition_intent, PaymentIntentStatus
 from app.utils.idempotency import lookup_response, store_response, get_idempotency_key
+from app.utils.events import log_event
+from app.utils.observability import get_request_id
 
 orders_bp = Blueprint("orders_bp", __name__, url_prefix="/api")
 
@@ -145,6 +148,23 @@ def _event(order_id: int, actor_id: int | None, event: str, note: str = "") -> N
         )
         db.session.add(e)
         db.session.commit()
+        mapped_type = {
+            "created": "order_created",
+            "paid": "order_paid",
+            "driver_assigned": "delivery_assigned",
+            "picked_up": "delivery_requested",
+            "delivered": "delivery_completed",
+        }.get((event or "").strip().lower())
+        if mapped_type:
+            log_event(
+                mapped_type,
+                actor_user_id=actor_id,
+                subject_type="order",
+                subject_id=int(order_id),
+                request_id=get_request_id(),
+                idempotency_key=f"platform_event:order:{int(order_id)}:{mapped_type}:{int(actor_id) if actor_id is not None else 'system'}",
+                metadata={"event": event, "note": note},
+            )
     except Exception:
         db.session.rollback()
 
@@ -559,6 +579,25 @@ def _ensure_order_commission_snapshot(order: Order, listing: Listing | None = No
         is_top_tier=_is_top_tier_merchant(getattr(order, "merchant_id", None)),
     )
     _apply_snapshot_to_order(order, snapshot)
+    order_id = int(getattr(order, "id", 0) or 0) if getattr(order, "id", None) is not None else None
+    log_event(
+        "commission_snapshot_created",
+        actor_user_id=None,
+        subject_type="order",
+        subject_id=order_id,
+        request_id=get_request_id(),
+        idempotency_key=(
+            f"commission_snapshot:{order_id}:{int(getattr(order, 'commission_snapshot_version', 1) or 1)}"
+            if order_id is not None
+            else None
+        ),
+        metadata={
+            "sale_kind": sale_kind,
+            "sale_fee_minor": int(getattr(order, "sale_fee_minor", 0) or 0),
+            "delivery_actor_minor": int(getattr(order, "delivery_actor_minor", 0) or 0),
+            "inspection_actor_minor": int(getattr(order, "inspection_actor_minor", 0) or 0),
+        },
+    )
     return snapshot
 
 
@@ -599,6 +638,12 @@ def _payments_mode(settings) -> str:
 
 
 def _paystack_available(settings) -> bool:
+    if not is_enabled(
+        "payments.paystack_enabled",
+        default=bool(getattr(settings, "paystack_enabled", False)),
+        settings=settings,
+    ):
+        return False
     mode = _payments_mode(settings)
     if mode == "mock":
         return True

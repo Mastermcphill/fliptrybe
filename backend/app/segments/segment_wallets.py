@@ -13,6 +13,8 @@ from app.models import AuditLog, PayoutRecipient
 from app.utils.commission import resolve_rate
 from app.utils.account_flags import record_account_flag, flag_duplicate_bank
 from app.models import Receipt
+from app.utils.events import log_event
+from app.utils.observability import get_request_id
 import os
 
 wallets_bp = Blueprint("wallets_bp", __name__, url_prefix="/api/wallet")
@@ -208,6 +210,15 @@ def request_payout():
     try:
         db.session.add(pr)
         db.session.commit()
+        log_event(
+            "payout_requested",
+            actor_user_id=int(u.id),
+            subject_type="payout",
+            subject_id=int(pr.id),
+            request_id=get_request_id(),
+            idempotency_key=f"payout_requested:{int(pr.id)}",
+            metadata={"amount": float(pr.amount or 0.0), "speed": pr.speed or "standard"},
+        )
         return jsonify({"ok": True, "payout": pr.to_dict()}), 201
     except Exception as e:
         db.session.rollback()
@@ -286,6 +297,15 @@ def admin_mark_paid(payout_id: int):
     try:
         db.session.add(p)
         db.session.commit()
+        log_event(
+            "payout_released",
+            actor_user_id=int(u.id) if u is not None else None,
+            subject_type="payout",
+            subject_id=int(p.id),
+            request_id=get_request_id(),
+            idempotency_key=f"payout_released:{int(p.id)}",
+            metadata={"amount": float(p.amount or 0.0), "fee_amount": float(fee_amount or 0.0)},
+        )
         return jsonify({"ok": True, "payout": p.to_dict()}), 200
     except Exception as e:
         db.session.rollback()
@@ -320,6 +340,15 @@ def admin_approve(payout_id: int):
     try:
         db.session.add(p)
         db.session.commit()
+        log_event(
+            "payout_approved",
+            actor_user_id=int(u.id) if u is not None else None,
+            subject_type="payout",
+            subject_id=int(p.id),
+            request_id=get_request_id(),
+            idempotency_key=f"payout_approved:{int(p.id)}",
+            metadata={"status": p.status or "approved"},
+        )
         return jsonify({"ok": True, "payout": p.to_dict()}), 200
     except Exception as e:
         db.session.rollback()

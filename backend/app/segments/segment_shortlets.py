@@ -20,6 +20,7 @@ from app.models import User, PaymentIntent, ShortletMedia
 from app.utils.jwt_utils import decode_token
 from app.utils.listing_caps import enforce_listing_cap
 from app.utils.autopilot import get_settings
+from app.utils.feature_flags import is_enabled
 from app.services.payment_intent_service import transition_intent, PaymentIntentStatus
 from app.integrations.payments.factory import build_payments_provider
 from app.integrations.payments.mock_provider import MockPaymentsProvider
@@ -79,6 +80,8 @@ def _payments_mode(settings) -> str:
 
 
 def _paystack_available(settings) -> bool:
+    if not is_enabled("payments.paystack_enabled", default=bool(getattr(settings, "paystack_enabled", False)), settings=settings):
+        return False
     mode = _payments_mode(settings)
     if mode == "mock":
         return True
@@ -112,6 +115,9 @@ def _from_minor(value) -> float:
 
 
 def _cloudinary_enabled() -> bool:
+    settings = get_settings()
+    if not is_enabled("media.cloudinary_enabled", default=False, settings=settings):
+        return False
     return bool((os.getenv("CLOUDINARY_CLOUD_NAME") or "").strip()) and bool((os.getenv("CLOUDINARY_API_KEY") or "").strip()) and bool((os.getenv("CLOUDINARY_API_SECRET") or "").strip())
 
 

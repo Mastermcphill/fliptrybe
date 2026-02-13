@@ -16,6 +16,8 @@ from app.utils.account_flags import record_account_flag, find_duplicate_phone_us
 from app.utils.notify import queue_email
 from app.utils.autopilot import get_settings
 from app.utils.rate_limit import check_limit
+from app.utils.events import log_event
+from app.utils.observability import get_request_id
 from app.services.risk_engine_service import record_event
 
 
@@ -344,6 +346,15 @@ def _create_role_request(*, user: User, requested_role: str, meta: dict | None =
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_submitted",
+            actor_user_id=int(user.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_submitted:{int(req.id)}",
+            metadata={"requested_role": req.requested_role or "", "current_role": req.current_role or ""},
+        )
         return req, None
     except SQLAlchemyError:
         db.session.rollback()
@@ -969,6 +980,15 @@ def register_merchant():
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_submitted",
+            actor_user_id=int(user.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_submitted:{int(req.id)}",
+            metadata={"requested_role": req.requested_role or "", "current_role": req.current_role or ""},
+        )
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
@@ -1048,6 +1068,15 @@ def register_driver():
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_submitted",
+            actor_user_id=int(user.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_submitted:{int(req.id)}",
+            metadata={"requested_role": req.requested_role or "", "current_role": req.current_role or ""},
+        )
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
@@ -1128,6 +1157,15 @@ def register_inspector():
     try:
         db.session.add(req)
         db.session.commit()
+        log_event(
+            "role_request_submitted",
+            actor_user_id=int(user.id),
+            subject_type="role_request",
+            subject_id=int(req.id),
+            request_id=get_request_id(),
+            idempotency_key=f"role_request_submitted:{int(req.id)}",
+            metadata={"requested_role": req.requested_role or "", "current_role": req.current_role or ""},
+        )
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500

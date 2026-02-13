@@ -9,6 +9,7 @@ from app.models import User, Order, OrderEvent
 from app.utils.jwt_utils import decode_token
 from app.utils.escrow_unlocks import ensure_unlock, set_code_if_missing
 from app.utils.notify import queue_sms, queue_whatsapp
+from app.utils.events import log_event
 
 drivers_bp = Blueprint("drivers_bp", __name__, url_prefix="/api/driver")
 
@@ -72,6 +73,21 @@ def _event(order_id: int, actor_id: int | None, event: str, note: str = "") -> N
         )
         db.session.add(e)
         db.session.commit()
+        mapped = {
+            "driver_assigned": "delivery_assigned",
+            "picked_up": "delivery_requested",
+            "delivered": "delivery_completed",
+            "completed": "delivery_completed",
+        }.get((event or "").strip().lower())
+        if mapped:
+            log_event(
+                mapped,
+                actor_user_id=actor_id,
+                subject_type="order",
+                subject_id=int(order_id),
+                idempotency_key=f"driver_event:{int(order_id)}:{mapped}:{int(actor_id) if actor_id is not None else 'system'}",
+                metadata={"event": event, "note": note},
+            )
     except Exception:
         db.session.rollback()
 
