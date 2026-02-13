@@ -10,8 +10,10 @@ class ApiClient {
   static final ApiClient instance = ApiClient._internal();
   String? _authToken;
   final Set<CancelToken> _activeCancelTokens = <CancelToken>{};
-  final Random _rand = Random();
-  static const Map<String, dynamic> _notAuthenticatedResponse = <String, dynamic>{
+  final Random _rand = Random.secure();
+  String? _lastFailedRequestId;
+  static const Map<String, dynamic> _notAuthenticatedResponse =
+      <String, dynamic>{
     'ok': false,
     'code': 'NOT_AUTHENTICATED',
     'message': 'Not authenticated',
@@ -19,9 +21,47 @@ class ApiClient {
   };
 
   String _newRequestId() {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final nonce = _rand.nextInt(1 << 32).toRadixString(16);
-    return "ft-$now-$nonce";
+    final bytes = Uint8List(16);
+    for (var i = 0; i < bytes.length; i++) {
+      bytes[i] = _rand.nextInt(256);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+    String hex(int value) => value.toRadixString(16).padLeft(2, '0');
+    final parts = bytes.map(hex).toList(growable: false);
+    return [
+      parts.sublist(0, 4).join(),
+      parts.sublist(4, 6).join(),
+      parts.sublist(6, 8).join(),
+      parts.sublist(8, 10).join(),
+      parts.sublist(10, 16).join(),
+    ].join('-');
+  }
+
+  String? get lastFailedRequestId => _lastFailedRequestId;
+
+  void clearLastFailedRequestId() {
+    _lastFailedRequestId = null;
+  }
+
+  String _requestIdFromHeaders(dynamic headers) {
+    if (headers == null) return '';
+    try {
+      final value =
+          headers.value('X-Request-ID') ?? headers.value('X-Request-Id');
+      return (value ?? '').toString().trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _requestIdForFailure(
+      Response<dynamic>? response, RequestOptions requestOptions) {
+    final fromResponse = _requestIdFromHeaders(response?.headers);
+    if (fromResponse.isNotEmpty) return fromResponse;
+    final reqHeader = requestOptions.headers['X-Request-ID'] ??
+        requestOptions.headers['X-Request-Id'];
+    return (reqHeader ?? '').toString().trim();
   }
 
   bool _hasAuthToken() {
@@ -65,10 +105,15 @@ class ApiClient {
   )..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          final requestId = _newRequestId();
+          options.headers['X-Request-ID'] = requestId;
+          options.headers['X-Fliptrybe-Client'] = ApiConfig.clientFingerprint;
           if (_requiresAuth(options.uri) && !_hasAuthToken()) {
             if (kDebugMode) {
-              debugPrint('[ApiClient] BLOCKED unauthenticated ${options.method} ${options.uri}');
+              debugPrint(
+                  '[ApiClient] BLOCKED unauthenticated ${options.method} ${options.uri}');
             }
+            _lastFailedRequestId = requestId;
             return handler.resolve(
               Response<dynamic>(
                 requestOptions: options,
@@ -77,6 +122,7 @@ class ApiClient {
                 data: <String, dynamic>{
                   ..._notAuthenticatedResponse,
                   'path': options.uri.path,
+                  'trace_id': requestId,
                 },
               ),
             );
@@ -90,8 +136,6 @@ class ApiClient {
           } else {
             options.headers.remove('Authorization');
           }
-          options.headers['X-Request-Id'] = _newRequestId();
-          options.headers['X-Fliptrybe-Client'] = ApiConfig.clientFingerprint;
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.request',
             type: 'http',
@@ -99,6 +143,7 @@ class ApiClient {
             data: {
               'method': options.method,
               'url': options.uri.toString(),
+              'request_id': requestId,
             },
           ));
           // ignore: avoid_print
@@ -113,7 +158,8 @@ class ApiClient {
           if (token != null) _activeCancelTokens.remove(token);
           // ignore: avoid_print
           if (kDebugMode) {
-            debugPrint('[ApiClient] ${response.requestOptions.method} ${response.realUri} -> ${response.statusCode}');
+            debugPrint(
+                '[ApiClient] ${response.requestOptions.method} ${response.realUri} -> ${response.statusCode}');
           }
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.response',
@@ -123,8 +169,13 @@ class ApiClient {
               'method': response.requestOptions.method,
               'url': response.realUri.toString(),
               'status': response.statusCode,
+              'request_id': _requestIdFromHeaders(response.headers),
             },
           ));
+          if ((response.statusCode ?? 0) >= 400) {
+            _lastFailedRequestId =
+                _requestIdForFailure(response, response.requestOptions);
+          }
 
           return handler.next(response);
         },
@@ -134,8 +185,11 @@ class ApiClient {
           // Mostly for network errors/timeouts now (5xx won't throw either).
           // ignore: avoid_print
           if (kDebugMode) {
-            debugPrint('[ApiClient] ERROR ${e.requestOptions.method} ${e.requestOptions.uri} -> ${e.response?.statusCode} ${e.message}');
+            debugPrint(
+                '[ApiClient] ERROR ${e.requestOptions.method} ${e.requestOptions.uri} -> ${e.response?.statusCode} ${e.message}');
           }
+          final rid = _requestIdForFailure(e.response, e.requestOptions);
+          _lastFailedRequestId = rid.isNotEmpty ? rid : _lastFailedRequestId;
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.error',
             type: 'http',
@@ -144,6 +198,7 @@ class ApiClient {
               'method': e.requestOptions.method,
               'url': e.requestOptions.uri.toString(),
               'status': e.response?.statusCode,
+              'request_id': rid,
             },
           ));
           Sentry.captureException(e);
