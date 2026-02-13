@@ -18,6 +18,7 @@ from app.models import (
     Brand,
     BrandModel,
     MerchantProfile,
+    ImageFingerprint,
 )
 from app.utils.commission import compute_commission, RATES
 from app.utils.listing_caps import enforce_listing_cap
@@ -26,6 +27,7 @@ from app.utils.autopilot import get_settings
 from app.services.search_v2_service import search_listings_v2
 from app.utils.rate_limit import check_limit
 from app.services.risk_engine_service import record_event
+from app.services.image_dedupe_service import ensure_image_unique, DuplicateImageError
 from app.services.discovery_service import (
     ranking_for_listing,
     set_listing_favorite,
@@ -33,6 +35,7 @@ from app.services.discovery_service import (
     merchant_listing_metrics,
     queue_item_unavailable_notifications,
 )
+from app.utils.observability import get_request_id
 
 
 market_bp = Blueprint("market_bp", __name__, url_prefix="/api")
@@ -587,6 +590,53 @@ def public_filters():
         except Exception:
             pass
         return jsonify({"ok": False, "error": "FILTERS_READ_FAILED", "message": str(exc), "brands": [], "models": []}), 500
+
+
+@market_bp.get("/admin/images/fingerprints")
+def admin_image_fingerprints():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    q = (request.args.get("q") or "").strip().lower()
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 50), 200))
+    except Exception:
+        limit = 50
+    try:
+        offset = max(0, int(request.args.get("offset") or 0))
+    except Exception:
+        offset = 0
+
+    query = ImageFingerprint.query
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                ImageFingerprint.hash_hex.ilike(like),
+                ImageFingerprint.image_url.ilike(like),
+                ImageFingerprint.cloudinary_public_id.ilike(like),
+            )
+        )
+    total = query.count()
+    rows = query.order_by(ImageFingerprint.created_at.desc(), ImageFingerprint.id.desc()).offset(offset).limit(limit).all()
+    items = [
+        {
+            "id": int(row.id),
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "hash_type": row.hash_type or "phash64",
+            "hash_hex": row.hash_hex or "",
+            "source": row.source or "",
+            "image_url": row.image_url or "",
+            "cloudinary_public_id": row.cloudinary_public_id or "",
+            "listing_id": int(row.listing_id) if row.listing_id is not None else None,
+            "shortlet_id": int(row.shortlet_id) if row.shortlet_id is not None else None,
+            "uploader_user_id": int(row.uploader_user_id) if row.uploader_user_id is not None else None,
+        }
+        for row in rows
+    ]
+    return jsonify({"ok": True, "items": items, "total": int(total), "limit": int(limit), "offset": int(offset)}), 200
 
 
 @market_bp.get("/public/listings/search")
@@ -1438,6 +1488,28 @@ def update_listing(listing_id: int):
     if "image_path" in payload or "image" in payload:
         incoming = (payload.get("image_path") or payload.get("image") or "").strip()
         if incoming:
+            try:
+                ensure_image_unique(
+                    image_url=incoming,
+                    source="listing_update",
+                    uploader_user_id=int(u.id),
+                    listing_id=int(item.id),
+                    allow_same_entity=True,
+                    upload_dir=UPLOAD_DIR,
+                )
+            except DuplicateImageError as dup:
+                payload = dup.to_payload()
+                payload["trace_id"] = get_request_id()
+                return jsonify(payload), 409
+            except Exception:
+                return jsonify(
+                    {
+                        "ok": False,
+                        "code": "IMAGE_FINGERPRINT_FAILED",
+                        "message": "Could not validate image uniqueness.",
+                        "trace_id": get_request_id(),
+                    }
+                ), 400
             item.image_path = incoming
 
     try:
@@ -1512,6 +1584,8 @@ def create_listing():
     category_id = None
     brand_id = None
     model_id = None
+    uploaded_image_bytes = None
+    image_source = "unknown"
 
     # 1) Multipart upload
     if request.content_type and "multipart/form-data" in (request.content_type or ""):
@@ -1542,11 +1616,14 @@ def create_listing():
             ts = int(datetime.utcnow().timestamp())
             safe_name = f"{ts}_{original}" if original else f"{ts}_upload.jpg"
 
+            uploaded_image_bytes = file.read()
+            file.stream.seek(0)
             save_path = os.path.join(UPLOAD_DIR, safe_name)
             file.save(save_path)
 
             # Store RELATIVE path in DB (portable across emulator/localhost/prod)
             stored_image_path = f"/api/uploads/{safe_name}"
+            image_source = "upload"
 
     # 2) JSON fallback
     else:
@@ -1573,6 +1650,7 @@ def create_listing():
         incoming = (payload.get("image_path") or payload.get("image") or "").strip()
         if incoming:
             stored_image_path = incoming
+            image_source = "url"
 
     if not title:
         return jsonify({"message": "title is required"}), 400
@@ -1631,16 +1709,45 @@ def create_listing():
                 "listing_create",
                 user=owner_user,
                 context={"title": title[:120], "state": state or "", "price": float(price or 0.0)},
-                request_id=request.headers.get("X-Request-Id"),
+                request_id=request.headers.get("X-Request-ID"),
             )
         except Exception:
             db.session.rollback()
         db.session.add(listing)
+        db.session.flush()
+        if stored_image_path:
+            fp = ensure_image_unique(
+                image_url=stored_image_path,
+                image_bytes=uploaded_image_bytes,
+                source=image_source,
+                uploader_user_id=int(user_id),
+                listing_id=int(listing.id),
+                allow_same_entity=True,
+                upload_dir=UPLOAD_DIR,
+            )
+            if fp.listing_id != int(listing.id):
+                fp.listing_id = int(listing.id)
+                db.session.add(fp)
         db.session.commit()
 
         base = _base_url()
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=base)}), 201
 
+    except DuplicateImageError as dup:
+        db.session.rollback()
+        payload = dup.to_payload()
+        payload["trace_id"] = get_request_id()
+        return jsonify(payload), 409
+    except ValueError:
+        db.session.rollback()
+        return jsonify(
+            {
+                "ok": False,
+                "code": "IMAGE_FINGERPRINT_FAILED",
+                "message": "Could not validate image uniqueness.",
+                "trace_id": get_request_id(),
+            }
+        ), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed to create listing", "error": str(e)}), 500

@@ -47,8 +47,8 @@ class Listing(db.Model):
     heat_level = db.Column(db.String(16), nullable=False, default="normal", server_default="normal")
     heat_score = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=sa.text("now()"))
-    date_posted = db.Column(db.DateTime(timezone=True), nullable=False, server_default=sa.text("now()"))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=sa.func.now())
+    date_posted = db.Column(db.DateTime(timezone=True), nullable=False, default=datetime.utcnow, server_default=sa.func.now())
 
     @property
     def owner_id(self):

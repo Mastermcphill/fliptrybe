@@ -22,6 +22,7 @@ from app.utils.listing_caps import enforce_listing_cap
 from app.utils.autopilot import get_settings
 from app.utils.feature_flags import is_enabled
 from app.services.payment_intent_service import transition_intent, PaymentIntentStatus
+from app.services.image_dedupe_service import ensure_image_unique, DuplicateImageError
 from app.integrations.payments.factory import build_payments_provider
 from app.integrations.payments.mock_provider import MockPaymentsProvider
 from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
@@ -31,6 +32,7 @@ from app.services.discovery_service import (
     record_shortlet_view,
     host_shortlet_metrics,
 )
+from app.utils.observability import get_request_id
 
 shortlets_bp = Blueprint("shortlets_bp", __name__, url_prefix="/api")
 
@@ -462,6 +464,28 @@ def attach_shortlet_media(shortlet_id: int):
     duration_seconds = int(payload.get("duration_seconds") or 0)
     if media_type == "video" and duration_seconds > 30:
         return jsonify({"ok": False, "message": "video duration must be <= 30 seconds"}), 400
+    if media_type == "image":
+        try:
+            ensure_image_unique(
+                image_url=url,
+                source="shortlet_media",
+                uploader_user_id=int(u.id),
+                shortlet_id=int(shortlet_id),
+                upload_dir=UPLOAD_DIR,
+            )
+        except DuplicateImageError as dup:
+            payload = dup.to_payload()
+            payload["trace_id"] = get_request_id()
+            return jsonify(payload), 409
+        except Exception:
+            return jsonify(
+                {
+                    "ok": False,
+                    "code": "IMAGE_FINGERPRINT_FAILED",
+                    "message": "Could not validate image uniqueness.",
+                    "trace_id": get_request_id(),
+                }
+            ), 400
     item = ShortletMedia(
         shortlet_id=int(shortlet_id),
         media_type=media_type,
@@ -494,6 +518,8 @@ def create_shortlet():
     house_rules = []
     verification_score = 20
     media_items = []
+    uploaded_image_bytes = None
+    image_source = "unknown"
 
 
     state = ""
@@ -595,8 +621,11 @@ def create_shortlet():
             ts = int(datetime.utcnow().timestamp())
             safe_name = f"{ts}_{original}" if original else f"{ts}_shortlet.jpg"
             save_path = os.path.join(UPLOAD_DIR, safe_name)
+            uploaded_image_bytes = file.read()
+            file.stream.seek(0)
             file.save(save_path)
             image_rel = f"/api/shortlet_uploads/{safe_name}"
+            image_source = "upload"
     else:
         payload = request.get_json(silent=True) or {}
         title = (payload.get("title") or "").strip()
@@ -663,6 +692,8 @@ def create_shortlet():
         available_to = _d_any(payload.get("available_to"))
 
         image_rel = (payload.get("image_path") or payload.get("image") or "").strip()
+        if image_rel:
+            image_source = "url"
         media_payload = payload.get("media")
         if isinstance(media_payload, list):
             media_items = media_payload
@@ -705,7 +736,17 @@ def create_shortlet():
 
     try:
         db.session.add(s)
-        db.session.commit()
+        db.session.flush()
+        if image_rel:
+            ensure_image_unique(
+                image_url=image_rel,
+                image_bytes=uploaded_image_bytes,
+                source=image_source,
+                uploader_user_id=int(u.id),
+                shortlet_id=int(s.id),
+                allow_same_entity=True,
+                upload_dir=UPLOAD_DIR,
+            )
         if media_items:
             for idx, raw in enumerate(media_items):
                 if not isinstance(raw, dict):
@@ -719,6 +760,14 @@ def create_shortlet():
                 media_url = str(raw.get("url") or "").strip()
                 if not media_url:
                     continue
+                if media_type == "image":
+                    ensure_image_unique(
+                        image_url=media_url,
+                        source="shortlet_media",
+                        uploader_user_id=int(u.id),
+                        shortlet_id=int(s.id),
+                        upload_dir=UPLOAD_DIR,
+                    )
                 db.session.add(
                     ShortletMedia(
                         shortlet_id=int(s.id),
@@ -729,8 +778,23 @@ def create_shortlet():
                         position=int(raw.get("position") or idx),
                     )
                 )
-            db.session.commit()
+        db.session.commit()
         return jsonify({"ok": True, "shortlet": s.to_dict(base_url=_base_url())}), 201
+    except DuplicateImageError as dup:
+        db.session.rollback()
+        payload = dup.to_payload()
+        payload["trace_id"] = get_request_id()
+        return jsonify(payload), 409
+    except ValueError:
+        db.session.rollback()
+        return jsonify(
+            {
+                "ok": False,
+                "code": "IMAGE_FINGERPRINT_FAILED",
+                "message": "Could not validate image uniqueness.",
+                "trace_id": get_request_id(),
+            }
+        ), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed to create shortlet", "error": str(e)}), 500
