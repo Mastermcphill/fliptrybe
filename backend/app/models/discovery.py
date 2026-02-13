@@ -129,3 +129,19 @@ class ShortletMedia(db.Model):
     duration_seconds = db.Column(db.Integer, nullable=False, default=0)
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ImageFingerprint(db.Model):
+    __tablename__ = "image_fingerprints"
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    hash_type = db.Column(db.String(24), nullable=False, default="phash64")
+    hash_hex = db.Column(db.String(32), nullable=False, unique=True, index=True)
+    hash_int = db.Column(db.BigInteger, nullable=False, index=True)
+    source = db.Column(db.String(32), nullable=False, default="unknown")
+    cloudinary_public_id = db.Column(db.String(255), nullable=True, index=True)
+    image_url = db.Column(db.String(1024), nullable=False, default="")
+    listing_id = db.Column(db.Integer, db.ForeignKey("listings.id"), nullable=True, index=True)
+    shortlet_id = db.Column(db.Integer, db.ForeignKey("shortlets.id"), nullable=True, index=True)
+    uploader_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)

@@ -71,4 +71,5 @@ from .discovery import (
     CartItem,
     CheckoutBatch,
     ShortletMedia,
+    ImageFingerprint,
 )  # noqa: F401
