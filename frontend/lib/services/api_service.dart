@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'api_client.dart';
 import 'api_config.dart';
@@ -27,9 +28,29 @@ class ApiService {
     await TokenStorage().clear();
     setToken(null);
     _client.resetSession();
+    await syncSentryUser(null);
     lastMeStatusCode = null;
     lastMeAt = null;
     lastAuthError = null;
+  }
+
+  static Future<void> syncSentryUser(Map<String, dynamic>? user) async {
+    final id = (user?['id'] ?? '').toString().trim();
+    final email = (user?['email'] ?? '').toString().trim();
+    if (id.isEmpty && email.isEmpty) {
+      await Sentry.configureScope((scope) {
+        scope.setUser(null);
+      });
+      return;
+    }
+    await Sentry.configureScope((scope) {
+      scope.setUser(
+        SentryUser(
+          id: id.isEmpty ? null : id,
+          email: email.isEmpty ? null : email,
+        ),
+      );
+    });
   }
 
   static void _recordMeStatus(int? statusCode, dynamic data, {String? error}) {
@@ -158,6 +179,7 @@ class ApiService {
       setToken(t);
       await TokenStorage().saveToken(t);
     }
+    await syncSentryUser(_asMap(data['user']));
 
     return data;
   }
@@ -180,6 +202,7 @@ class ApiService {
       setToken(t);
       await TokenStorage().saveToken(t);
     }
+    await syncSentryUser(_asMap(data['user']));
 
     return data;
   }

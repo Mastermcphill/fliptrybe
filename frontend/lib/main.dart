@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'screens/landing_screen.dart';
@@ -24,22 +25,47 @@ Future<void> main() async {
   const sentryDsn = String.fromEnvironment('SENTRY_DSN', defaultValue: '');
   const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: 'dev');
   if (sentryDsn.trim().isEmpty) {
+    _installGlobalErrorHandlers(sentryEnabled: false);
     runApp(const FlipTrybeApp());
     return;
   }
   await SentryFlutter.init(
     (options) {
       options.dsn = sentryDsn;
-      options.environment =
-          const String.fromEnvironment('SENTRY_ENVIRONMENT', defaultValue: 'dev');
+      options.environment = const String.fromEnvironment('SENTRY_ENVIRONMENT',
+          defaultValue: 'dev');
       options.release = 'fliptrybe@${ApiConfig.appVersion}+$gitSha';
-      options.tracesSampleRate =
-          double.tryParse(const String.fromEnvironment('SENTRY_TRACES_SAMPLE_RATE', defaultValue: '0.0')) ?? 0.0;
+      options.tracesSampleRate = double.tryParse(const String.fromEnvironment(
+              'SENTRY_TRACES_SAMPLE_RATE',
+              defaultValue: '0.0')) ??
+          0.0;
       options.attachStacktrace = true;
       options.sendDefaultPii = false;
     },
-    appRunner: () => runApp(const FlipTrybeApp()),
+    appRunner: () {
+      _installGlobalErrorHandlers(sentryEnabled: true);
+      runApp(const FlipTrybeApp());
+    },
   );
+}
+
+void _installGlobalErrorHandlers({required bool sentryEnabled}) {
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    if (sentryEnabled) {
+      Sentry.captureException(
+        details.exception,
+        stackTrace: details.stack,
+      );
+    }
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    if (sentryEnabled) {
+      Sentry.captureException(error, stackTrace: stack);
+      return true;
+    }
+    return false;
+  };
 }
 
 class FlipTrybeApp extends StatefulWidget {
@@ -156,6 +182,7 @@ class _StartupScreenState extends State<StartupScreen> {
       final user = _unwrapUser(res.data);
 
       if (user != null) {
+        await ApiService.syncSentryUser(user);
         _navigateToRoleHome(
           (user['role'] ?? 'buyer').toString(),
           roleStatus: (user['role_status'] ?? 'approved').toString(),

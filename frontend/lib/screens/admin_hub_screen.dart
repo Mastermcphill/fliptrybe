@@ -17,6 +17,8 @@ import 'not_available_yet_screen.dart';
 import 'admin_global_search_screen.dart';
 import 'admin_anomalies_screen.dart';
 import 'admin_risk_events_screen.dart';
+import 'admin_system_health_screen.dart';
+import 'admin_feature_flags_screen.dart';
 import '../utils/auth_navigation.dart';
 import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/ft_components.dart';
@@ -210,6 +212,16 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                     builder: (_) => const AdminKycReviewScreen())),
           ),
           FTTile(
+            leading: const Icon(Icons.monitor_heart_outlined),
+            title: const Text('System Health'),
+            subtitle:
+                const Text('Queue backlog, runner state, payout pressure'),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminSystemHealthScreen())),
+          ),
+          FTTile(
             leading: const Icon(Icons.manage_search_outlined),
             title: const Text('Global Search'),
             subtitle: const Text('Search users, orders, listings, intents'),
@@ -238,15 +250,28 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             leading: const Icon(Icons.rule_folder_outlined),
             title: const Text('Anomalies'),
             subtitle: const Text('Detect payment, escrow and webhook drifts'),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const AdminAnomaliesScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminAnomaliesScreen())),
           ),
           FTTile(
             leading: const Icon(Icons.security_outlined),
             title: const Text('Risk Events'),
             subtitle: const Text('Review throttles, spam and abuse signals'),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const AdminRiskEventsScreen())),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminRiskEventsScreen())),
+          ),
+          FTTile(
+            leading: const Icon(Icons.toggle_on_outlined),
+            title: const Text('Feature Flags'),
+            subtitle: const Text('Runtime toggles for payments, jobs, media'),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const AdminFeatureFlagsScreen())),
           ),
           FTTile(
             leading: const Icon(Icons.percent_outlined),
