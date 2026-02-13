@@ -200,31 +200,16 @@ class _ShortletScreenState extends State<ShortletScreen> {
                           ),
                           const SizedBox(height: 10),
                           FTCard(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'City-first feed',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w800),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                          'Showing top shortlets around $_selectedCity'),
-                                    ],
-                                  ),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: _pickCity,
-                                  icon:
-                                      const Icon(Icons.location_city_outlined),
-                                  label: Text(_selectedCity),
-                                ),
-                              ],
+                            child: FTResponsiveTitleAction(
+                              title: 'City-first feed',
+                              subtitle:
+                                  'Showing top shortlets around $_selectedCity',
+                              action: FTButton(
+                                label: _selectedCity,
+                                icon: Icons.location_city_outlined,
+                                variant: FTButtonVariant.ghost,
+                                onPressed: _pickCity,
+                              ),
                             ),
                           ),
                         ],

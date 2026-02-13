@@ -354,6 +354,47 @@ def _create_role_request(*, user: User, requested_role: str, meta: dict | None =
         return None, ({"message": "Failed to create role request"}, 500)
 
 
+def _latest_role_request(user_id: int) -> RoleChangeRequest | None:
+    try:
+        return (
+            RoleChangeRequest.query.filter_by(user_id=int(user_id))
+            .order_by(RoleChangeRequest.created_at.desc())
+            .first()
+        )
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return None
+
+
+def _user_payload_with_role_status(user: User) -> dict:
+    payload = user.to_dict()
+    current_role = (payload.get("role") or "buyer").strip().lower()
+    payload["role_status"] = "approved"
+    payload["requested_role"] = current_role
+
+    req = _latest_role_request(int(user.id))
+    if not req:
+        return payload
+
+    status = (getattr(req, "status", "") or "").strip().lower()
+    requested_role = (getattr(req, "requested_role", "") or "").strip().lower()
+    if requested_role:
+        payload["requested_role"] = requested_role
+
+    if status == "pending" and requested_role and requested_role != current_role:
+        payload["role_status"] = "pending"
+    elif status == "rejected" and requested_role and requested_role != current_role:
+        payload["role_status"] = "rejected"
+    else:
+        payload["role_status"] = "approved"
+
+    payload["role_request_status"] = status or "none"
+    return payload
+
+
 def _bearer_token() -> str | None:
     header = request.headers.get("Authorization", "")
     return get_bearer_token(header)
@@ -407,7 +448,7 @@ def register():
     if err:
         body, code = err
         return jsonify(body), code
-    return jsonify({"user": u.to_dict(), "token": token}), 201
+    return jsonify({"user": _user_payload_with_role_status(u), "token": token}), 201
 
 
 @auth_bp.post("/login")
@@ -461,7 +502,7 @@ def login():
         return jsonify({"message": "Invalid credentials"}), 401
 
     token = create_token(u.id)
-    return jsonify({"user": u.to_dict(), "token": token}), 200
+    return jsonify({"user": _user_payload_with_role_status(u), "token": token}), 200
 
 
 @auth_bp.get("/me")
@@ -517,7 +558,7 @@ def me():
         return jsonify({"message": "User not found"}), 404
 
     # Return user dict directly (cleanest for frontend)
-    return jsonify(u.to_dict()), 200
+    return jsonify(_user_payload_with_role_status(u)), 200
 
 
 @auth_bp.post("/set-role")
@@ -567,7 +608,7 @@ def set_role():
         except Exception:
             pass
         db.session.commit()
-        return jsonify({"ok": True, "user": u.to_dict()}), 200
+        return jsonify({"ok": True, "user": _user_payload_with_role_status(u)}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500
@@ -735,7 +776,7 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
             pass
 
         token = create_token(str(u.id))
-        return {"token": token, "user": u.to_dict()}, None
+        return {"token": token, "user": _user_payload_with_role_status(u)}, None
     finally:
         try:
             db.session.remove()
@@ -929,7 +970,7 @@ def register_merchant():
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
     token = create_token(str(user.id))
-    return jsonify({"token": token, "user": user.to_dict(), "request": req.to_dict()}), 201
+    return jsonify({"token": token, "user": _user_payload_with_role_status(user), "request": req.to_dict()}), 201
 
 
 @auth_bp.post("/register/driver")
@@ -1010,7 +1051,7 @@ def register_driver():
     token = create_token(str(user.id))
     return jsonify({
         "token": token,
-        "user": user.to_dict(),
+        "user": _user_payload_with_role_status(user),
         "request": req.to_dict(),
         "message": "Driver signup submitted. Activation is admin-mediated.",
     }), 201
@@ -1090,7 +1131,7 @@ def register_inspector():
     token = create_token(str(user.id))
     return jsonify({
         "token": token,
-        "user": user.to_dict(),
+        "user": _user_payload_with_role_status(user),
         "request": req.to_dict(),
         "message": "Inspector signup submitted. Activation is admin-mediated.",
     }), 201

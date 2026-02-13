@@ -397,6 +397,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     ),
                   FTCard(
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         CircleAvatar(
                           radius: 24,
@@ -414,24 +415,19 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Merchant Photo',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
+                          child: FTResponsiveTitleAction(
+                            title: 'Merchant Photo',
+                            subtitle:
                                 'Used on merchant profile, listing seller badge, and leaderboards.',
-                                style: TextStyle(color: cs.onSurfaceVariant),
+                            action: Align(
+                              alignment: Alignment.centerLeft,
+                              child: FTButton(
+                                label: 'Upload Photo',
+                                variant: FTButtonVariant.ghost,
+                                onPressed: _openPhotoUploadDialog,
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                        OutlinedButton(
-                          onPressed: _openPhotoUploadDialog,
-                          child: const Text('Upload Photo'),
                         ),
                       ],
                     ),

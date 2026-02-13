@@ -352,31 +352,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           child: Column(
                             children: [
                               FTCard(
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'City Discovery',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w800),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                              'Showing results around $_preferredCity'),
-                                        ],
-                                      ),
-                                    ),
-                                    OutlinedButton.icon(
-                                      onPressed: _pickCity,
-                                      icon: const Icon(
-                                          Icons.location_city_outlined),
-                                      label: Text(_preferredCity),
-                                    ),
-                                  ],
+                                child: FTResponsiveTitleAction(
+                                  title: 'City Discovery',
+                                  subtitle:
+                                      'Showing results around $_preferredCity',
+                                  action: FTButton(
+                                    label: _preferredCity,
+                                    icon: Icons.location_city_outlined,
+                                    variant: FTButtonVariant.ghost,
+                                    onPressed: _pickCity,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 18),

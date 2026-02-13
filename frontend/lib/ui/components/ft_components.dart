@@ -53,6 +53,67 @@ class FTSectionHeader extends StatelessWidget {
   }
 }
 
+class FTResponsiveTitleAction extends StatelessWidget {
+  const FTResponsiveTitleAction({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.action,
+    this.breakpoint = 540,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? action;
+  final double breakpoint;
+
+  @override
+  Widget build(BuildContext context) {
+    final textContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: AppTypography.cardTitle(context)),
+        if ((subtitle ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: AppTokens.s4),
+          Text(subtitle!, style: AppTypography.meta(context)),
+        ],
+      ],
+    );
+
+    if (action == null) {
+      return textContent;
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < breakpoint;
+        if (compact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              textContent,
+              const SizedBox(height: AppTokens.s8),
+              action!,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: textContent),
+            const SizedBox(width: AppTokens.s12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: action!,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class FTChip extends StatelessWidget {
   const FTChip({
     super.key,
