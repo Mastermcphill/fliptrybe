@@ -1,7 +1,11 @@
-import 'dart:async';
+﻿import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../services/api_client.dart';
 import '../services/api_config.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/app_tokens.dart';
 
 class LandingScreen extends StatefulWidget {
   final VoidCallback onLogin;
@@ -37,7 +41,6 @@ class _LandingScreenState extends State<LandingScreen> {
         if (_items.isNotEmpty) {
           setState(() => _idx = (_idx + 1) % _items.length);
         }
-        // refresh occasionally
         if (DateTime.now().second % 30 == 0) {
           _loadTicker();
         }
@@ -47,10 +50,10 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Future<void> _loadTicker() async {
     try {
-      final res = await ApiClient.instance.getJson(ApiConfig.api("/public/sales_ticker?limit=8"));
-      if (res is Map && res["items"] is List) {
-        final list = (res["items"] as List)
-            .map((e) => (e is Map ? (e["text"] ?? "") : "").toString())
+      final res = await ApiClient.instance.getJson(ApiConfig.api('/public/sales_ticker?limit=8'));
+      if (res is Map && res['items'] is List) {
+        final list = (res['items'] as List)
+            .map((e) => (e is Map ? (e['text'] ?? '') : '').toString())
             .where((s) => s.trim().isNotEmpty)
             .toList();
         if (!mounted) return;
@@ -62,7 +65,7 @@ class _LandingScreenState extends State<LandingScreen> {
         }
       }
     } catch (_) {
-      // Silent: ticker is a nice-to-have on slow networks.
+      // Ticker is optional.
     }
   }
 
@@ -74,232 +77,172 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Alignment _heroAlignment(BoxConstraints c) {
     final r = c.maxHeight / (c.maxWidth == 0 ? 1 : c.maxWidth);
-    // Taller screens (iOS/Android portrait) often need a slight upward crop.
     if (r > 1.7) return const Alignment(0, -0.25);
     return Alignment.center;
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF020617),
+      backgroundColor: scheme.surface,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, c) {
             final alignment = _heroAlignment(c);
             final isCompact = c.maxWidth < 360 || c.maxHeight < 700;
-            final headlineSize = isCompact ? 28.0 : 36.0;
-            final bodySize = isCompact ? 13.0 : 15.0;
-            final ctaHeight = isCompact ? 46.0 : 52.0;
-            final ctaRadius = isCompact ? 12.0 : 14.0;
             return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: c.maxHeight - 30),
-                child: IntrinsicHeight(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.asset(
-                                'assets/images/landing_hero.jpg',
-                                fit: BoxFit.cover,
-                                alignment: alignment,
-                              ),
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.black.withValues(alpha: 0.35),
-                                      Colors.black.withValues(alpha: 0.65),
-                                    ],
+              padding: const EdgeInsets.all(AppTokens.s16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FTCard(
+                    padding: const EdgeInsets.all(AppTokens.s12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(AppTokens.r16),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.asset(
+                                  'assets/images/landing_hero.jpg',
+                                  fit: BoxFit.cover,
+                                  alignment: alignment,
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        scheme.scrim.withValues(alpha: 0.18),
+                                        scheme.scrim.withValues(alpha: 0.55),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                              if (_items.isNotEmpty)
-                                Align(
-                                  alignment: Alignment.topLeft,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                                      ),
-                                      child: AnimatedSwitcher(
-                                        duration: const Duration(milliseconds: 400),
-                                        child: Text(
-                                          _items[_idx],
-                                          key: ValueKey(_items[_idx]),
-                                          maxLines: isCompact ? 1 : 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w800,
-                                            height: 1.1,
+                                if (_items.isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(AppTokens.s12),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppTokens.s12,
+                                          vertical: AppTokens.s8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: scheme.surface.withValues(alpha: 0.35),
+                                          borderRadius: BorderRadius.circular(AppTokens.r12),
+                                          border: Border.all(color: scheme.outlineVariant),
+                                        ),
+                                        child: AnimatedSwitcher(
+                                          duration: AppTokens.d200,
+                                          child: Text(
+                                            _items[_idx],
+                                            key: ValueKey(_items[_idx]),
+                                            maxLines: isCompact ? 1 : 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: scheme.onSurface,
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-                        ),
-                        child: const Text(
-                          "FlipTrybe",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        "Declutter Marketplace +\nShortlet Stays.",
-                        style: TextStyle(
-                          fontSize: headlineSize,
-                          height: 1.05,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "FlipTrybe combines Declutter Marketplace and Shortlet Stays. Browse immediately, then sign in only when you are ready to transact.",
-                        style: TextStyle(
-                          fontSize: bodySize,
-                          height: 1.4,
-                          color: Colors.white.withValues(alpha: 0.92),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      if (widget.onBrowseMarketplace != null ||
-                          widget.onBrowseShortlets != null)
+                        const SizedBox(height: AppTokens.s16),
                         Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTokens.s12,
+                            vertical: AppTokens.s8,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.16)),
+                            color: scheme.secondaryContainer,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: scheme.outlineVariant),
                           ),
-                          child: Column(
-                            children: [
-                              if (widget.onBrowseMarketplace != null)
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: widget.onBrowseMarketplace,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF0EA5E9),
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(ctaRadius),
-                                      ),
-                                    ),
-                                    icon: const Icon(Icons.storefront_outlined),
-                                    label: const Text('Browse Marketplace'),
-                                  ),
-                                ),
-                              if (widget.onBrowseMarketplace != null &&
-                                  widget.onBrowseShortlets != null)
-                                const SizedBox(height: 8),
-                              if (widget.onBrowseShortlets != null)
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton.icon(
-                                    onPressed: widget.onBrowseShortlets,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF22C55E),
-                                      foregroundColor: const Color(0xFF052E16),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(ctaRadius),
-                                      ),
-                                    ),
-                                    icon: const Icon(Icons.home_work_outlined),
-                                    label: const Text('Browse Shortlets'),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      if (widget.onBrowseMarketplace != null ||
-                          widget.onBrowseShortlets != null)
-                        const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: ctaHeight,
-                        child: ElevatedButton(
-                          onPressed: widget.onLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF0F172A),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(ctaRadius),
+                          child: Text(
+                            'FlipTrybe',
+                            style: TextStyle(
+                              color: scheme.onSecondaryContainer,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          child: const Text(
-                            "Login",
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: ctaHeight,
-                        child: OutlinedButton(
-                          onPressed: widget.onSignup,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.75)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(ctaRadius),
-                            ),
-                          ),
-                          child: const Text(
-                            "Sign up (Choose role)",
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                          ),
+                        const SizedBox(height: AppTokens.s12),
+                        Text(
+                          'Declutter Marketplace +\nShortlet Stays.',
+                          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                                color: scheme.onSurface,
+                                fontWeight: FontWeight.w700,
+                                height: 1.05,
+                              ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        "Guest browsing is open. Login is required for buy, checkout, sell, and booking actions.",
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(height: AppTokens.s8),
+                        Text(
+                          'Browse immediately, then sign in only when you are ready to transact.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: AppTokens.s16),
+                  FTSectionContainer(
+                    title: 'Start Browsing',
+                    subtitle: 'Guest mode is enabled for marketplace and shortlets.',
+                    child: Column(
+                      children: [
+                        if (widget.onBrowseMarketplace != null)
+                          FTPrimaryButton(
+                            onPressed: widget.onBrowseMarketplace,
+                            icon: Icons.storefront_outlined,
+                            label: 'Browse Marketplace',
+                          ),
+                        if (widget.onBrowseMarketplace != null && widget.onBrowseShortlets != null)
+                          const SizedBox(height: AppTokens.s8),
+                        if (widget.onBrowseShortlets != null)
+                          FTSecondaryButton(
+                            onPressed: widget.onBrowseShortlets,
+                            icon: Icons.home_work_outlined,
+                            label: 'Browse Shortlets',
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppTokens.s12),
+                  FTPrimaryButton(
+                    onPressed: widget.onLogin,
+                    label: 'Login',
+                  ),
+                  const SizedBox(height: AppTokens.s8),
+                  FTButton(
+                    onPressed: widget.onSignup,
+                    variant: FTButtonVariant.ghost,
+                    expand: true,
+                    label: 'Sign up (Choose role)',
+                  ),
+                  const SizedBox(height: AppTokens.s12),
+                  Text(
+                    'Guest browsing is open. Login is required for buy, checkout, sell, and booking actions.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
               ),
             );
           },
