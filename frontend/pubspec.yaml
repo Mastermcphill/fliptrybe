@@ -2,7 +2,7 @@ name: fliptrybe
 description: The Super App for Nigeria (Commerce, Logistics, Short-lets).
 publish_to: 'none' # Prevent accidental publishing to pub.dev
 
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
