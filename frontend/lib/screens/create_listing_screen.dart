@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/ng_states.dart';
 import '../services/api_service.dart';
 import '../services/auth_gate_service.dart';
+import '../services/api_client.dart';
 import '../services/category_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
@@ -146,7 +147,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       _localityCtrl.text = (draft['locality'] ?? '').toString();
       _lgaCtrl.text = (draft['lga'] ?? '').toString();
       _category = (draft['category'] ?? _category).toString();
-      _parentCategoryId = int.tryParse((draft['parent_category_id'] ?? '').toString());
+      _parentCategoryId =
+          int.tryParse((draft['parent_category_id'] ?? '').toString());
       _categoryId = int.tryParse((draft['category_id'] ?? '').toString());
       _brandId = int.tryParse((draft['brand_id'] ?? '').toString());
       _modelId = int.tryParse((draft['model_id'] ?? '').toString());
@@ -294,11 +296,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       _brandOptions = data['brands'] ?? const <Map<String, dynamic>>[];
       _modelOptions = data['models'] ?? const <Map<String, dynamic>>[];
       if (_brandId != null &&
-          !_brandOptions.any((row) => int.tryParse('${row['id']}') == _brandId)) {
+          !_brandOptions
+              .any((row) => int.tryParse('${row['id']}') == _brandId)) {
         _brandId = null;
       }
       if (_modelId != null &&
-          !_modelOptions.any((row) => int.tryParse('${row['id']}') == _modelId)) {
+          !_modelOptions
+              .any((row) => int.tryParse('${row['id']}') == _modelId)) {
         _modelId = null;
       }
     });
@@ -407,6 +411,47 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _showDuplicateImageDialog(Map<String, dynamic> response) async {
+    final supportCode = (response['trace_id'] ??
+            response['request_id'] ??
+            ApiClient.instance.lastFailedRequestId ??
+            '')
+        .toString()
+        .trim();
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Photo Already Used'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('This photo has already been used on FlipTrybe.'),
+              const SizedBox(height: 8),
+              const Text('Choose a different photo to continue.'),
+              if (supportCode.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Support code: $supportCode',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Choose a different photo'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    setState(() => _step = 2);
+  }
+
   Future<void> _submitListing() async {
     if (_loading) return;
     if (!_validateCurrentStep()) return;
@@ -448,6 +493,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     setState(() => _loading = false);
 
     final ok = res['ok'] == true;
+    final code = (res['code'] ?? '').toString().trim().toUpperCase();
     final msg = (res['message'] ?? res['error'] ?? 'Failed to publish listing')
         .toString();
 
@@ -465,6 +511,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       if (!mounted) return;
       _showSnack('Listing published successfully.');
       Navigator.of(context).pop();
+      return;
+    }
+
+    if (code.startsWith('DUPLICATE_IMAGE')) {
+      await _showDuplicateImageDialog(res);
       return;
     }
 
@@ -616,9 +667,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       if (value == null) return;
                       final row = _leafCategoriesForParent(_parentCategoryId)
                           .firstWhere(
-                            (entry) => int.tryParse('${entry['id']}') == value,
-                            orElse: () => const <String, dynamic>{},
-                          );
+                        (entry) => int.tryParse('${entry['id']}') == value,
+                        orElse: () => const <String, dynamic>{},
+                      );
                       setState(() {
                         _categoryId = value;
                         _category = (row['name'] ?? _category).toString();
