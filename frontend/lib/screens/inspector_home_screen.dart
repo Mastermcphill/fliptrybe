@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/inspector_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
+import '../ui/components/app_components.dart';
 import '../utils/formatters.dart';
 import 'growth/growth_analytics_screen.dart';
 import 'inspector_bookings_screen.dart';
@@ -25,6 +26,9 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
   final _moneyboxService = MoneyBoxService();
   final _inspectorService = InspectorService();
   bool _loading = true;
+  bool _autosaveSaving = false;
+  bool _autosaveEnabled = false;
+  int _autosavePercent = 10;
   Map<String, dynamic>? _wallet;
   Map<String, dynamic> _moneybox = const {};
   List<dynamic> _assignments = const [];
@@ -47,6 +51,14 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
       setState(() {
         _wallet = values[0] as Map<String, dynamic>?;
         _moneybox = values[1] as Map<String, dynamic>;
+        _autosaveEnabled = _moneybox['autosave_enabled'] == true;
+        final parsedPct =
+            int.tryParse('${_moneybox['autosave_percent'] ?? 0}') ?? 0;
+        _autosavePercent = parsedPct < 1
+            ? 10
+            : parsedPct > 30
+                ? 30
+                : parsedPct;
         _assignments = values[2] as List<dynamic>;
         _loading = false;
       });
@@ -57,6 +69,31 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
   }
 
   String _money(dynamic value) => formatNaira(value);
+
+  Future<void> _saveAutosave() async {
+    if (_autosaveSaving) return;
+    setState(() => _autosaveSaving = true);
+    try {
+      final res = await _moneyboxService.updateAutosaveSettings(
+        enabled: _autosaveEnabled,
+        percent: _autosavePercent,
+      );
+      if (!mounted) return;
+      final ok = res['ok'] == true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Autosave settings updated.'
+              : (res['message'] ?? 'Autosave update failed').toString()),
+        ),
+      );
+      if (ok) {
+        await _reload();
+      }
+    } finally {
+      if (mounted) setState(() => _autosaveSaving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,24 +127,22 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Inspector Snapshot',
-                            style: TextStyle(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 8),
-                        Text(
-                            'Available Balance: ${_money(_wallet?['balance'])}'),
-                        Text(
-                            'MoneyBox Locked: ${_money(_moneybox['principal_balance'])}'),
-                        Text('Pending Bookings: $pending'),
-                        Text('Completed Inspections: $completed'),
-                        Text('Rating Snapshot: $avgRating'),
-                      ],
-                    ),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const AppSectionHeader(
+                        title: 'Inspector Snapshot',
+                        subtitle: 'Bookings and earnings overview',
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Available Balance: ${_money(_wallet?['balance'])}'),
+                      Text(
+                          'MoneyBox Locked: ${_money(_moneybox['principal_balance'])}'),
+                      Text('Pending Bookings: $pending'),
+                      Text('Completed Inspections: $completed'),
+                      Text('Rating Snapshot: $avgRating'),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -130,18 +165,62 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Autosave Earnings',
+                            style: TextStyle(fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 8),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: _autosaveEnabled,
+                          onChanged: (value) =>
+                              setState(() => _autosaveEnabled = value),
+                          title: const Text('Enable autosave'),
+                          subtitle: const Text(
+                              'Automatically move part of eligible credits into MoneyBox.'),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Slider(
+                                value: _autosavePercent.toDouble(),
+                                min: 1,
+                                max: 30,
+                                divisions: 29,
+                                label: '$_autosavePercent%',
+                                onChanged: _autosaveEnabled
+                                    ? (value) => setState(
+                                        () => _autosavePercent = value.round())
+                                    : null,
+                              ),
+                            ),
+                            Text('$_autosavePercent%'),
+                          ],
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: _autosaveSaving ? null : _saveAutosave,
+                          icon: const Icon(Icons.save_outlined),
+                          label: Text(_autosaveSaving
+                              ? 'Saving...'
+                              : 'Save autosave settings'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 OutlinedButton.icon(
                   onPressed: () {
-                    if (widget.onSelectTab != null) {
-                      widget.onSelectTab!(2);
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const GrowthAnalyticsScreen(role: 'inspector'),
-                        ),
-                      );
-                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            const GrowthAnalyticsScreen(role: 'inspector'),
+                      ),
+                    );
                   },
                   icon: const Icon(Icons.calculate_outlined),
                   label: const Text('Estimate Earnings'),
@@ -150,7 +229,7 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 OutlinedButton.icon(
                   onPressed: () {
                     if (widget.onSelectTab != null) {
-                      widget.onSelectTab!(1);
+                      widget.onSelectTab!(3);
                     } else {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -180,14 +259,10 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
-                    if (widget.onSelectTab != null) {
-                      widget.onSelectTab!(3);
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const MoneyBoxDashboardScreen()),
-                      );
-                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const MoneyBoxDashboardScreen()),
+                    );
                   },
                   icon: const Icon(Icons.savings_outlined),
                   label: const Text('MoneyBox'),

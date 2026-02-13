@@ -20,6 +20,7 @@ import 'merchants_screen.dart';
 import 'notifications_screen.dart';
 import 'receipts_screen.dart';
 import 'support_tickets_screen.dart';
+import 'support_chat_screen.dart';
 import 'kyc_demo_screen.dart';
 import 'admin_broadcast_screen.dart';
 import 'leaderboards_screen.dart';
@@ -430,6 +431,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             context,
                             MaterialPageRoute(
                                 builder: (_) => const SupportTicketsScreen()));
+                      }),
+                      _buildMenuItem(Icons.chat_outlined, "Support Chat",
+                          onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SupportChatScreen()));
                       }),
                       _buildMenuItem(Icons.mark_email_read, "Verify Email",
                           onTap: () {

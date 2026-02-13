@@ -10,6 +10,7 @@ import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
 import '../shells/inspector_shell.dart';
 import '../shells/merchant_shell.dart';
+import '../widgets/app_exit_guard.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -49,10 +50,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
-    if (r == 'driver') return const DriverShell();
-    if (r == 'merchant') return const MerchantShell();
-    if (r == 'inspector') return const InspectorShell();
-    return const BuyerShell();
+    if (r == 'driver') return const AppExitGuard(child: DriverShell());
+    if (r == 'merchant') return const AppExitGuard(child: MerchantShell());
+    if (r == 'inspector') return const AppExitGuard(child: InspectorShell());
+    return const AppExitGuard(child: BuyerShell());
   }
 
   void _toast(String msg) {

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../screens/inspector_bookings_screen.dart';
 import '../screens/inspector_home_screen.dart';
-import '../screens/growth/growth_analytics_screen.dart';
-import '../screens/moneybox_dashboard_screen.dart';
+import '../screens/marketplace_screen.dart';
+import '../screens/profile_screen.dart';
 import '../screens/shortlet_screen.dart';
 
 class InspectorShell extends StatefulWidget {
@@ -22,19 +22,19 @@ class _InspectorShellState extends State<InspectorShell> {
     if (widget.debugUseLightweightTabs) {
       return const [
         SizedBox.expand(child: Center(child: Text('Inspector Home'))),
-        SizedBox.expand(child: Center(child: Text('Inspector Bookings'))),
-        SizedBox.expand(child: Center(child: Text('Inspector Earnings'))),
-        SizedBox.expand(child: Center(child: Text('Inspector MoneyBox'))),
+        SizedBox.expand(child: Center(child: Text('Inspector Marketplace'))),
         SizedBox.expand(child: Center(child: Text('Inspector Shortlet'))),
+        SizedBox.expand(child: Center(child: Text('Inspector Orders'))),
+        SizedBox.expand(child: Center(child: Text('Inspector Profile'))),
       ];
     }
     return [
       InspectorHomeScreen(
           onSelectTab: (index) => setState(() => _currentIndex = index)),
-      InspectorBookingsScreen(),
-      const GrowthAnalyticsScreen(role: 'inspector'),
-      const MoneyBoxDashboardScreen(),
+      const MarketplaceScreen(),
       const ShortletScreen(),
+      InspectorBookingsScreen(),
+      const ProfileScreen(),
     ];
   }
 
@@ -62,13 +62,13 @@ class _InspectorShellState extends State<InspectorShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.home_outlined), label: 'Home'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.assignment_outlined), label: 'Bookings'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
+                icon: Icon(Icons.storefront_outlined), label: 'Marketplace'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.assignment_outlined), label: 'Orders'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline), label: 'Profile'),
           ],
         ),
       ),

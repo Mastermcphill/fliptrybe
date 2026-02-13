@@ -14,6 +14,7 @@ import 'package:fliptrybe/shells/driver_shell.dart';
 import 'package:fliptrybe/shells/inspector_shell.dart';
 import 'package:fliptrybe/shells/merchant_shell.dart';
 import 'package:fliptrybe/shells/public_browse_shell.dart';
+import 'package:fliptrybe/widgets/app_exit_guard.dart';
 
 void _noop() {}
 
@@ -75,6 +76,28 @@ void main() {
     expect(browseShortlets, findsOneWidget);
   });
 
+  testWidgets('App exit guard shows prompt before exit',
+      (WidgetTester tester) async {
+    final controller = AppExitBackController(forceAndroid: true);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Center(child: Text('Root')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.text('Root'));
+    await controller.handleBackPress(context);
+    await tester.pump();
+    expect(find.text('Press back again to exit'), findsOneWidget);
+
+    controller.handleBackPress(context);
+    await tester.pumpAndSettle();
+    expect(find.text('Exit app?'), findsOneWidget);
+  });
+
   testWidgets('Merchant shell renders 5 tabs', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -84,10 +107,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Listings'), findsOneWidget);
-    expect(find.text('Orders'), findsOneWidget);
-    expect(find.text('Growth'), findsOneWidget);
+    expect(find.text('Marketplace'), findsOneWidget);
     expect(find.text('Shortlet'), findsOneWidget);
+    expect(find.text('Orders'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
   });
 
   testWidgets('Merchant home shows action buttons',
@@ -197,10 +220,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Jobs'), findsOneWidget);
-    expect(find.text('Growth'), findsOneWidget);
-    expect(find.text('MoneyBox'), findsOneWidget);
+    expect(find.text('Marketplace'), findsOneWidget);
     expect(find.text('Shortlet'), findsOneWidget);
+    expect(find.text('Orders'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
   });
 
   testWidgets('Inspector shell renders 5 tabs', (WidgetTester tester) async {
@@ -212,10 +235,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Bookings'), findsOneWidget);
-    expect(find.text('Growth'), findsOneWidget);
-    expect(find.text('MoneyBox'), findsOneWidget);
+    expect(find.text('Marketplace'), findsOneWidget);
     expect(find.text('Shortlet'), findsOneWidget);
+    expect(find.text('Orders'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
   });
 
   testWidgets('Public browse shell exposes marketplace and shortlet tabs',

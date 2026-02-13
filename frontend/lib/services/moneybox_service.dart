@@ -21,8 +21,35 @@ class MoneyBoxService {
     return _asMap(data);
   }
 
+  Future<Map<String, dynamic>> autosaveSettings() async {
+    final data = await _client.getJson(ApiConfig.api('/moneybox/autosave/settings'));
+    return _asMap(data);
+  }
+
+  Future<Map<String, dynamic>> updateAutosaveSettings({
+    required bool enabled,
+    required int percent,
+  }) async {
+    final safePercent = percent < 1
+        ? 1
+        : percent > 30
+            ? 30
+            : percent;
+    final data = await _client.postJson(
+      ApiConfig.api('/moneybox/autosave/settings'),
+      {
+        'autosave_enabled': enabled,
+        'autosave_percent': safePercent,
+      },
+    );
+    return _asMap(data);
+  }
+
   Future<Map<String, dynamic>> setAutosave(int percent) async {
-    final data = await _client.postJson(ApiConfig.api('/moneybox/autosave'), {'percent': percent});
+    final data = await _client.postJson(ApiConfig.api('/moneybox/autosave'), {
+      'enabled': true,
+      'percent': percent,
+    });
     return _asMap(data);
   }
 

@@ -91,6 +91,24 @@ class DiscoveryJsonContractTestCase(unittest.TestCase):
             self.assertTrue(LISTING_KEYS.issubset(item.keys()))
             self.assertIsInstance(item["ranking_reason"], list)
 
+    def test_public_listings_deals_json_contract(self):
+        parsed = self._assert_discovery_shape("/api/public/listings/deals?limit=5")
+        self.assertIn("total", parsed)
+        self.assertIn("offset", parsed)
+        for item in parsed["items"]:
+            self.assertIsInstance(item, dict)
+            self.assertTrue(LISTING_KEYS.issubset(item.keys()))
+            self.assertIsInstance(item["ranking_reason"], list)
+
+    def test_public_listings_new_drops_json_contract(self):
+        parsed = self._assert_discovery_shape("/api/public/listings/new_drops?limit=5")
+        self.assertIn("total", parsed)
+        self.assertIn("offset", parsed)
+        for item in parsed["items"]:
+            self.assertIsInstance(item, dict)
+            self.assertTrue(LISTING_KEYS.issubset(item.keys()))
+            self.assertIsInstance(item["ranking_reason"], list)
+
     def test_public_shortlets_recommended_json_contract(self):
         parsed = self._assert_discovery_shape("/api/public/shortlets/recommended?limit=5")
         self.assertTrue(parsed["items"], "expected at least one shortlet item for contract validation")

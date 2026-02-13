@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../services/cart_service.dart';
+import '../services/payment_service.dart';
 import '../utils/formatters.dart';
 import '../ui/components/ft_components.dart';
 import 'manual_payment_instructions_screen.dart';
@@ -17,6 +18,7 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   final CartService _cartService = CartService();
+  final PaymentService _paymentService = PaymentService();
 
   bool _loading = true;
   bool _checkoutBusy = false;
@@ -91,6 +93,34 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _checkout() async {
     if (_items.isEmpty || _checkoutBusy) return;
+    final methods = await _paymentService.availableMethods(scope: 'order');
+    if (!mounted) return;
+    final methodsMap = (methods['methods'] is Map)
+        ? Map<String, dynamic>.from(methods['methods'] as Map)
+        : <String, dynamic>{};
+    final options = <Map<String, String>>[];
+    void addOption(String key, String title, String subtitle) {
+      final row = methodsMap[key];
+      if (row is Map && row['available'] == true) {
+        options.add({
+          'key': key,
+          'title': title,
+          'subtitle': subtitle,
+        });
+      }
+    }
+    addOption('wallet', 'Wallet', 'Instant if wallet balance is enough');
+    addOption('paystack_card', 'Paystack Card', 'Automated checkout via card');
+    addOption(
+        'paystack_transfer', 'Paystack Transfer', 'Automated bank transfer');
+    addOption('bank_transfer_manual', 'Bank Transfer', 'Manual confirmation');
+    if (options.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No payment methods available right now.')),
+      );
+      return;
+    }
     final method = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.white,
@@ -102,24 +132,20 @@ class _CartScreenState extends State<CartScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const ListTile(title: Text('Select payment method')),
-            ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: const Text('Wallet'),
-              subtitle: const Text('Instant if wallet balance is enough'),
-              onTap: () => Navigator.of(context).pop('wallet'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.credit_card_outlined),
-              title: const Text('Paystack'),
-              subtitle: const Text('Card / bank transfer (automated)'),
-              onTap: () => Navigator.of(context).pop('paystack'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.account_balance_outlined),
-              title: const Text('Bank Transfer'),
-              subtitle: const Text('Manual confirmation with reference'),
-              onTap: () => Navigator.of(context).pop('bank_transfer_manual'),
-            ),
+            ...options.map((option) {
+              final key = option['key'] ?? '';
+              final icon = key == 'wallet'
+                  ? Icons.account_balance_wallet_outlined
+                  : key == 'bank_transfer_manual'
+                      ? Icons.account_balance_outlined
+                      : Icons.credit_card_outlined;
+              return ListTile(
+                leading: Icon(icon),
+                title: Text(option['title'] ?? key),
+                subtitle: Text(option['subtitle'] ?? ''),
+                onTap: () => Navigator.of(context).pop(key),
+              );
+            }),
           ],
         ),
       ),

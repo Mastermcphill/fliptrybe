@@ -3,10 +3,14 @@ import 'api_config.dart';
 
 class PaymentService {
   Future<Map<String, dynamic>> initialize(
-      {required double amount, String purpose = 'topup', int? orderId}) async {
+      {required double amount,
+      String purpose = 'topup',
+      int? orderId,
+      String paymentMethod = 'paystack_card'}) async {
     final payload = <String, dynamic>{
       'amount': amount,
       'purpose': purpose,
+      'payment_method': paymentMethod,
     };
     if (orderId != null) {
       payload['order_id'] = orderId;
@@ -28,6 +32,14 @@ class PaymentService {
   Future<Map<String, dynamic>> manualInstructions() async {
     final data = await ApiClient.instance.getJson(
       ApiConfig.api('/public/manual-payment-instructions'),
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> availableMethods({String scope = 'order'}) async {
+    final safeScope = (scope == 'shortlet') ? 'shortlet' : 'order';
+    final data = await ApiClient.instance.getJson(
+      ApiConfig.api('/payments/methods?scope=$safeScope'),
     );
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }

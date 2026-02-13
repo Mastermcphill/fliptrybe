@@ -113,6 +113,37 @@ def _account_response(acct: MoneyBoxAccount) -> dict:
     return {"ok": True, "account": data}
 
 
+def _autosave_settings_payload(acct: MoneyBoxAccount, *, role_eligible: bool) -> dict:
+    percent = float(acct.autosave_percent or 0.0)
+    if percent < 0:
+        percent = 0.0
+    return {
+        "ok": True,
+        "autosave_enabled": bool(acct.autosave_enabled),
+        "autosave_percent": int(round(percent)),
+        "min_percent": 1,
+        "max_percent": 30,
+        "role_eligible": bool(role_eligible),
+    }
+
+
+def _apply_autosave_settings(*, acct: MoneyBoxAccount, enabled, percent) -> tuple[dict, int] | None:
+    if enabled is False:
+        acct.autosave_enabled = False
+        acct.autosave_percent = 0.0
+        return None
+
+    try:
+        pct = int(round(float(percent if percent is not None else acct.autosave_percent or 0.0)))
+    except Exception:
+        pct = int(round(float(acct.autosave_percent or 0.0)))
+    if pct < 1 or pct > 30:
+        return {"ok": False, "message": "autosave_percent must be between 1 and 30"}, 400
+    acct.autosave_enabled = True
+    acct.autosave_percent = float(pct)
+    return None
+
+
 @moneybox_bp.get("/status")
 def status():
     u = _current_user()
@@ -287,42 +318,50 @@ def relock_moneybox():
     return jsonify(_account_response(acct)), 200
 
 
-@moneybox_bp.post("/autosave")
-def autosave():
+@moneybox_bp.get("/autosave/settings")
+def autosave_settings_get():
     u = _current_user()
     if not u:
-        return jsonify({"message": "Unauthorized"}), 401
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
+    role_eligible = _allowed_role(u)
+    acct = get_or_create_account(int(u.id))
+    if not role_eligible:
+        return jsonify(_autosave_settings_payload(acct, role_eligible=False)), 200
+    return jsonify(_autosave_settings_payload(acct, role_eligible=True)), 200
+
+
+@moneybox_bp.post("/autosave/settings")
+def autosave_settings_post():
+    u = _current_user()
+    if not u:
+        return jsonify({"ok": False, "message": "Unauthorized"}), 401
     if not _allowed_role(u):
-        return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
+        return jsonify({"ok": False, "message": "MoneyBox autosave is only for merchants, drivers, inspectors"}), 403
 
     payload = request.get_json(silent=True) or {}
-    enabled = payload.get("enabled")
-    percent = payload.get("percent")
+    enabled = payload.get("autosave_enabled", payload.get("enabled"))
+    percent = payload.get("autosave_percent", payload.get("percent"))
 
     acct = get_or_create_account(int(u.id))
-
-    if enabled is False:
-        acct.autosave_enabled = False
-        acct.autosave_percent = 0.0
-    else:
-        try:
-            pct = float(percent or acct.autosave_percent or 0.0)
-        except Exception:
-            pct = 0.0
-        if pct < 1 or pct > 30:
-            return jsonify({"message": "percent must be between 1 and 30"}), 400
-        acct.autosave_enabled = True
-        acct.autosave_percent = pct
+    settings_error = _apply_autosave_settings(acct=acct, enabled=enabled, percent=percent)
+    if settings_error is not None:
+        body, status_code = settings_error
+        return jsonify(body), status_code
 
     acct.updated_at = datetime.utcnow()
 
     try:
         db.session.add(acct)
         db.session.commit()
-        return jsonify(_account_response(acct)), 200
+        return jsonify(_autosave_settings_payload(acct, role_eligible=True)), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({"message": "Failed", "error": str(e)}), 500
+        return jsonify({"ok": False, "message": "Failed", "error": str(e)}), 500
+
+
+@moneybox_bp.post("/autosave")
+def autosave():
+    return autosave_settings_post()
 
 
 @moneybox_bp.post("/withdraw")

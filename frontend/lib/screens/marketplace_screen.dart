@@ -32,6 +32,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   String? _error;
   List<Map<String, dynamic>> _all = const [];
   List<Map<String, dynamic>> _recommendedRemote = const [];
+  List<Map<String, dynamic>> _dealsRemote = const [];
+  List<Map<String, dynamic>> _newDropsRemote = const [];
   Set<int> _favorites = <int>{};
   String _preferredCity = defaultDiscoveryCity;
   String _preferredState = defaultDiscoveryState;
@@ -67,6 +69,16 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         state: state,
         limit: 12,
       );
+      final remoteDeals = await _catalog.dealsRemote(
+        city: city,
+        state: state,
+        limit: 12,
+      );
+      final remoteDrops = await _catalog.newDropsRemote(
+        city: city,
+        state: state,
+        limit: 12,
+      );
       if (!mounted) return;
       setState(() {
         _all = values[0] as List<Map<String, dynamic>>;
@@ -74,6 +86,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         _preferredCity = city.isEmpty ? defaultDiscoveryCity : city;
         _preferredState = state.isEmpty ? defaultDiscoveryState : state;
         _recommendedRemote = remoteRecommended;
+        _dealsRemote = remoteDeals;
+        _newDropsRemote = remoteDrops;
         _loading = false;
       });
     } catch (_) {
@@ -260,6 +274,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     final trending = _catalog.trending(_all, limit: 10);
     final newest = _catalog.newest(_all, limit: 10);
     final bestValue = _catalog.bestValue(_all, limit: 10);
+    final newDropsItems = _newDropsRemote.isNotEmpty ? _newDropsRemote : newest;
+    final dealsItems = _dealsRemote.isNotEmpty ? _dealsRemote : bestValue;
 
     return FTScaffold(
       title: 'FlipTrybe Marketplace',
@@ -378,26 +394,24 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               _section(
                                 context,
                                 title: 'Trending near you',
-                                subtitle:
-                                    'Fast-moving listings with strong demand',
+                                subtitle: 'Heat-ranked listings with strong demand',
                                 items: trending,
                                 seeAllSort: 'distance',
                               ),
                               const SizedBox(height: 18),
                               _section(
                                 context,
-                                title: 'Newly listed',
+                                title: 'New Drops',
                                 subtitle: 'Fresh listings from across Nigeria',
-                                items: newest,
+                                items: newDropsItems,
                                 seeAllSort: 'newest',
                               ),
                               const SizedBox(height: 18),
                               _section(
                                 context,
-                                title: 'Best value',
-                                subtitle:
-                                    'Low-price options with solid condition tags',
-                                items: bestValue,
+                                title: 'Hot Deals',
+                                subtitle: 'Price-friendly picks and active offers',
+                                items: dealsItems,
                                 seeAllSort: 'price_low',
                               ),
                             ],

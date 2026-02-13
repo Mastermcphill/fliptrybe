@@ -14,6 +14,7 @@ import 'shells/public_browse_shell.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
 import 'services/token_storage.dart';
+import 'widgets/app_exit_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +54,7 @@ class FlipTrybeApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
       ),
-      home: const StartupScreen(),
+      home: const AppExitGuard(child: StartupScreen()),
     );
   }
 }
@@ -66,8 +67,6 @@ class StartupScreen extends StatefulWidget {
 }
 
 class _StartupScreenState extends State<StartupScreen> {
-  bool _isLoading = true;
-  bool _loggedIn = false;
   bool _isCheckingSession = false;
   bool _hasCheckedSession = false;
   bool _hasNavigated = false;
@@ -116,11 +115,6 @@ class _StartupScreenState extends State<StartupScreen> {
 
       if (token.isEmpty) {
         ApiService.setToken(null);
-        if (!mounted) return;
-        setState(() {
-          _loggedIn = false;
-          _isLoading = false;
-        });
         return;
       }
 
@@ -130,21 +124,11 @@ class _StartupScreenState extends State<StartupScreen> {
       if (res.statusCode == 401) {
         await TokenStorage().clear();
         ApiService.setToken(null);
-        if (!mounted) return;
-        setState(() {
-          _loggedIn = false;
-          _isLoading = false;
-        });
         return;
       }
 
       final user = _unwrapUser(res.data);
 
-      if (!mounted) return;
-      setState(() {
-        _loggedIn = user != null;
-        _isLoading = false;
-      });
       if (user != null) {
         _navigateToRoleHome(
           (user['role'] ?? 'buyer').toString(),
@@ -153,11 +137,6 @@ class _StartupScreenState extends State<StartupScreen> {
       }
     } catch (e) {
       debugPrint("Session check failed: $e");
-      if (!mounted) return;
-      setState(() {
-        _loggedIn = false;
-        _isLoading = false;
-      });
     } finally {
       _hasCheckedSession = true;
       _isCheckingSession = false;
@@ -166,11 +145,11 @@ class _StartupScreenState extends State<StartupScreen> {
 
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
-    if (r == 'admin') return const AdminShell();
-    if (r == 'driver') return const DriverShell();
-    if (r == 'merchant') return const MerchantShell();
-    if (r == 'inspector') return const InspectorShell();
-    return const BuyerShell();
+    if (r == 'admin') return const AppExitGuard(child: AdminShell());
+    if (r == 'driver') return const AppExitGuard(child: DriverShell());
+    if (r == 'merchant') return const AppExitGuard(child: MerchantShell());
+    if (r == 'inspector') return const AppExitGuard(child: InspectorShell());
+    return const AppExitGuard(child: BuyerShell());
   }
 
   void _navigateToRoleHome(String role, {String? roleStatus}) {
@@ -181,7 +160,11 @@ class _StartupScreenState extends State<StartupScreen> {
       final status = (roleStatus ?? 'approved').toLowerCase();
       if (status == 'pending') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: role)),
+          MaterialPageRoute(
+            builder: (_) => AppExitGuard(
+              child: PendingApprovalScreen(role: role),
+            ),
+          ),
         );
       } else {
         Navigator.of(context).pushReplacement(

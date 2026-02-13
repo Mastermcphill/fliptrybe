@@ -78,6 +78,15 @@ def _payments_mode(settings) -> str:
     return "mock" if provider == "mock" else "paystack_auto"
 
 
+def _paystack_available(settings) -> bool:
+    mode = _payments_mode(settings)
+    if mode == "mock":
+        return True
+    provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+    enabled = bool(getattr(settings, "paystack_enabled", False))
+    return mode == "paystack_auto" and provider != "mock" and enabled
+
+
 def _manual_instructions(settings) -> dict:
     return {
         "bank_name": (getattr(settings, "manual_payment_bank_name", "") or "").strip() or (os.getenv("FLIPTRYBE_BANK_NAME") or "").strip(),
@@ -795,8 +804,15 @@ def book_shortlet(shortlet_id: int):
     total = float(subtotal) + float(platform_fee)
     total_minor = _to_minor(total)
     payment_method = str(payload.get("payment_method") or "wallet").strip().lower()
-    if payment_method not in ("wallet", "paystack", "bank_transfer_manual"):
-        return jsonify({"ok": False, "message": "payment_method must be wallet|paystack|bank_transfer_manual"}), 400
+    if payment_method == "paystack":
+        payment_method = "paystack_card"
+    if payment_method not in ("wallet", "paystack_card", "paystack_transfer", "bank_transfer_manual"):
+        return jsonify(
+            {
+                "ok": False,
+                "message": "payment_method must be wallet|paystack_card|paystack_transfer|bank_transfer_manual",
+            }
+        ), 400
 
     rec = create_receipt(
         user_id=int(u.id),
@@ -853,11 +869,19 @@ def book_shortlet(shortlet_id: int):
                     )
             except Exception:
                 pass
-            return jsonify({"ok": True, "mode": "wallet", "booking": b.to_dict(), "quote": {"nights": nights, "subtotal": subtotal, "platform_fee": platform_fee, "total": total}}), 201
+            return jsonify({"ok": True, "mode": "wallet", "payment_method": "wallet", "booking": b.to_dict(), "quote": {"nights": nights, "subtotal": subtotal, "platform_fee": platform_fee, "total": total}}), 201
 
         settings = get_settings()
         payments_mode = _payments_mode(settings)
         reference = f"FT-SHORTLET-{int(b.id)}-{int(datetime.utcnow().timestamp())}"
+        if payment_method == "bank_transfer_manual" and _paystack_available(settings):
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "PAYMENT_METHOD_UNAVAILABLE",
+                    "message": "Manual transfer is unavailable while Paystack auto mode is active.",
+                }
+            ), 409
         if payment_method == "bank_transfer_manual":
             pi = PaymentIntent(
                 user_id=int(u.id),
@@ -873,6 +897,7 @@ def book_shortlet(shortlet_id: int):
                         "purpose": "shortlet_booking",
                         "booking_id": int(b.id),
                         "shortlet_id": int(shortlet_id),
+                        "payment_method": "bank_transfer_manual",
                         "order_ids": [],
                         "order_id": None,
                     }
@@ -896,6 +921,7 @@ def book_shortlet(shortlet_id: int):
                 {
                     "ok": True,
                     "mode": "bank_transfer_manual",
+                    "payment_method": "bank_transfer_manual",
                     "booking": b.to_dict(),
                     "payment_intent_id": int(pi.id),
                     "reference": pi.reference,
@@ -906,6 +932,8 @@ def book_shortlet(shortlet_id: int):
 
         if payments_mode == "manual_company_account":
             return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": "Paystack checkout disabled while manual mode is active"}), 503
+        if not _paystack_available(settings):
+            return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": "Paystack checkout is unavailable in current mode"}), 503
         provider = MockPaymentsProvider() if payments_mode == "mock" else None
         if provider is None:
             try:
@@ -929,6 +957,7 @@ def book_shortlet(shortlet_id: int):
                     "purpose": "shortlet_booking",
                     "booking_id": int(b.id),
                     "shortlet_id": int(shortlet_id),
+                    "payment_method": payment_method,
                     "order_ids": [],
                     "order_id": None,
                 }
@@ -949,7 +978,11 @@ def book_shortlet(shortlet_id: int):
             amount=float(total),
             email=(u.email or ""),
             reference=pi.reference,
-            metadata={"booking_id": int(b.id), "shortlet_id": int(shortlet_id)},
+            metadata={
+                "booking_id": int(b.id),
+                "shortlet_id": int(shortlet_id),
+                "payment_method": payment_method,
+            },
         )
         if init_result.reference and init_result.reference != pi.reference:
             pi.reference = init_result.reference
@@ -962,6 +995,7 @@ def book_shortlet(shortlet_id: int):
             {
                 "ok": True,
                 "mode": "paystack",
+                "payment_method": payment_method,
                 "booking": b.to_dict(),
                 "payment_intent_id": int(pi.id),
                 "reference": pi.reference,

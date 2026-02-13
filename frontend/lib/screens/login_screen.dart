@@ -12,6 +12,7 @@ import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
 import '../shells/merchant_shell.dart';
 import '../shells/inspector_shell.dart';
+import '../widgets/app_exit_guard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -38,11 +39,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
-    if (r == 'admin') return const AdminShell();
-    if (r == 'driver') return const DriverShell();
-    if (r == 'merchant') return const MerchantShell();
-    if (r == 'inspector') return const InspectorShell();
-    return const BuyerShell();
+    if (r == 'admin') return const AppExitGuard(child: AdminShell());
+    if (r == 'driver') return const AppExitGuard(child: DriverShell());
+    if (r == 'merchant') return const AppExitGuard(child: MerchantShell());
+    if (r == 'inspector') return const AppExitGuard(child: InspectorShell());
+    return const AppExitGuard(child: BuyerShell());
   }
 
   void _toast(String msg) {

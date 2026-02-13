@@ -177,7 +177,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        "Declutter and shortlet.\nBrowse instantly.",
+                        "Declutter Marketplace +\nShortlet Stays.",
                         style: TextStyle(
                           fontSize: headlineSize,
                           height: 1.05,
@@ -187,7 +187,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        "FlipTrybe combines a declutter marketplace with shortlet stays. Browse immediately, then sign in only when you are ready to transact.",
+                        "FlipTrybe combines Declutter Marketplace and Shortlet Stays. Browse immediately, then sign in only when you are ready to transact.",
                         style: TextStyle(
                           fontSize: bodySize,
                           height: 1.4,

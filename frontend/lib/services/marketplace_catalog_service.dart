@@ -218,6 +218,54 @@ class MarketplaceCatalogService {
     return const <Map<String, dynamic>>[];
   }
 
+  Future<List<Map<String, dynamic>>> dealsRemote({
+    String city = '',
+    String state = '',
+    int limit = 20,
+  }) async {
+    final qp = <String, String>{
+      'limit': '${limit < 1 ? 20 : limit > 60 ? 60 : limit}'
+    };
+    if (city.trim().isNotEmpty) qp['city'] = city.trim();
+    if (state.trim().isNotEmpty) qp['state'] = state.trim();
+    final uri = Uri(path: '/public/listings/deals', queryParameters: qp);
+    try {
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .whereType<Map>()
+            .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
+            .toList(growable: false);
+      }
+    } catch (_) {}
+    return const <Map<String, dynamic>>[];
+  }
+
+  Future<List<Map<String, dynamic>>> newDropsRemote({
+    String city = '',
+    String state = '',
+    int limit = 20,
+  }) async {
+    final qp = <String, String>{
+      'limit': '${limit < 1 ? 20 : limit > 60 ? 60 : limit}'
+    };
+    if (city.trim().isNotEmpty) qp['city'] = city.trim();
+    if (state.trim().isNotEmpty) qp['state'] = state.trim();
+    final uri = Uri(path: '/public/listings/new_drops', queryParameters: qp);
+    try {
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
+      if (data is Map && data['items'] is List) {
+        return (data['items'] as List)
+            .whereType<Map>()
+            .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
+            .toList(growable: false);
+      }
+    } catch (_) {}
+    return const <Map<String, dynamic>>[];
+  }
+
   Future<List<String>> titleSuggestions(String query, {int limit = 8}) async {
     if (query.trim().isEmpty) return const <String>[];
     final uri = Uri(

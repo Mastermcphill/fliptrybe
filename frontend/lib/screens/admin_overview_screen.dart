@@ -8,6 +8,7 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/kyc_service.dart';
 import '../services/leaderboard_service.dart';
+import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
 import 'not_available_yet_screen.dart';
 
@@ -254,7 +255,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 ),
               ),
             const SizedBox(height: 16),
-            const FTSectionHeader(
+            const AppSectionHeader(
               title: 'Operational Counters',
               subtitle: 'Queue health and pending admin approvals',
             ),

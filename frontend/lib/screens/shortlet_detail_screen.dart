@@ -27,11 +27,13 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
   final TextEditingController _proofNoteCtrl = TextEditingController();
 
   bool _loading = false;
+  bool _loadingMethods = false;
   bool _booking = false;
   bool _favoriteBusy = false;
   bool _favorite = false;
   bool _viewSent = false;
   String _paymentMethod = 'wallet';
+  Map<String, dynamic> _availableMethods = const {};
   int? _paymentIntentId;
   Map<String, dynamic> _shortlet = const <String, dynamic>{};
   Map<String, dynamic>? _manualInstructions;
@@ -42,6 +44,7 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     _shortlet = Map<String, dynamic>.from(widget.shortlet);
     _favorite = _shortlet['is_favorite'] == true;
     _refresh();
+    _loadPaymentMethods();
     _recordView();
   }
 
@@ -81,6 +84,39 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     } else {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _loadPaymentMethods() async {
+    setState(() => _loadingMethods = true);
+    final methods = await _payments.availableMethods(scope: 'shortlet');
+    if (!mounted) return;
+    final rows = (methods['methods'] is Map)
+        ? Map<String, dynamic>.from(methods['methods'] as Map)
+        : <String, dynamic>{};
+    setState(() {
+      _availableMethods = rows;
+      _loadingMethods = false;
+    });
+    if (_isMethodAvailable(_paymentMethod)) return;
+    for (final candidate in const [
+      'wallet',
+      'paystack_card',
+      'paystack_transfer',
+      'bank_transfer_manual'
+    ]) {
+      if (_isMethodAvailable(candidate)) {
+        setState(() => _paymentMethod = candidate);
+        break;
+      }
+    }
+  }
+
+  bool _isMethodAvailable(String key) {
+    final row = _availableMethods[key];
+    if (row is Map) {
+      return row['available'] == true;
+    }
+    return false;
   }
 
   Future<void> _recordView() async {
@@ -397,14 +433,25 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: _paymentMethod,
-                  items: const [
-                    DropdownMenuItem(value: 'wallet', child: Text('Wallet')),
-                    DropdownMenuItem(
-                        value: 'paystack', child: Text('Paystack (Card/Bank)')),
-                    DropdownMenuItem(
+                  initialValue:
+                      _isMethodAvailable(_paymentMethod) ? _paymentMethod : null,
+                  items: [
+                    if (_isMethodAvailable('wallet'))
+                      const DropdownMenuItem(
+                          value: 'wallet', child: Text('Wallet')),
+                    if (_isMethodAvailable('paystack_card'))
+                      const DropdownMenuItem(
+                          value: 'paystack_card',
+                          child: Text('Paystack (Card)')),
+                    if (_isMethodAvailable('paystack_transfer'))
+                      const DropdownMenuItem(
+                          value: 'paystack_transfer',
+                          child: Text('Paystack (Transfer)')),
+                    if (_isMethodAvailable('bank_transfer_manual'))
+                      const DropdownMenuItem(
                         value: 'bank_transfer_manual',
-                        child: Text('Bank Transfer (Manual)')),
+                        child: Text('Bank Transfer (Manual)'),
+                      ),
                   ],
                   onChanged: (value) {
                     if (value == null || value.trim().isEmpty) return;
@@ -415,6 +462,11 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                if (_loadingMethods)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: LinearProgressIndicator(minHeight: 2),
+                  ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,

@@ -10,6 +10,7 @@ import '../services/listing_service.dart';
 import '../services/merchant_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
+import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import '../utils/auth_navigation.dart';
@@ -23,6 +24,8 @@ import 'moneybox_autosave_screen.dart';
 import 'moneybox_tier_screen.dart';
 import 'moneybox_withdraw_screen.dart';
 import 'merchant_followers_screen.dart';
+import 'merchant_listings_screen.dart';
+import 'merchant_orders_screen.dart';
 import 'support_chat_screen.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
@@ -56,6 +59,9 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   int _rank = 0;
   String _merchantName = '';
   int _chartDays = 7;
+  bool _autosaveEnabled = false;
+  int _autosavePercent = 10;
+  bool _autosaveSaving = false;
 
   @override
   void initState() {
@@ -108,6 +114,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             (me['profile_image_url'] ?? me['avatar_url'] ?? '').toString();
         _wallet = (values[0] as Map<String, dynamic>?) ?? <String, dynamic>{};
         _moneyBox = values[1] as Map<String, dynamic>;
+        _autosaveEnabled = (_moneyBox['autosave_enabled'] == true);
+        final parsedPct = _int(_moneyBox['autosave_percent']);
+        _autosavePercent = parsedPct < 1
+            ? 10
+            : parsedPct > 30
+                ? 30
+                : parsedPct;
         _kpis = values[2] as Map<String, dynamic>;
         _myListings = (values[4] as List)
             .whereType<Map>()
@@ -230,6 +243,34 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _saveAutosaveSettings() async {
+    if (_autosaveSaving) return;
+    setState(() => _autosaveSaving = true);
+    try {
+      final res = await _moneyBoxSvc.updateAutosaveSettings(
+        enabled: _autosaveEnabled,
+        percent: _autosavePercent,
+      );
+      if (!mounted) return;
+      if (res['ok'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Autosave settings updated.')),
+        );
+        await _reload();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text((res['message'] ?? 'Autosave update failed').toString()),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _autosaveSaving = false);
+      }
+    }
   }
 
   List<FlSpot> _trendSpots() {
@@ -511,7 +552,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const FTSectionHeader(
+                  const AppSectionHeader(
                     title: 'Quick Actions',
                     subtitle: 'One-tap operational actions',
                   ),
@@ -525,19 +566,27 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   _quickAction(
                     icon: Icons.inventory_2_outlined,
                     label: 'Manage Listings',
-                    onTap: () => widget.onSelectTab?.call(1),
+                    onTap: () => _safePush(const MerchantListingsScreen()),
                   ),
                   const SizedBox(height: 8),
                   _quickAction(
                     icon: Icons.receipt_long_outlined,
                     label: 'View Orders',
-                    onTap: () => widget.onSelectTab?.call(2),
+                    onTap: () {
+                      if (widget.onSelectTab != null) {
+                        widget.onSelectTab!(3);
+                      } else {
+                        _safePush(const MerchantOrdersScreen());
+                      }
+                    },
                   ),
                   const SizedBox(height: 8),
                   _quickAction(
                     icon: Icons.trending_up_outlined,
                     label: 'Growth Analytics',
-                    onTap: () => widget.onSelectTab?.call(3),
+                    onTap: () => _safePush(
+                      const GrowthAnalyticsScreen(role: 'merchant'),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   _quickAction(
@@ -608,6 +657,50 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                         Text('Autosave: $autosave%'),
                         Text('Bonus: $bonusPct%'),
                         Text('Days remaining: $daysRemaining'),
+                        const SizedBox(height: 10),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          value: _autosaveEnabled,
+                          onChanged: (value) =>
+                              setState(() => _autosaveEnabled = value),
+                          title: const Text('Enable autosave'),
+                          subtitle: const Text(
+                              'Automatically lock a share of eligible earnings.'),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Slider(
+                                value: _autosavePercent.toDouble(),
+                                min: 1,
+                                max: 30,
+                                divisions: 29,
+                                label: '$_autosavePercent%',
+                                onChanged: _autosaveEnabled
+                                    ? (value) => setState(
+                                          () =>
+                                              _autosavePercent = value.round(),
+                                        )
+                                    : null,
+                              ),
+                            ),
+                            Text('$_autosavePercent%'),
+                          ],
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ElevatedButton.icon(
+                            onPressed: _autosaveSaving
+                                ? null
+                                : () => _openMoneyBoxGateAware(
+                                      () => _moneyBoxSvc.status(),
+                                      _saveAutosaveSettings,
+                                    ),
+                            icon: const Icon(Icons.save_outlined),
+                            label: Text(
+                                _autosaveSaving ? 'Saving...' : 'Save Autosave'),
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         const Text(
                           'Early withdrawal penalties: first third 7%, second third 5%, final third 2%, maturity 0%.',

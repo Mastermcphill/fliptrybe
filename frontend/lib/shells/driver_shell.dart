@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../screens/driver_home_screen.dart';
 import '../screens/driver_jobs_screen.dart';
-import '../screens/growth/growth_analytics_screen.dart';
-import '../screens/moneybox_dashboard_screen.dart';
+import '../screens/marketplace_screen.dart';
+import '../screens/profile_screen.dart';
 import '../screens/shortlet_screen.dart';
 
 class DriverShell extends StatefulWidget {
@@ -22,19 +22,19 @@ class _DriverShellState extends State<DriverShell> {
     if (widget.debugUseLightweightTabs) {
       return const [
         SizedBox.expand(child: Center(child: Text('Driver Home'))),
-        SizedBox.expand(child: Center(child: Text('Driver Jobs'))),
-        SizedBox.expand(child: Center(child: Text('Driver Earnings'))),
-        SizedBox.expand(child: Center(child: Text('Driver MoneyBox'))),
+        SizedBox.expand(child: Center(child: Text('Driver Marketplace'))),
         SizedBox.expand(child: Center(child: Text('Driver Shortlet'))),
+        SizedBox.expand(child: Center(child: Text('Driver Orders'))),
+        SizedBox.expand(child: Center(child: Text('Driver Profile'))),
       ];
     }
     return [
       DriverHomeScreen(
           onSelectTab: (index) => setState(() => _currentIndex = index)),
-      DriverJobsScreen(),
-      const GrowthAnalyticsScreen(role: 'driver'),
-      const MoneyBoxDashboardScreen(),
+      const MarketplaceScreen(),
       const ShortletScreen(),
+      DriverJobsScreen(),
+      const ProfileScreen(),
     ];
   }
 
@@ -62,13 +62,13 @@ class _DriverShellState extends State<DriverShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.home_outlined), label: 'Home'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.local_shipping_outlined), label: 'Jobs'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
+                icon: Icon(Icons.storefront_outlined), label: 'Marketplace'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.local_shipping_outlined), label: 'Orders'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline), label: 'Profile'),
           ],
         ),
       ),

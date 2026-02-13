@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/marketplace_catalog_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/wallet_service.dart';
+import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import '../widgets/listing/listing_card.dart';
@@ -33,6 +34,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   Map<String, dynamic>? _wallet;
   List<dynamic> _ledger = const [];
   List<Map<String, dynamic>> _all = const [];
+  List<Map<String, dynamic>> _dealsRemote = const [];
+  List<Map<String, dynamic>> _newDropsRemote = const [];
   Set<int> _favorites = <int>{};
 
   @override
@@ -62,6 +65,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         _walletService.ledger(),
         _catalog.listAll(),
         _prefs.loadFavorites(),
+        _catalog.dealsRemote(limit: 10),
+        _catalog.newDropsRemote(limit: 10),
       ]);
       if (!mounted) return;
       setState(() {
@@ -69,6 +74,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         _ledger = values[1] as List<dynamic>;
         _all = values[2] as List<Map<String, dynamic>>;
         _favorites = values[3] as Set<int>;
+        _dealsRemote = values[4] as List<Map<String, dynamic>>;
+        _newDropsRemote = values[5] as List<Map<String, dynamic>>;
         _loading = false;
       });
     } catch (e) {
@@ -104,7 +111,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: FTCard(
+        child: AppCard(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -192,6 +199,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     final trending = _catalog.trending(_all, limit: 10);
     final newest = _catalog.newest(_all, limit: 10);
     final bestValue = _catalog.bestValue(_all, limit: 10);
+    final newDrops = _newDropsRemote.isNotEmpty ? _newDropsRemote : newest;
+    final deals = _dealsRemote.isNotEmpty ? _dealsRemote : bestValue;
 
     return Scaffold(
       body: _loading
@@ -330,16 +339,16 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                           ),
                           const SizedBox(height: 14),
                           _section(
-                            title: 'Newly listed',
+                            title: 'New Drops',
                             subtitle: 'Fresh arrivals across Nigeria',
-                            items: newest,
+                            items: newDrops,
                             seeAllSort: 'newest',
                           ),
                           const SizedBox(height: 14),
                           _section(
-                            title: 'Best value',
+                            title: 'Hot Deals',
                             subtitle: 'Budget-friendly listings',
-                            items: bestValue,
+                            items: deals,
                             seeAllSort: 'price_low',
                           ),
                           const SizedBox(height: 14),

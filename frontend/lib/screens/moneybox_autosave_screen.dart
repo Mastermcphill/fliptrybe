@@ -74,9 +74,9 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
             Text('Percent: $_percent%'),
             Slider(
               value: _percent.toDouble(),
-              min: 0,
+              min: 1,
               max: 30,
-              divisions: 30,
+              divisions: 29,
               label: '$_percent%',
               onChanged: _loading ? null : (v) => setState(() => _percent = v.round()),
             ),

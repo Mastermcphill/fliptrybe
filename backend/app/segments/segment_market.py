@@ -761,6 +761,164 @@ def public_listings_recommended():
         return jsonify({"ok": True, "city": city, "state": state, "items": [], "limit": limit}), 200
 
 
+def _public_discovery_args() -> dict:
+    try:
+        limit = max(1, min(int(request.args.get("limit") or 20), 60))
+    except Exception:
+        limit = 20
+    try:
+        offset = max(0, int(request.args.get("offset") or 0))
+    except Exception:
+        offset = 0
+    return {
+        "limit": limit,
+        "offset": offset,
+        "city": (request.args.get("city") or "").strip(),
+        "state": (request.args.get("state") or "").strip(),
+        "category_id": _maybe_int(request.args.get("category_id")),
+        "parent_category_id": _maybe_int(request.args.get("parent_category_id")),
+        "brand_id": _maybe_int(request.args.get("brand_id")),
+        "model_id": _maybe_int(request.args.get("model_id")),
+    }
+
+
+def _discovery_query_with_taxonomy(
+    *,
+    category_id: int | None,
+    parent_category_id: int | None,
+    brand_id: int | None,
+    model_id: int | None,
+):
+    q = _apply_listing_ordering(_apply_listing_active_filter(Listing.query))
+    if category_id is not None and hasattr(Listing, "category_id"):
+        q = q.filter(Listing.category_id == int(category_id))
+    elif parent_category_id is not None and hasattr(Listing, "category_id"):
+        descendant_ids = _descendant_category_ids(int(parent_category_id))
+        if descendant_ids:
+            q = q.filter(Listing.category_id.in_(descendant_ids))
+    if brand_id is not None and hasattr(Listing, "brand_id"):
+        q = q.filter(Listing.brand_id == int(brand_id))
+    if model_id is not None and hasattr(Listing, "model_id"):
+        q = q.filter(Listing.model_id == int(model_id))
+    return q
+
+
+@market_bp.get("/public/listings/new_drops")
+def public_listings_new_drops():
+    args = _public_discovery_args()
+    city = args["city"]
+    state = args["state"]
+    u = _current_user()
+    if not city and not state:
+        pref_city, pref_state = _user_preferences(u)
+        city = pref_city or city
+        state = pref_state or state
+    try:
+        q = _discovery_query_with_taxonomy(
+            category_id=args["category_id"],
+            parent_category_id=args["parent_category_id"],
+            brand_id=args["brand_id"],
+            model_id=args["model_id"],
+        )
+        q = q.order_by(Listing.created_at.desc(), Listing.id.desc())
+        total = q.count()
+        rows = q.offset(int(args["offset"])).limit(int(args["limit"])).all()
+        items = []
+        for row in rows:
+            score, reasons = ranking_for_listing(row, preferred_city=city, preferred_state=state)
+            payload = _listing_item_from_raw(
+                row.to_dict(base_url=_base_url()),
+                ranking_score=int(score),
+                ranking_reason=reasons,
+            )
+            items.append(payload)
+        return jsonify(
+            {
+                "ok": True,
+                "city": city,
+                "state": state,
+                "items": items,
+                "limit": int(args["limit"]),
+                "offset": int(args["offset"]),
+                "total": int(total),
+            }
+        ), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify(
+            {
+                "ok": True,
+                "city": city,
+                "state": state,
+                "items": [],
+                "limit": int(args["limit"]),
+                "offset": int(args["offset"]),
+                "total": 0,
+            }
+        ), 200
+
+
+@market_bp.get("/public/listings/deals")
+def public_listings_deals():
+    args = _public_discovery_args()
+    city = args["city"]
+    state = args["state"]
+    u = _current_user()
+    if not city and not state:
+        pref_city, pref_state = _user_preferences(u)
+        city = pref_city or city
+        state = pref_state or state
+    try:
+        q = _discovery_query_with_taxonomy(
+            category_id=args["category_id"],
+            parent_category_id=args["parent_category_id"],
+            brand_id=args["brand_id"],
+            model_id=args["model_id"],
+        )
+        q = q.order_by(Listing.heat_score.desc(), Listing.price.asc(), Listing.created_at.desc(), Listing.id.desc())
+        total = q.count()
+        rows = q.offset(int(args["offset"])).limit(int(args["limit"])).all()
+        items = []
+        for row in rows:
+            score, reasons = ranking_for_listing(row, preferred_city=city, preferred_state=state)
+            payload = _listing_item_from_raw(
+                row.to_dict(base_url=_base_url()),
+                ranking_score=int(score),
+                ranking_reason=reasons,
+            )
+            items.append(payload)
+        return jsonify(
+            {
+                "ok": True,
+                "city": city,
+                "state": state,
+                "items": items,
+                "limit": int(args["limit"]),
+                "offset": int(args["offset"]),
+                "total": int(total),
+            }
+        ), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify(
+            {
+                "ok": True,
+                "city": city,
+                "state": state,
+                "items": [],
+                "limit": int(args["limit"]),
+                "offset": int(args["offset"]),
+                "total": 0,
+            }
+        ), 200
+
+
 @market_bp.get("/public/listings/title-suggestions")
 def listing_title_suggestions():
     q = (request.args.get("q") or "").strip().lower()

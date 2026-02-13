@@ -294,6 +294,59 @@ def _payments_mode_payload(settings) -> dict:
     }
 
 
+def _paystack_is_available(settings) -> bool:
+    mode = _payments_mode(settings)
+    if mode == "mock":
+        return True
+    provider = (getattr(settings, "payments_provider", "mock") or "mock").strip().lower()
+    enabled = bool(getattr(settings, "paystack_enabled", False))
+    if mode != "paystack_auto":
+        return False
+    if provider == "mock":
+        return False
+    return bool(enabled)
+
+
+def _payment_methods_payload(*, settings, scope: str) -> dict:
+    paystack_available = _paystack_is_available(settings)
+    mode = _payments_mode(settings)
+    methods = {
+        "wallet": {
+            "id": "wallet",
+            "available": True,
+            "reason": "Wallet checkout is always available.",
+        },
+        "paystack_card": {
+            "id": "paystack_card",
+            "available": bool(paystack_available),
+            "reason": "Paystack card checkout is available."
+            if paystack_available
+            else "Paystack is unavailable in current runtime mode.",
+        },
+        "paystack_transfer": {
+            "id": "paystack_transfer",
+            "available": bool(paystack_available),
+            "reason": "Paystack transfer checkout is available."
+            if paystack_available
+            else "Paystack is unavailable in current runtime mode.",
+        },
+        "bank_transfer_manual": {
+            "id": "bank_transfer_manual",
+            "available": not bool(paystack_available),
+            "reason": "Manual transfer is enabled because Paystack is unavailable."
+            if not paystack_available
+            else "Manual transfer is hidden while Paystack auto mode is available.",
+        },
+    }
+    return {
+        "ok": True,
+        "scope": scope,
+        "mode": mode,
+        "paystack_available": bool(paystack_available),
+        "methods": methods,
+    }
+
+
 def _extract_order_id(meta_raw) -> int | None:
     payload = _meta_dict(meta_raw)
     oid = payload.get("order_id")
@@ -784,6 +837,15 @@ def public_manual_payment_instructions():
     ), 200
 
 
+@payments_bp.get("/methods")
+def payment_methods():
+    settings = get_settings()
+    scope = (request.args.get("scope") or "order").strip().lower()
+    if scope not in ("order", "shortlet"):
+        scope = "order"
+    return jsonify(_payment_methods_payload(settings=settings, scope=scope)), 200
+
+
 @admin_payments_bp.get("/mode")
 def admin_get_payments_mode():
     u = _current_user()
@@ -862,6 +924,17 @@ def initialize_payment():
     purpose = (data.get("purpose") or "topup").strip().lower()
     if purpose not in ("topup", "order"):
         return jsonify({"ok": False, "message": "purpose must be topup|order"}), 400
+    payment_method_raw = (data.get("payment_method") or "").strip().lower()
+    payment_method = payment_method_raw or "paystack_card"
+    if payment_method == "paystack":
+        payment_method = "paystack_card"
+    if payment_method not in ("paystack_card", "paystack_transfer", "wallet", "bank_transfer_manual"):
+        return jsonify(
+            {
+                "ok": False,
+                "message": "payment_method must be wallet|paystack_card|paystack_transfer|bank_transfer_manual",
+            }
+        ), 400
 
     settings = get_settings()
     payments_mode = _payments_mode(settings)
@@ -892,6 +965,7 @@ def initialize_payment():
     now_stamp = int(datetime.utcnow().timestamp())
     meta = {
         "purpose": purpose,
+        "payment_method": payment_method,
         "order_id": int(order.id) if order is not None else None,
         "initiated_by": int(u.id),
         "source": "api.payments.initialize",
@@ -910,7 +984,25 @@ def initialize_payment():
     except Exception:
         db.session.rollback()
 
-    if payments_mode == "manual_company_account":
+    if payment_method == "wallet":
+        return jsonify(
+            {
+                "ok": False,
+                "error": "UNSUPPORTED_PAYMENT_METHOD",
+                "message": "Use wallet checkout from order/cart flows.",
+            }
+        ), 400
+
+    if payment_method == "bank_transfer_manual" and _paystack_is_available(settings):
+        return jsonify(
+            {
+                "ok": False,
+                "error": "PAYMENT_METHOD_UNAVAILABLE",
+                "message": "Manual transfer is currently unavailable while Paystack auto mode is active.",
+            }
+        ), 409
+
+    if payment_method == "bank_transfer_manual" or payments_mode == "manual_company_account":
         if purpose != "order":
             return jsonify({"ok": False, "error": "INTEGRATION_DISABLED", "message": "manual payment mode supports order payments only"}), 503
         if order is None:
@@ -954,6 +1046,7 @@ def initialize_payment():
                 "ok": True,
                 "mode": "manual_company_account",
                 "provider": "manual_company_account",
+                "payment_method": "bank_transfer_manual",
                 "payment_intent_id": int(pi.id),
                 "payment_status": pi.status or PaymentIntentStatus.MANUAL_PENDING,
                 "reference": pi.reference,
@@ -971,6 +1064,15 @@ def initialize_payment():
             db.session.rollback()
             current_app.logger.exception("payments_initialize_manual_failed")
             return jsonify({"ok": False, "error": "PAYMENT_INIT_FAILED", "message": str(e)}), 500
+
+    if payment_method in ("paystack_card", "paystack_transfer") and not _paystack_is_available(settings):
+        return jsonify(
+            {
+                "ok": False,
+                "error": "INTEGRATION_DISABLED",
+                "message": "Paystack checkout is unavailable in current mode.",
+            }
+        ), 503
 
     if payments_mode == "mock":
         provider = MockPaymentsProvider()
@@ -1033,6 +1135,7 @@ def initialize_payment():
             "ok": True,
             "provider": provider.name,
             "mode": payments_mode,
+            "payment_method": payment_method,
             "reference": init.reference,
             "authorization_url": init.authorization_url,
             "purpose": purpose,

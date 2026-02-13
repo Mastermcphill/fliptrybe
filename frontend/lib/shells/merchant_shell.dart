@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../screens/create_listing_screen.dart';
+import '../screens/marketplace_screen.dart';
 import '../screens/merchant_home_screen.dart';
-import '../screens/merchant_growth_screen.dart';
-import '../screens/merchant_listings_screen.dart';
 import '../screens/merchant_orders_screen.dart';
+import '../screens/profile_screen.dart';
 import '../screens/shortlet_screen.dart';
 
 class MerchantShell extends StatefulWidget {
@@ -23,18 +23,18 @@ class _MerchantShellState extends State<MerchantShell> {
     if (widget.debugUseLightweightTabs) {
       return const [
         SizedBox.expand(child: Center(child: Text('Merchant Home'))),
-        SizedBox.expand(child: Center(child: Text('Merchant Listings'))),
-        SizedBox.expand(child: Center(child: Text('Merchant Orders'))),
-        SizedBox.expand(child: Center(child: Text('Merchant Growth'))),
+        SizedBox.expand(child: Center(child: Text('Merchant Marketplace'))),
         SizedBox.expand(child: Center(child: Text('Merchant Shortlet'))),
+        SizedBox.expand(child: Center(child: Text('Merchant Orders'))),
+        SizedBox.expand(child: Center(child: Text('Merchant Profile'))),
       ];
     }
     return [
       MerchantHomeScreen(onSelectTab: (i) => setState(() => _currentIndex = i)),
-      const MerchantListingsScreen(),
-      const MerchantOrdersScreen(),
-      const MerchantGrowthScreen(),
+      const MarketplaceScreen(),
       const ShortletScreen(),
+      const MerchantOrdersScreen(),
+      const ProfileScreen(),
     ];
   }
 
@@ -78,13 +78,13 @@ class _MerchantShellState extends State<MerchantShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.home_outlined), label: 'Home'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.inventory_2_outlined), label: 'Listings'),
+                icon: Icon(Icons.storefront_outlined), label: 'Marketplace'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
+                icon: Icon(Icons.person_outline), label: 'Profile'),
           ],
         ),
       ),
