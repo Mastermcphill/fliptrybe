@@ -6,6 +6,7 @@ import random
 import secrets
 import uuid
 import json
+import copy
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime, timedelta
 
@@ -35,7 +36,14 @@ from app.models import (
 )
 from app.utils.jwt_utils import decode_token
 from app.utils.receipts import create_receipt
-from app.utils.commission import compute_commission, resolve_rate, RATES
+from app.utils.commission import (
+    compute_commission,
+    resolve_rate,
+    RATES,
+    compute_order_commissions_minor,
+    money_major_to_minor,
+    snapshot_to_order_columns,
+)
 from app.utils.messaging import enqueue_sms, enqueue_whatsapp
 from app.utils.notify import queue_in_app, queue_sms, queue_whatsapp
 from app.utils.escrow_unlocks import (
@@ -429,6 +437,7 @@ def _reveal_for_user(order: Order, viewer: User, listing: Listing | None) -> dic
 
 
 def _mark_paid(order: Order, reference: str | None = None, actor_id: int | None = None) -> None:
+    _ensure_order_commission_snapshot(order)
     if reference:
         order.payment_reference = reference
     order.status = "paid"
@@ -481,6 +490,76 @@ def _mark_paid(order: Order, reference: str | None = None, actor_id: int | None 
             _event(int(order.id), int(actor_id), "paid", "Order marked paid")
         except Exception:
             pass
+
+
+def _snapshot_from_order(order: Order) -> dict | None:
+    raw = getattr(order, "commission_snapshot_json", None)
+    if not raw:
+        return None
+    if isinstance(raw, dict):
+        return copy.deepcopy(raw)
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return copy.deepcopy(parsed)
+
+
+def _apply_snapshot_to_order(order: Order, snapshot: dict) -> None:
+    cols = snapshot_to_order_columns(snapshot)
+    order.commission_snapshot_version = int(cols.get("commission_snapshot_version") or 1)
+    order.commission_snapshot_json = json.dumps(snapshot)
+    order.sale_fee_minor = int(cols.get("sale_fee_minor") or 0)
+    order.sale_platform_minor = int(cols.get("sale_platform_minor") or 0)
+    order.sale_seller_minor = int(cols.get("sale_seller_minor") or 0)
+    order.sale_top_tier_incentive_minor = int(cols.get("sale_top_tier_incentive_minor") or 0)
+    order.delivery_actor_minor = int(cols.get("delivery_actor_minor") or 0)
+    order.delivery_platform_minor = int(cols.get("delivery_platform_minor") or 0)
+    order.inspection_actor_minor = int(cols.get("inspection_actor_minor") or 0)
+    order.inspection_platform_minor = int(cols.get("inspection_platform_minor") or 0)
+
+
+def _is_top_tier_merchant(merchant_id: int | None) -> bool:
+    if not merchant_id:
+        return False
+    try:
+        prof = MerchantProfile.query.filter_by(user_id=int(merchant_id)).first()
+        return bool(getattr(prof, "is_top_tier", False)) if prof else False
+    except Exception:
+        return False
+
+
+def _order_sale_kind(order: Order, listing: Listing | None = None) -> str:
+    source = listing
+    if source is None and getattr(order, "listing_id", None):
+        try:
+            source = db.session.get(Listing, int(order.listing_id))
+        except Exception:
+            source = None
+    if source is not None:
+        listing_type = str(getattr(source, "listing_type", "") or "").strip().lower()
+        if listing_type == "shortlet":
+            return "shortlet"
+    return "declutter"
+
+
+def _ensure_order_commission_snapshot(order: Order, listing: Listing | None = None) -> dict:
+    existing = _snapshot_from_order(order)
+    if existing is not None:
+        return existing
+
+    sale_kind = _order_sale_kind(order, listing)
+    snapshot = compute_order_commissions_minor(
+        sale_kind=sale_kind,
+        sale_charge_minor=money_major_to_minor(float(getattr(order, "amount", 0.0) or 0.0)),
+        delivery_minor=money_major_to_minor(float(getattr(order, "delivery_fee", 0.0) or 0.0)),
+        inspection_minor=money_major_to_minor(float(getattr(order, "inspection_fee", 0.0) or 0.0)),
+        is_top_tier=_is_top_tier_merchant(getattr(order, "merchant_id", None)),
+    )
+    _apply_snapshot_to_order(order, snapshot)
+    return snapshot
 
 
 def _money_to_minor(amount: float | Decimal | int | None) -> int:
@@ -781,7 +860,7 @@ def create_order():
 
         if seller_role == "merchant":
             if platform_fee <= 0:
-                platform_fee = (base_price * Decimal("0.03")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                platform_fee = (base_price * Decimal("0.05")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             if final_price <= 0:
                 final_price = (base_price + platform_fee).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             amount_dec = final_price
@@ -830,6 +909,7 @@ def create_order():
         updated_at=datetime.utcnow(),
         handshake_id=handshake_id,
     )
+    _ensure_order_commission_snapshot(order, listing)
 
     try:
         db.session.add(order)
@@ -1074,6 +1154,7 @@ def create_orders_bulk():
             updated_at=datetime.utcnow(),
             handshake_id=str(uuid.uuid4()),
         )
+        _ensure_order_commission_snapshot(order, listing)
         db.session.add(order)
         orders.append(order)
         total_minor += _money_to_minor(amount)

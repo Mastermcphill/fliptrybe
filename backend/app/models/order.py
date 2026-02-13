@@ -18,6 +18,16 @@ class Order(db.Model):
     total_price = db.Column(db.Float, nullable=False, default=0.0, server_default="0")
     delivery_fee = db.Column(db.Float, nullable=False, default=0.0)
     inspection_fee = db.Column(db.Float, nullable=False, default=0.0)
+    commission_snapshot_version = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    commission_snapshot_json = db.Column(db.Text, nullable=True)
+    sale_fee_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    sale_platform_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    sale_seller_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    sale_top_tier_incentive_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    delivery_actor_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    delivery_platform_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    inspection_actor_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    inspection_platform_minor = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     pickup = db.Column(db.String(200), nullable=True)
     dropoff = db.Column(db.String(200), nullable=True)
@@ -110,6 +120,16 @@ class Order(db.Model):
             "total_price": float(self.total_price or 0.0),
             "delivery_fee": float(self.delivery_fee or 0.0),
             "inspection_fee": float(self.inspection_fee or 0.0),
+            "commission_snapshot_version": int(self.commission_snapshot_version or 1),
+            "commission_snapshot_json": self.commission_snapshot_json or "",
+            "sale_fee_minor": int(self.sale_fee_minor or 0),
+            "sale_platform_minor": int(self.sale_platform_minor or 0),
+            "sale_seller_minor": int(self.sale_seller_minor or 0),
+            "sale_top_tier_incentive_minor": int(self.sale_top_tier_incentive_minor or 0),
+            "delivery_actor_minor": int(self.delivery_actor_minor or 0),
+            "delivery_platform_minor": int(self.delivery_platform_minor or 0),
+            "inspection_actor_minor": int(self.inspection_actor_minor or 0),
+            "inspection_platform_minor": int(self.inspection_platform_minor or 0),
             "pickup": self.pickup or "",
             "dropoff": self.dropoff or "",
             "status": self.status,

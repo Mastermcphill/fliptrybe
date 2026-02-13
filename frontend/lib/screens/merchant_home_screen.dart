@@ -338,6 +338,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     final moneyboxTier =
         _int(_moneyBox['tier']) > 0 ? _int(_moneyBox['tier']) : 1;
     final autosave = _int(_moneyBox['autosave_percent']);
+    final cs = Theme.of(context).colorScheme;
     final daysRemaining = (_moneyBox['days_remaining'] ?? '-').toString();
     final bonusPct = (_moneyBox['bonus_percent'] ??
             _moneyBox['projected_bonus_percent'] ??
@@ -399,7 +400,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: const Color(0xFFE2E8F0),
+                          backgroundColor: cs.secondaryContainer,
                           backgroundImage: profilePhoto.isNotEmpty
                               ? NetworkImage(profilePhoto)
                               : null,
@@ -412,18 +413,18 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                                 ),
                         ),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                              const Text(
                                 'Merchant Photo',
                                 style: TextStyle(fontWeight: FontWeight.w800),
                               ),
-                              SizedBox(height: 2),
+                              const SizedBox(height: 2),
                               Text(
                                 'Used on merchant profile, listing seller badge, and leaderboards.',
-                                style: TextStyle(color: Colors.black54),
+                                style: TextStyle(color: cs.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -519,11 +520,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                                   spots: spots,
                                   isCurved: true,
                                   barWidth: 3,
-                                  color: const Color(0xFF0E7490),
+                                  color: cs.primary,
                                   dotData: const FlDotData(show: false),
                                   belowBarData: BarAreaData(
                                     show: true,
-                                    color: const Color(0x220E7490),
+                                    color: cs.primary.withOpacity(0.14),
                                   ),
                                 ),
                               ],

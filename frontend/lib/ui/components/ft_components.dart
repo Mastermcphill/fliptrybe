@@ -20,8 +20,9 @@ class FTScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: FTTokens.bg,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(title),
         actions: actions,
@@ -47,11 +48,18 @@ class FTCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: color ?? FTTokens.card,
+        color: color ?? cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(FTTokens.radiusMd),
-        boxShadow: FTTokens.shadowSm,
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Padding(
         padding: padding ?? const EdgeInsets.all(FTTokens.spaceMd),
@@ -75,6 +83,7 @@ class FTSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -87,7 +96,6 @@ class FTSectionHeader extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
-                  color: FTTokens.textPrimary,
                 ),
               ),
               if ((subtitle ?? '').trim().isNotEmpty)
@@ -95,10 +103,7 @@ class FTSectionHeader extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     subtitle!,
-                    style: const TextStyle(
-                      color: FTTokens.textSecondary,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
                   ),
                 ),
             ],
@@ -124,17 +129,18 @@ class FTChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return ChoiceChip(
       label: Text(label),
       selected: selected,
       onSelected: onTap == null ? null : (_) => onTap!(),
-      selectedColor: const Color(0xFFD9F3F7),
+      selectedColor: cs.secondaryContainer,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(999),
       ),
       labelStyle: TextStyle(
         fontWeight: FontWeight.w700,
-        color: selected ? FTTokens.accent : FTTokens.textPrimary,
+        color: selected ? cs.onSecondaryContainer : cs.onSurface,
       ),
     );
   }
@@ -154,10 +160,11 @@ class FTPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: bgColor ?? const Color(0xFFE2E8F0),
+        color: bgColor ?? cs.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -165,7 +172,7 @@ class FTPill extends StatelessWidget {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          color: textColor ?? const Color(0xFF334155),
+          color: textColor ?? cs.onSecondaryContainer,
         ),
       ),
     );
@@ -186,11 +193,12 @@ class FTSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       height: height,
       width: width,
       decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0),
+        color: cs.surfaceContainerHighest,
         borderRadius: borderRadius ?? BorderRadius.circular(8),
       ),
     );
@@ -215,13 +223,14 @@ class FTEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 44, color: const Color(0xFF64748B)),
+            Icon(icon, size: 44, color: cs.onSurfaceVariant),
             const SizedBox(height: 10),
             Text(
               title,
@@ -231,7 +240,7 @@ class FTEmptyState extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               subtitle,
-              style: const TextStyle(color: FTTokens.textSecondary),
+              style: TextStyle(color: cs.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             if (actionLabel != null && onAction != null) ...[
@@ -281,13 +290,14 @@ class FTPrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return ElevatedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon ?? Icons.chevron_right),
       label: Text(label),
       style: ElevatedButton.styleFrom(
-        backgroundColor: FTTokens.accent,
-        foregroundColor: Colors.white,
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(FTTokens.radiusSm),
@@ -311,13 +321,14 @@ class FTSecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return OutlinedButton.icon(
       onPressed: onPressed,
       icon: Icon(icon ?? Icons.chevron_right),
       label: Text(label),
       style: OutlinedButton.styleFrom(
-        foregroundColor: FTTokens.textPrimary,
-        side: const BorderSide(color: Color(0xFFCBD5E1)),
+        foregroundColor: cs.onSurface,
+        side: BorderSide(color: cs.outlineVariant),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(FTTokens.radiusSm),
@@ -381,6 +392,7 @@ class FTMetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return FTCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,10 +402,10 @@ class FTMetricTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: FTTokens.textSecondary,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -401,27 +413,17 @@ class FTMetricTile extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color: color ?? FTTokens.accent,
+                  color: color ?? cs.primary,
                 ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
-              color: FTTokens.textPrimary,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
           if ((subtitle ?? '').trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               subtitle!,
-              style: const TextStyle(
-                fontSize: 11,
-                color: FTTokens.textSecondary,
-              ),
+              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
             ),
           ],
         ],

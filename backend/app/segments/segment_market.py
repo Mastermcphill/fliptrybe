@@ -450,7 +450,7 @@ def _apply_pricing_for_listing(listing: Listing, *, base_price: float, seller_ro
     platform_fee = 0.0
     final_price = base
     if seller_role == "merchant":
-        platform_fee = round(base * 0.03, 2)
+        platform_fee = round(base * 0.05, 2)
         final_price = round(base + platform_fee, 2)
 
     try:
@@ -1194,13 +1194,13 @@ def listing_price_preview():
     rule = "user_commission_5pct"
 
     if listing_type == "shortlet":
-        platform_fee = round(base_price * 0.03, 2)
+        platform_fee = round(base_price * 0.05, 2)
         final_price = round(base_price + platform_fee, 2)
-        rule = "shortlet_addon_3pct"
+        rule = "shortlet_addon_5pct"
     elif seller_role == "merchant":
-        platform_fee = round(base_price * 0.03, 2)
+        platform_fee = round(base_price * 0.05, 2)
         final_price = round(base_price + platform_fee, 2)
-        rule = "merchant_addon_3pct"
+        rule = "merchant_addon_5pct"
     else:
         platform_fee = round(base_price * 0.05, 2)
         final_price = float(base_price)

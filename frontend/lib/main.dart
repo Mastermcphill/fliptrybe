@@ -15,6 +15,8 @@ import 'services/api_service.dart';
 import 'services/api_config.dart';
 import 'services/token_storage.dart';
 import 'widgets/app_exit_guard.dart';
+import 'ui/theme/app_theme.dart';
+import 'ui/theme/theme_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,21 +42,45 @@ Future<void> main() async {
   );
 }
 
-class FlipTrybeApp extends StatelessWidget {
+class FlipTrybeApp extends StatefulWidget {
   const FlipTrybeApp({super.key});
 
   @override
+  State<FlipTrybeApp> createState() => _FlipTrybeAppState();
+}
+
+class _FlipTrybeAppState extends State<FlipTrybeApp> {
+  late final ThemeController _themeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _themeController = ThemeController();
+    _themeController.load();
+  }
+
+  @override
+  void dispose() {
+    _themeController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FlipTrybe',
-      debugShowCheckedModeBanner: false,
-      navigatorObservers: [SentryNavigatorObserver()],
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
-        useMaterial3: true,
+    return ThemeControllerProvider(
+      controller: _themeController,
+      child: AnimatedBuilder(
+        animation: _themeController,
+        builder: (context, _) => MaterialApp(
+          title: 'FlipTrybe',
+          debugShowCheckedModeBanner: false,
+          navigatorObservers: [SentryNavigatorObserver()],
+          theme: AppTheme.light(_themeController.backgroundPalette),
+          darkTheme: AppTheme.dark(_themeController.backgroundPalette),
+          themeMode: _themeController.themeMode,
+          home: const AppExitGuard(child: StartupScreen()),
+        ),
       ),
-      home: const AppExitGuard(child: StartupScreen()),
     );
   }
 }

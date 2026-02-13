@@ -20,6 +20,7 @@ from flask import Blueprint, jsonify, request
 
 from app.extensions import db
 from app.models import User, Transaction, Withdrawal, Order
+from app.utils.commission import compute_commission, RATES
 
 # =====================================================
 # CONFIG
@@ -224,11 +225,15 @@ def release_order_funds(order):
 
     seller = order.listing.seller
 
-    seller.wallet_balance += order.total_price * 0.9
+    gross = float(getattr(order, "total_price", 0.0) or 0.0)
+    fee = compute_commission(gross, float(RATES.get("listing_sale", 0.05)))
+    seller_amount = round(max(gross - fee, 0.0), 2)
+
+    seller.wallet_balance += seller_amount
 
     tx = Transaction(
         user_id=seller.id,
-        amount=order.total_price * 0.9,
+        amount=seller_amount,
         type="Credit",
         reference=f"ORD-{order.id}",
     )
@@ -241,4 +246,4 @@ def release_order_funds(order):
     return True
 
 
-print("💳 Segment 9 Loaded: Payments Core Active")
+print("Segment 9 Loaded: Payments Core Active")

@@ -667,7 +667,7 @@ def create_shortlet():
     base_price = float(nightly_price or 0.0)
     if base_price < 0:
         base_price = 0.0
-    platform_fee = round(base_price * 0.03, 2)
+    platform_fee = round(base_price * 0.05, 2)
     final_price = round(base_price + platform_fee, 2)
 
     s = Shortlet(
@@ -800,7 +800,7 @@ def book_shortlet(shortlet_id: int):
     if base_price <= 0.0:
         base_price = float(shortlet.nightly_price or 0.0)
     subtotal = float(base_price) * float(nights) + float(shortlet.cleaning_fee or 0.0)
-    platform_fee = compute_commission(subtotal, RATES.get("shortlet_booking", 0.03))
+    platform_fee = compute_commission(subtotal, RATES.get("shortlet_booking", 0.05))
     total = float(subtotal) + float(platform_fee)
     total_minor = _to_minor(total)
     payment_method = str(payload.get("payment_method") or "wallet").strip().lower()

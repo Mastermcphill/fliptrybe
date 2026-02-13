@@ -7,7 +7,12 @@ import json
 
 from app.models import Order, AuditLog, User, Listing, MerchantProfile, OrderEvent, EscrowUnlock
 from app.utils.wallets import post_txn
-from app.utils.commission import compute_commission, RATES
+from app.utils.commission import (
+    compute_order_commissions_minor,
+    money_major_to_minor,
+    money_minor_to_major,
+    snapshot_to_order_columns,
+)
 import os
 
 
@@ -55,114 +60,116 @@ def _is_top_tier(merchant_id: int | None) -> bool:
     return False
 
 
+def _snapshot_from_order(order: Order) -> dict | None:
+    raw = getattr(order, "commission_snapshot_json", None)
+    if not raw:
+        return None
+    if isinstance(raw, dict):
+        return dict(raw)
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
+
+
+def _apply_snapshot_to_order(order: Order, snapshot: dict) -> None:
+    cols = snapshot_to_order_columns(snapshot)
+    order.commission_snapshot_version = int(cols.get("commission_snapshot_version") or 1)
+    order.commission_snapshot_json = json.dumps(snapshot)
+    order.sale_fee_minor = int(cols.get("sale_fee_minor") or 0)
+    order.sale_platform_minor = int(cols.get("sale_platform_minor") or 0)
+    order.sale_seller_minor = int(cols.get("sale_seller_minor") or 0)
+    order.sale_top_tier_incentive_minor = int(cols.get("sale_top_tier_incentive_minor") or 0)
+    order.delivery_actor_minor = int(cols.get("delivery_actor_minor") or 0)
+    order.delivery_platform_minor = int(cols.get("delivery_platform_minor") or 0)
+    order.inspection_actor_minor = int(cols.get("inspection_actor_minor") or 0)
+    order.inspection_platform_minor = int(cols.get("inspection_platform_minor") or 0)
+
+
+def _ensure_commission_snapshot(order: Order, listing: Listing | None = None) -> dict:
+    existing = _snapshot_from_order(order)
+    if existing is not None:
+        return existing
+
+    sale_kind = "declutter"
+    if listing is not None:
+        listing_type = str(getattr(listing, "listing_type", "") or "").strip().lower()
+        if listing_type == "shortlet":
+            sale_kind = "shortlet"
+
+    snapshot = compute_order_commissions_minor(
+        sale_kind=sale_kind,
+        sale_charge_minor=money_major_to_minor(float(getattr(order, "amount", 0.0) or 0.0)),
+        delivery_minor=money_major_to_minor(float(getattr(order, "delivery_fee", 0.0) or 0.0)),
+        inspection_minor=money_major_to_minor(float(getattr(order, "inspection_fee", 0.0) or 0.0)),
+        is_top_tier=_is_top_tier(getattr(order, "merchant_id", None)),
+    )
+    _apply_snapshot_to_order(order, snapshot)
+    return snapshot
+
+
 def _credit_seller(order: Order, listing: Listing | None, ref: str, order_amount: float) -> None:
-    seller_role = _seller_role(order.merchant_id)
-    if order_amount <= 0:
-        return
+    snapshot = _ensure_commission_snapshot(order, listing)
+    sale = snapshot.get("sale") if isinstance(snapshot.get("sale"), dict) else {}
+    seller_minor = int(sale.get("seller_minor") or 0)
+    platform_minor = int(sale.get("platform_minor") or 0)
+    top_tier_minor = int(sale.get("top_tier_incentive_minor") or 0)
 
-    if seller_role == "merchant":
-        base_price = float(getattr(listing, "base_price", 0.0) or 0.0) if listing else 0.0
-        if base_price <= 0.0:
-            try:
-                base_price = float(order_amount) / 1.03 if order_amount > 0 else 0.0
-            except Exception:
-                base_price = float(order_amount or 0.0)
-        platform_fee = float(getattr(listing, "platform_fee", 0.0) or 0.0) if listing else 0.0
-        if platform_fee <= 0.0 and base_price > 0:
-            platform_fee = round(base_price * 0.03, 2)
-        final_price = float(getattr(listing, "final_price", 0.0) or 0.0) if listing else 0.0
-        if final_price <= 0.0:
-            final_price = round(base_price + platform_fee, 2)
-        if order_amount > 0 and abs(final_price - order_amount) > 0.05:
-            platform_fee = round(max(order_amount - base_price, 0.0), 2)
-            final_price = round(base_price + platform_fee, 2)
-
-        if base_price > 0:
-            post_txn(
-                user_id=int(order.merchant_id),
-                direction="credit",
-                amount=float(base_price),
-                kind="order_sale",
-                reference=ref,
-                note=f"Order sale (base) for order #{int(order.id)}",
-            )
-
-        if platform_fee > 0:
-            if _is_top_tier(order.merchant_id):
-                incentive = round(platform_fee * (11.0 / 13.0), 2)
-                platform_share = round(platform_fee - incentive, 2)
-                if incentive > 0:
-                    post_txn(
-                        user_id=int(order.merchant_id),
-                        direction="credit",
-                        amount=float(incentive),
-                        kind="top_tier_incentive",
-                        reference=ref,
-                        note=f"Top-tier incentive for order #{int(order.id)}",
-                    )
-                if platform_share > 0:
-                    post_txn(
-                        user_id=_platform_user_id(),
-                        direction="credit",
-                        amount=float(platform_share),
-                        kind="platform_fee",
-                        reference=ref,
-                        note=f"Platform fee for order #{int(order.id)}",
-                    )
-            else:
-                post_txn(
-                    user_id=_platform_user_id(),
-                    direction="credit",
-                    amount=float(platform_fee),
-                    kind="platform_fee",
-                    reference=ref,
-                    note=f"Platform fee for order #{int(order.id)}",
-                )
-    else:
-        commission_fee = compute_commission(order_amount, float(RATES.get("listing_sale", 0.05)))
-        net_amount = round(float(order_amount) - float(commission_fee), 2)
-        if net_amount > 0:
-            post_txn(
-                user_id=int(order.merchant_id),
-                direction="credit",
-                amount=float(net_amount),
-                kind="order_sale",
-                reference=ref,
-                note=f"Order sale (net) for order #{int(order.id)}",
-            )
-        if commission_fee > 0:
-            post_txn(
-                user_id=_platform_user_id(),
-                direction="credit",
-                amount=float(commission_fee),
-                kind="user_listing_commission",
-                reference=ref,
-                note=f"User listing commission for order #{int(order.id)}",
-            )
-
-
-def _credit_driver(order: Order, ref: str, delivery_fee: float) -> None:
-    if delivery_fee <= 0 or not order.driver_id:
-        return
-    delivery_commission = compute_commission(delivery_fee, float(RATES.get("delivery", 0.10)))
-    net_delivery = round(float(delivery_fee) - float(delivery_commission), 2)
-    if net_delivery > 0:
+    if seller_minor > 0:
         post_txn(
-            user_id=int(order.driver_id),
+            user_id=int(order.merchant_id),
             direction="credit",
-            amount=float(net_delivery),
-            kind="delivery_fee",
+            amount=money_minor_to_major(seller_minor),
+            kind="order_sale",
             reference=ref,
-            note=f"Delivery fee (net) for order #{int(order.id)}",
+            note=f"Order sale for order #{int(order.id)}",
         )
-    if delivery_commission > 0:
+    if top_tier_minor > 0:
+        post_txn(
+            user_id=int(order.merchant_id),
+            direction="credit",
+            amount=money_minor_to_major(top_tier_minor),
+            kind="top_tier_incentive",
+            reference=ref,
+            note=f"Top-tier incentive for order #{int(order.id)}",
+        )
+    if platform_minor > 0:
         post_txn(
             user_id=_platform_user_id(),
             direction="credit",
-            amount=float(delivery_commission),
+            amount=money_minor_to_major(platform_minor),
+            kind="platform_fee",
+            reference=ref,
+            note=f"Platform fee for order #{int(order.id)}",
+        )
+
+
+def _credit_driver(order: Order, ref: str, delivery_fee: float) -> None:
+    snapshot = _ensure_commission_snapshot(order)
+    delivery = snapshot.get("delivery") if isinstance(snapshot.get("delivery"), dict) else {}
+    actor_minor = int(delivery.get("actor_minor") or 0)
+    platform_minor = int(delivery.get("platform_minor") or 0)
+
+    if actor_minor > 0 and order.driver_id:
+        post_txn(
+            user_id=int(order.driver_id),
+            direction="credit",
+            amount=money_minor_to_major(actor_minor),
+            kind="delivery_fee",
+            reference=ref,
+            note=f"Delivery fee for order #{int(order.id)}",
+        )
+    if platform_minor > 0:
+        post_txn(
+            user_id=_platform_user_id(),
+            direction="credit",
+            amount=money_minor_to_major(platform_minor),
             kind="delivery_commission",
             reference=ref,
-            note=f"Delivery commission for order #{int(order.id)}",
+            note=f"Delivery platform share for order #{int(order.id)}",
         )
 
 
@@ -254,28 +261,27 @@ def _event_once(order_id: int, event: str, note: str = "") -> None:
 
 
 def _settle_inspection_fee(order: Order) -> None:
-    inspection_fee = float(getattr(order, "inspection_fee", 0.0) or 0.0)
-    if inspection_fee <= 0 or not order.inspector_id:
-        return
-    inspection_commission = compute_commission(inspection_fee, float(RATES.get("inspection", 0.10)))
-    net_inspection = round(float(inspection_fee) - float(inspection_commission), 2)
-    if net_inspection > 0:
+    snapshot = _ensure_commission_snapshot(order)
+    inspection = snapshot.get("inspection") if isinstance(snapshot.get("inspection"), dict) else {}
+    actor_minor = int(inspection.get("actor_minor") or 0)
+    platform_minor = int(inspection.get("platform_minor") or 0)
+    if actor_minor > 0 and order.inspector_id:
         post_txn(
             user_id=int(order.inspector_id),
             direction="credit",
-            amount=float(net_inspection),
+            amount=money_minor_to_major(actor_minor),
             kind="inspection_fee",
             reference=f"inspection:{int(order.id)}",
-            note=f"Inspection fee (net) for order #{int(order.id)}",
+            note=f"Inspection fee for order #{int(order.id)}",
         )
-    if inspection_commission > 0:
+    if platform_minor > 0:
         post_txn(
             user_id=_platform_user_id(),
             direction="credit",
-            amount=float(inspection_commission),
+            amount=money_minor_to_major(platform_minor),
             kind="inspection_commission",
             reference=f"inspection:{int(order.id)}",
-            note=f"Inspection commission for order #{int(order.id)}",
+            note=f"Inspection platform share for order #{int(order.id)}",
         )
 
 

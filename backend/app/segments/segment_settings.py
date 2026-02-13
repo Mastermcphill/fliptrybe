@@ -86,10 +86,35 @@ def update_settings():
             return v
         return str(v).lower() in ("1", "true", "yes", "y", "on")
 
-    s.notif_in_app = _b(payload.get("notif_in_app"), True)
-    s.notif_sms = _b(payload.get("notif_sms"), False)
-    s.notif_whatsapp = _b(payload.get("notif_whatsapp"), False)
-    s.dark_mode = _b(payload.get("dark_mode"), False)
+    def _theme_mode(raw) -> str:
+        value = str(raw or "").strip().lower()
+        if value in ("system", "light", "dark"):
+            return value
+        return "system"
+
+    def _palette(raw) -> str:
+        value = str(raw or "").strip().lower()
+        if value in ("neutral", "mint", "sand"):
+            return value
+        return "neutral"
+
+    s.notif_in_app = _b(payload.get("notif_in_app"), bool(getattr(s, "notif_in_app", True)))
+    s.notif_sms = _b(payload.get("notif_sms"), bool(getattr(s, "notif_sms", False)))
+    s.notif_whatsapp = _b(payload.get("notif_whatsapp"), bool(getattr(s, "notif_whatsapp", False)))
+    incoming_theme = payload.get("theme_mode")
+    incoming_palette = payload.get("background_palette")
+    theme_mode = _theme_mode(incoming_theme if incoming_theme is not None else getattr(s, "theme_mode", "system"))
+    palette = _palette(incoming_palette if incoming_palette is not None else getattr(s, "background_palette", "neutral"))
+    dark_mode_raw = payload.get("dark_mode")
+    if dark_mode_raw is None:
+        dark_mode = theme_mode == "dark"
+    else:
+        dark_mode = _b(dark_mode_raw, False)
+        if theme_mode == "system" and dark_mode:
+            theme_mode = "dark"
+    s.dark_mode = dark_mode
+    s.theme_mode = theme_mode
+    s.background_palette = palette
     s.updated_at = datetime.utcnow()
 
     try:

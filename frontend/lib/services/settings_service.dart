@@ -16,20 +16,28 @@ class SettingsService {
   }
 
   Future<bool> updateSettings({
-    required bool notifInApp,
-    required bool notifSms,
-    required bool notifWhatsapp,
-    required bool darkMode,
+    bool? notifInApp,
+    bool? notifSms,
+    bool? notifWhatsapp,
+    bool? darkMode,
+    String? themeMode,
+    String? backgroundPalette,
   }) async {
     try {
+      final payload = <String, dynamic>{};
+      if (notifInApp != null) payload['notif_in_app'] = notifInApp;
+      if (notifSms != null) payload['notif_sms'] = notifSms;
+      if (notifWhatsapp != null) payload['notif_whatsapp'] = notifWhatsapp;
+      if (darkMode != null) payload['dark_mode'] = darkMode;
+      if ((themeMode ?? '').trim().isNotEmpty) {
+        payload['theme_mode'] = themeMode!.trim().toLowerCase();
+      }
+      if ((backgroundPalette ?? '').trim().isNotEmpty) {
+        payload['background_palette'] = backgroundPalette!.trim().toLowerCase();
+      }
       final res = await _client.dio.post(
         ApiConfig.api('/settings'),
-        data: {
-          'notif_in_app': notifInApp,
-          'notif_sms': notifSms,
-          'notif_whatsapp': notifWhatsapp,
-          'dark_mode': darkMode,
-        },
+        data: payload,
       );
       final code = res.statusCode ?? 0;
       return code >= 200 && code < 300;
