@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../services/token_storage.dart';
 import '../constants/ng_states.dart';
 import 'pending_approval_screen.dart';
+import 'inspector_request_received_screen.dart';
 
 class RoleSignupScreen extends StatefulWidget {
   const RoleSignupScreen({super.key});
@@ -154,11 +155,12 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
 
       if (_role == "inspector") {
         if (res is Map && res["ok"] == true) {
-          _toast("Inspector request submitted");
           if (!mounted) return;
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: _role)),
+            MaterialPageRoute(
+              builder: (_) => const InspectorRequestReceivedScreen(),
+            ),
           );
           return;
         }

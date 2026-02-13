@@ -11,11 +11,38 @@ class ApiClient {
   String? _authToken;
   final Set<CancelToken> _activeCancelTokens = <CancelToken>{};
   final Random _rand = Random();
+  static const Map<String, dynamic> _notAuthenticatedResponse = <String, dynamic>{
+    'ok': false,
+    'code': 'NOT_AUTHENTICATED',
+    'message': 'Not authenticated',
+    'requires_auth': true,
+  };
 
   String _newRequestId() {
     final now = DateTime.now().millisecondsSinceEpoch;
     final nonce = _rand.nextInt(1 << 32).toRadixString(16);
     return "ft-$now-$nonce";
+  }
+
+  bool _hasAuthToken() {
+    final token = _authToken?.trim() ?? '';
+    return token.isNotEmpty;
+  }
+
+  bool _requiresAuth(Uri uri) {
+    final segments = uri.pathSegments
+        .map((s) => s.trim().toLowerCase())
+        .where((s) => s.isNotEmpty)
+        .toList(growable: false);
+    if (segments.isEmpty) return false;
+
+    final containsMe = segments.contains('me');
+    final isAdmin =
+        segments.length >= 2 && segments[0] == 'api' && segments[1] == 'admin';
+    final isRoleRequests = segments.length >= 2 &&
+        segments[0] == 'api' &&
+        segments[1] == 'role-requests';
+    return containsMe || isAdmin || isRoleRequests;
   }
 
   late final Dio dio = Dio(
@@ -38,6 +65,22 @@ class ApiClient {
   )..interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          if (_requiresAuth(options.uri) && !_hasAuthToken()) {
+            if (kDebugMode) {
+              debugPrint('[ApiClient] BLOCKED unauthenticated ${options.method} ${options.uri}');
+            }
+            return handler.resolve(
+              Response<dynamic>(
+                requestOptions: options,
+                statusCode: 401,
+                statusMessage: 'Not authenticated',
+                data: <String, dynamic>{
+                  ..._notAuthenticatedResponse,
+                  'path': options.uri.path,
+                },
+              ),
+            );
+          }
           final cancelToken = options.cancelToken ?? CancelToken();
           options.cancelToken = cancelToken;
           _activeCancelTokens.add(cancelToken);
