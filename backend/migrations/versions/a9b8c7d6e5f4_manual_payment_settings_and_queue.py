@@ -1,4 +1,5 @@
-﻿"""manual payment settings and queue support
+# -*- coding: utf-8 -*-
+"""manual payment settings and queue support
 
 Revision ID: a9b8c7d6e5f4
 Revises: ff6a7b8c9d01
