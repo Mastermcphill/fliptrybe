@@ -5,6 +5,20 @@ import 'api_client.dart';
 import 'api_config.dart';
 import 'token_storage.dart';
 
+class SessionRestoreResult {
+  const SessionRestoreResult({
+    required this.authenticated,
+    required this.usedRefresh,
+    required this.routedToLogin,
+    this.user,
+  });
+
+  final bool authenticated;
+  final bool usedRefresh;
+  final bool routedToLogin;
+  final Map<String, dynamic>? user;
+}
+
 class ApiService {
   static final ApiClient _client = ApiClient.instance;
 
@@ -14,6 +28,7 @@ class ApiService {
   static int? lastMeStatusCode;
   static DateTime? lastMeAt;
   static String? lastAuthError;
+  static DateTime? _lastSessionValidationAt;
 
   static void setToken(String? token) {
     _token = token;
@@ -24,7 +39,54 @@ class ApiService {
     }
   }
 
+  static Map<String, dynamic>? _unwrapUser(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final nested = data['user'];
+      if (nested is Map<String, dynamic>) return nested;
+      if (data['id'] != null) return data;
+      return null;
+    }
+    if (data is Map) {
+      return _unwrapUser(data.map((k, v) => MapEntry('$k', v)));
+    }
+    return null;
+  }
+
+  static Future<void> persistAuthPayload(Map<String, dynamic> data) async {
+    final t = (data['token'] ?? data['access_token'] ?? '').toString().trim();
+    if (t.isEmpty) return;
+    final refreshToken = (data['refresh_token'] ?? '').toString().trim();
+    final expiresAt = (data['expires_at'] ?? '').toString().trim();
+    final user = _unwrapUser(data);
+    final role = (user?['role'] ?? '').toString().trim();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    setToken(t);
+    await TokenStorage().saveSession(
+      accessToken: t,
+      refreshToken: refreshToken.isEmpty ? null : refreshToken,
+      userMode: role.isEmpty ? null : role,
+      lastLoginAt: nowIso,
+      tokenExpiresAt: expiresAt.isEmpty ? null : expiresAt,
+    );
+    _lastSessionValidationAt = DateTime.now();
+  }
+
   static Future<void> resetAuthSession() async {
+    final refreshToken = ((await TokenStorage().readRefreshToken()) ?? '').trim();
+    final hasAccess = (_token ?? '').trim().isNotEmpty;
+    if (hasAccess || refreshToken.isNotEmpty) {
+      try {
+        await _client.dio.post(
+          ApiConfig.api('/auth/logout'),
+          data: {
+            if (refreshToken.isNotEmpty) 'refresh_token': refreshToken,
+          },
+        );
+      } catch (_) {
+        // best effort server-side revocation; local clear still proceeds
+      }
+    }
     await TokenStorage().clear();
     setToken(null);
     _client.resetSession();
@@ -32,6 +94,7 @@ class ApiService {
     lastMeStatusCode = null;
     lastMeAt = null;
     lastAuthError = null;
+    _lastSessionValidationAt = null;
   }
 
   static Future<void> syncSentryUser(Map<String, dynamic>? user) async {
@@ -174,11 +237,7 @@ class ApiService {
 
     final data = _asMap(res.data);
 
-    final t = data['token'] ?? data['access_token'];
-    if (t is String && t.isNotEmpty) {
-      setToken(t);
-      await TokenStorage().saveToken(t);
-    }
+    await persistAuthPayload(data);
     await syncSentryUser(_asMap(data['user']));
 
     return data;
@@ -197,14 +256,126 @@ class ApiService {
 
     final data = _asMap(res.data);
 
-    final t = data['token'] ?? data['access_token'];
-    if (t is String && t.isNotEmpty) {
-      setToken(t);
-      await TokenStorage().saveToken(t);
-    }
+    await persistAuthPayload(data);
     await syncSentryUser(_asMap(data['user']));
 
     return data;
+  }
+
+  static Future<bool> refreshSession({String? refreshToken}) async {
+    final rt = (refreshToken ?? await TokenStorage().readRefreshToken() ?? '')
+        .trim();
+    if (rt.isEmpty) return false;
+    final url = ApiConfig.api('/auth/refresh');
+    try {
+      final res = await _client.dio.post(url, data: {'refresh_token': rt});
+      final code = res.statusCode ?? 0;
+      if (code < 200 || code >= 300) {
+        return false;
+      }
+      final data = _asMap(res.data);
+      await persistAuthPayload(data);
+      final meRes = await getProfileResponse();
+      if ((meRes.statusCode ?? 0) >= 200 && (meRes.statusCode ?? 0) < 300) {
+        await syncSentryUser(_unwrapUser(meRes.data));
+      }
+      return true;
+    } on DioException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<SessionRestoreResult> restoreSession({
+    Future<String?> Function()? readAccessToken,
+    Future<String?> Function()? readRefreshToken,
+    Future<Response<dynamic>> Function()? meCall,
+    Future<bool> Function(String refreshToken)? refreshCall,
+    Future<void> Function()? resetAuthSessionCall,
+  }) async {
+    final accessToken =
+        ((await (readAccessToken?.call() ?? TokenStorage().readToken())) ?? '')
+            .trim();
+    if (accessToken.isEmpty) {
+      setToken(null);
+      return const SessionRestoreResult(
+        authenticated: false,
+        usedRefresh: false,
+        routedToLogin: true,
+      );
+    }
+
+    setToken(accessToken);
+    try {
+      final meRes = await (meCall?.call() ?? getProfileResponse());
+      final status = meRes.statusCode ?? 0;
+      if (status >= 200 && status < 300) {
+        final user = _unwrapUser(meRes.data);
+        await syncSentryUser(user);
+        _lastSessionValidationAt = DateTime.now();
+        return SessionRestoreResult(
+          authenticated: user != null,
+          usedRefresh: false,
+          routedToLogin: user == null,
+          user: user,
+        );
+      }
+      if (status == 401) {
+        final rt = ((await (readRefreshToken?.call() ??
+                    TokenStorage().readRefreshToken())) ??
+                '')
+            .trim();
+        final refreshed = rt.isNotEmpty
+            ? await (refreshCall?.call(rt) ?? refreshSession(refreshToken: rt))
+            : false;
+        if (refreshed) {
+          final retry = await (meCall?.call() ?? getProfileResponse());
+          final retryStatus = retry.statusCode ?? 0;
+          if (retryStatus >= 200 && retryStatus < 300) {
+            final user = _unwrapUser(retry.data);
+            await syncSentryUser(user);
+            _lastSessionValidationAt = DateTime.now();
+            return SessionRestoreResult(
+              authenticated: user != null,
+              usedRefresh: true,
+              routedToLogin: user == null,
+              user: user,
+            );
+          }
+        }
+      }
+      await (resetAuthSessionCall?.call() ?? resetAuthSession());
+      return const SessionRestoreResult(
+        authenticated: false,
+        usedRefresh: false,
+        routedToLogin: true,
+      );
+    } catch (_) {
+      await (resetAuthSessionCall?.call() ?? resetAuthSession());
+      return const SessionRestoreResult(
+        authenticated: false,
+        usedRefresh: false,
+        routedToLogin: true,
+      );
+    }
+  }
+
+  static Future<void> revalidateSessionOnResume({
+    Duration minimumInterval = const Duration(minutes: 10),
+  }) async {
+    final t = (_token ?? '').trim();
+    if (t.isEmpty) return;
+    final now = DateTime.now();
+    if (_lastSessionValidationAt != null &&
+        now.difference(_lastSessionValidationAt!) < minimumInterval) {
+      return;
+    }
+    final result = await restoreSession();
+    if (!result.authenticated) {
+      lastAuthError = 'Session expired, please log in again.';
+    }
+    _lastSessionValidationAt = DateTime.now();
   }
 
   static Future<Map<String, dynamic>> getProfile() async {

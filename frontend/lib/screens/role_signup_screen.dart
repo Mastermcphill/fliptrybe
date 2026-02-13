@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
-import '../services/token_storage.dart';
 import '../constants/ng_states.dart';
 import 'pending_approval_screen.dart';
 
@@ -160,9 +159,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         final token = (res["token"] ?? "").toString();
         final hasToken = token.isNotEmpty;
         if (hasToken) {
-          ApiService.setToken(token);
-          ApiClient.instance.setAuthToken(token);
-          await TokenStorage().saveToken(token);
+          await ApiService.persistAuthPayload(
+              res.map((k, v) => MapEntry('$k', v)));
         }
 
         if (_responseIndicatesPending(res)) {

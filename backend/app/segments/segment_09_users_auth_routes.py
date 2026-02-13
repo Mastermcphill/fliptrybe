@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
-from app.models import User, RoleChangeRequest, EmailVerificationToken, PasswordResetToken, AuditLog
+from app.models import User, RoleChangeRequest, EmailVerificationToken, PasswordResetToken, RefreshToken, AuditLog
 from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 from app.utils.notify import queue_email
@@ -47,6 +47,88 @@ auth_bp = Blueprint("auth_bp", __name__, url_prefix="/api/auth")
 def _hash_token(value: str) -> str:
     secret = (current_app.config.get("SECRET_KEY") or os.getenv("SECRET_KEY") or "fliptrybe").encode("utf-8")
     return hmac.new(secret, value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _access_token_ttl_seconds() -> int:
+    raw = (os.getenv("ACCESS_TOKEN_TTL_SECONDS") or "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+            if parsed > 0:
+                return parsed
+        except Exception:
+            pass
+    return 60 * 60 * 24 * 7
+
+
+def _refresh_token_ttl_days() -> int:
+    raw = (os.getenv("REFRESH_TOKEN_TTL_DAYS") or "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+            if parsed > 0:
+                return parsed
+        except Exception:
+            pass
+    return 45
+
+
+def _iso_utc(dt: datetime) -> str:
+    return dt.replace(microsecond=0).isoformat() + "Z"
+
+
+def _issue_access_token(user_id: int) -> tuple[str, datetime]:
+    ttl_seconds = _access_token_ttl_seconds()
+    expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+    token = create_token(int(user_id), ttl_seconds=ttl_seconds)
+    return token, expires_at
+
+
+def _issue_refresh_token_record(*, user_id: int, device_id: str | None = None) -> tuple[RefreshToken, str]:
+    now = datetime.utcnow()
+    refresh_token = secrets.token_urlsafe(48)
+    rec = RefreshToken(
+        user_id=int(user_id),
+        token_hash=_hash_token(refresh_token),
+        created_at=now,
+        expires_at=now + timedelta(days=_refresh_token_ttl_days()),
+        revoked_at=None,
+        device_id=(device_id or "").strip() or None,
+    )
+    db.session.add(rec)
+    return rec, refresh_token
+
+
+def _revoke_refresh_token_record(rec: RefreshToken | None, *, when: datetime | None = None) -> None:
+    if not rec:
+        return
+    if getattr(rec, "revoked_at", None):
+        return
+    rec.revoked_at = when or datetime.utcnow()
+    db.session.add(rec)
+
+
+def _revoke_all_refresh_tokens_for_user(user_id: int, *, when: datetime | None = None) -> int:
+    ts = when or datetime.utcnow()
+    try:
+        q = RefreshToken.query.filter(
+            RefreshToken.user_id == int(user_id),
+            RefreshToken.revoked_at.is_(None),
+        )
+        count = q.update({"revoked_at": ts}, synchronize_session=False)
+        return int(count or 0)
+    except Exception:
+        return 0
+
+
+def _session_payload(user: User, *, access_token: str, access_expires_at: datetime, refresh_token: str) -> dict:
+    payload = {
+        "user": _user_payload_with_role_status(user),
+        "token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": _iso_utc(access_expires_at),
+    }
+    return payload
 
 
 def _verification_base_url() -> str:
@@ -245,14 +327,14 @@ def _rate_limit_response(action: str, *, limit: int, window_seconds: int, user_i
         db.session.rollback()
     return jsonify({"ok": False, "error": "RATE_LIMITED", "message": "Too many requests. Please retry later.", "retry_after": retry_after}), 429
 
-def _create_user(*, name: str, email: str, phone: str | None, password: str, role: str = "buyer") -> tuple[User | None, str | None, tuple[dict, int] | None]:
-    """Create user, return (user, token, error_response)."""
+def _create_user(*, name: str, email: str, phone: str | None, password: str, role: str = "buyer") -> tuple[User | None, tuple[dict, int] | None]:
+    """Create user, return (user, error_response)."""
     role = (role or "buyer").strip().lower()
     if role == "admin":
-        return None, None, ({"message": "Admin signup is not allowed"}, 403)
+        return None, ({"message": "Admin signup is not allowed"}, 403)
 
     if not email or not password:
-        return None, None, ({"message": "Email and password are required"}, 400)
+        return None, ({"message": "Email and password are required"}, 400)
 
     try:
         db.session.rollback()
@@ -276,7 +358,7 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
             current_app.logger.info("register_conflict route=/api/auth/register type=%s", conflict_msg)
         except Exception:
             pass
-        return None, None, ({"message": conflict_msg}, 409)
+        return None, ({"message": conflict_msg}, 409)
 
     u = User(name=(name or "").strip(), email=email)
     try:
@@ -306,23 +388,22 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
                 record_account_flag(int(existing.id), "DUP_EMAIL", signal=email, details={"email": email})
         except Exception:
             pass
-        return None, None, ({"message": _conflict_message_from_integrity(e)}, 409)
+        return None, ({"message": _conflict_message_from_integrity(e)}, 409)
     except SQLAlchemyError as e:
         db.session.rollback()
         try:
             current_app.logger.exception("create_user_db_error")
         except Exception:
             pass
-        return None, None, ({"message": "Failed to create user"}, 500)
+        return None, ({"message": "Failed to create user"}, 500)
 
-    token = create_token(u.id)
     try:
         vtoken = _issue_verification_token(u, ttl_minutes=30)
         if vtoken:
             _send_verification_email(u, vtoken)
     except Exception:
         pass
-    return u, token, None
+    return u, None
 
 
 def _create_role_request(*, user: User, requested_role: str, meta: dict | None = None) -> tuple[RoleChangeRequest | None, tuple[dict, int] | None]:
@@ -459,11 +540,24 @@ def register():
     if role == "admin":
         return jsonify({"message": "Admin signup is not allowed"}), 403
 
-    u, token, err = _create_user(name=name, email=email, phone=phone, password=password, role="buyer")
+    u, err = _create_user(name=name, email=email, phone=phone, password=password, role="buyer")
     if err:
         body, code = err
         return jsonify(body), code
-    return jsonify({"user": _user_payload_with_role_status(u), "token": token}), 201
+    try:
+        access_token, access_expires_at = _issue_access_token(int(u.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(u.id), device_id=request.headers.get("X-Device-Id"))
+        db.session.commit()
+        return jsonify(_session_payload(
+            u,
+            access_token=access_token,
+            access_expires_at=access_expires_at,
+            refresh_token=refresh_token,
+        )), 201
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("register_session_issue_failed")
+        return jsonify({"message": "Failed to issue session"}), 500
 
 
 @auth_bp.post("/login")
@@ -516,8 +610,20 @@ def login():
     if not u or not u.check_password(password):
         return jsonify({"message": "Invalid credentials"}), 401
 
-    token = create_token(u.id)
-    return jsonify({"user": _user_payload_with_role_status(u), "token": token}), 200
+    try:
+        access_token, access_expires_at = _issue_access_token(int(u.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(u.id), device_id=request.headers.get("X-Device-Id"))
+        db.session.commit()
+        return jsonify(_session_payload(
+            u,
+            access_token=access_token,
+            access_expires_at=access_expires_at,
+            refresh_token=refresh_token,
+        )), 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("login_session_issue_failed")
+        return jsonify({"message": "Failed to issue session"}), 500
 
 
 @auth_bp.get("/me")
@@ -574,6 +680,80 @@ def me():
 
     # Return user dict directly (cleanest for frontend)
     return jsonify(_user_payload_with_role_status(u)), 200
+
+
+@auth_bp.post("/refresh")
+def refresh():
+    data = request.get_json(silent=True) or {}
+    refresh_token = (data.get("refresh_token") or "").strip()
+    if not refresh_token:
+        return jsonify({"message": "refresh_token is required"}), 400
+
+    now = datetime.utcnow()
+    token_hash = _hash_token(refresh_token)
+    rec = RefreshToken.query.filter_by(token_hash=token_hash).first()
+    if not rec:
+        return jsonify({"message": "Invalid refresh token"}), 401
+    if rec.revoked_at is not None:
+        return jsonify({"message": "Refresh token revoked"}), 401
+    if rec.expires_at and rec.expires_at <= now:
+        return jsonify({"message": "Refresh token expired"}), 401
+
+    user = db.session.get(User, int(rec.user_id or 0))
+    if not user:
+        return jsonify({"message": "Invalid refresh token"}), 401
+
+    try:
+        _revoke_refresh_token_record(rec, when=now)
+        access_token, access_expires_at = _issue_access_token(int(user.id))
+        _new_rec, next_refresh_token = _issue_refresh_token_record(
+            user_id=int(user.id),
+            device_id=(data.get("device_id") or request.headers.get("X-Device-Id") or "").strip() or None,
+        )
+        db.session.commit()
+        return jsonify(_session_payload(
+            user,
+            access_token=access_token,
+            access_expires_at=access_expires_at,
+            refresh_token=next_refresh_token,
+        )), 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("refresh_token_rotation_failed")
+        return jsonify({"message": "Failed to refresh session"}), 500
+
+
+@auth_bp.post("/logout")
+def logout():
+    token = _bearer_token()
+    payload = decode_token(token) if token else None
+    sub = payload.get("sub") if isinstance(payload, dict) else None
+    try:
+        uid = int(sub) if sub is not None else None
+    except Exception:
+        uid = None
+    if not uid:
+        return jsonify({"message": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    refresh_token = (data.get("refresh_token") or "").strip()
+    now = datetime.utcnow()
+    revoked = 0
+    try:
+        if refresh_token:
+            token_hash = _hash_token(refresh_token)
+            rec = RefreshToken.query.filter_by(token_hash=token_hash, user_id=int(uid)).first()
+            if rec and rec.revoked_at is None:
+                _revoke_refresh_token_record(rec, when=now)
+                revoked += 1
+        revoked += _revoke_all_refresh_tokens_for_user(int(uid), when=now)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("logout_revoke_refresh_failed")
+        return jsonify({"message": "Failed to logout"}), 500
+
+    return jsonify({"ok": True, "revoked_refresh_tokens": int(revoked)}), 200
 
 
 @auth_bp.post("/set-role")
@@ -790,8 +970,7 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
         except Exception:
             pass
 
-        token = create_token(str(u.id))
-        return {"token": token, "user": _user_payload_with_role_status(u)}, None
+        return {"user": _user_payload_with_role_status(u)}, None
     finally:
         try:
             db.session.remove()
@@ -811,7 +990,25 @@ def register_buyer():
     payload, err = _register_common(data, role="buyer")
     if err:
         return err
-    return jsonify(payload), 201
+    user_payload = payload.get("user") if isinstance(payload, dict) else {}
+    user_id = int((user_payload or {}).get("id") or 0)
+    user = User.query.get(user_id) if user_id else None
+    if not user:
+        return jsonify({"message": "Failed to load user after signup"}), 500
+    try:
+        access_token, access_expires_at = _issue_access_token(int(user.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
+        db.session.commit()
+        return jsonify(_session_payload(
+            user,
+            access_token=access_token,
+            access_expires_at=access_expires_at,
+            refresh_token=refresh_token,
+        )), 201
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("register_buyer_session_issue_failed")
+        return jsonify({"message": "Failed to issue session"}), 500
 
 
 @auth_bp.post("/register/merchant")
@@ -993,8 +1190,22 @@ def register_merchant():
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
-    token = create_token(str(user.id))
-    return jsonify({"token": token, "user": _user_payload_with_role_status(user), "request": req.to_dict()}), 201
+    try:
+        access_token, access_expires_at = _issue_access_token(int(user.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("register_merchant_session_issue_failed")
+        return jsonify({"message": "Failed to issue session"}), 500
+    body = _session_payload(
+        user,
+        access_token=access_token,
+        access_expires_at=access_expires_at,
+        refresh_token=refresh_token,
+    )
+    body["request"] = req.to_dict()
+    return jsonify(body), 201
 
 
 @auth_bp.post("/register/driver")
@@ -1081,13 +1292,23 @@ def register_driver():
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
-    token = create_token(str(user.id))
-    return jsonify({
-        "token": token,
-        "user": _user_payload_with_role_status(user),
-        "request": req.to_dict(),
-        "message": "Driver signup submitted. Activation is admin-mediated.",
-    }), 201
+    try:
+        access_token, access_expires_at = _issue_access_token(int(user.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("register_driver_session_issue_failed")
+        return jsonify({"message": "Failed to issue session"}), 500
+    body = _session_payload(
+        user,
+        access_token=access_token,
+        access_expires_at=access_expires_at,
+        refresh_token=refresh_token,
+    )
+    body["request"] = req.to_dict()
+    body["message"] = "Driver signup submitted. Activation is admin-mediated."
+    return jsonify(body), 201
 
 
 @auth_bp.post("/register/inspector")
@@ -1170,13 +1391,23 @@ def register_inspector():
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
-    token = create_token(str(user.id))
-    return jsonify({
-        "token": token,
-        "user": _user_payload_with_role_status(user),
-        "request": req.to_dict(),
-        "message": "Inspector signup submitted. Activation is admin-mediated.",
-    }), 201
+    try:
+        access_token, access_expires_at = _issue_access_token(int(user.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("register_inspector_session_issue_failed")
+        return jsonify({"message": "Failed to issue session"}), 500
+    body = _session_payload(
+        user,
+        access_token=access_token,
+        access_expires_at=access_expires_at,
+        refresh_token=refresh_token,
+    )
+    body["request"] = req.to_dict()
+    body["message"] = "Inspector signup submitted. Activation is admin-mediated."
+    return jsonify(body), 201
 
 
 @auth_bp.get("/verify-email")
@@ -1384,6 +1615,7 @@ def password_reset():
     u.set_password(new_password)
     rec.used_at = now
     try:
+        _revoke_all_refresh_tokens_for_user(int(u.id), when=now)
         db.session.add(u)
         db.session.add(rec)
         db.session.commit()

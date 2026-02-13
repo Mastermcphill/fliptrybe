@@ -14,7 +14,6 @@ import 'shells/inspector_shell.dart';
 import 'shells/public_browse_shell.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
-import 'services/token_storage.dart';
 import 'widgets/app_exit_guard.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
@@ -75,20 +74,30 @@ class FlipTrybeApp extends StatefulWidget {
   State<FlipTrybeApp> createState() => _FlipTrybeAppState();
 }
 
-class _FlipTrybeAppState extends State<FlipTrybeApp> {
+class _FlipTrybeAppState extends State<FlipTrybeApp>
+    with WidgetsBindingObserver {
   late final ThemeController _themeController;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _themeController = ThemeController();
     _themeController.load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _themeController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ApiService.revalidateSessionOnResume();
+    }
   }
 
   @override
@@ -129,59 +138,13 @@ class _StartupScreenState extends State<StartupScreen> {
     _checkSession();
   }
 
-  bool _looksLikeUser(Map<String, dynamic> u) {
-    final id = u['id'];
-    final email = u['email'];
-    final name = u['name'];
-
-    final hasId = id is int || (id is String && id.trim().isNotEmpty);
-    final hasEmail = email is String && email.trim().isNotEmpty;
-    final hasName = name is String && name.trim().isNotEmpty;
-
-    return hasId && (hasEmail || hasName);
-  }
-
-  Map<String, dynamic>? _unwrapUser(dynamic data) {
-    if (data is Map<String, dynamic>) {
-      final maybeUser = data['user'];
-      if (maybeUser is Map<String, dynamic> && _looksLikeUser(maybeUser)) {
-        return maybeUser;
-      }
-      if (_looksLikeUser(data)) {
-        return data;
-      }
-    }
-    if (data is Map) {
-      final cast = data.map((k, v) => MapEntry('$k', v));
-      return _unwrapUser(cast);
-    }
-    return null;
-  }
-
   Future<void> _checkSession() async {
     if (_isCheckingSession || _hasCheckedSession) return;
     _isCheckingSession = true;
     try {
-      final storedToken = await TokenStorage().readToken();
-      final token = storedToken?.trim() ?? '';
-
-      if (token.isEmpty) {
-        ApiService.setToken(null);
-        return;
-      }
-
-      ApiService.setToken(token);
-      final res = await ApiService.getProfileResponse();
-
-      if (res.statusCode == 401) {
-        await TokenStorage().clear();
-        ApiService.setToken(null);
-        return;
-      }
-
-      final user = _unwrapUser(res.data);
-
-      if (user != null) {
+      final restored = await ApiService.restoreSession();
+      if (restored.authenticated && restored.user != null) {
+        final user = restored.user!;
         await ApiService.syncSentryUser(user);
         _navigateToRoleHome(
           (user['role'] ?? 'buyer').toString(),

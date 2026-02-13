@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
-import '../services/token_storage.dart';
 import 'login_screen.dart';
 import '../constants/ng_states.dart';
 import '../shells/buyer_shell.dart';
@@ -161,9 +160,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         return;
       }
 
-      ApiService.setToken(token);
-      ApiClient.instance.setAuthToken(token);
-      await TokenStorage().saveToken(token);
+      await ApiService.persistAuthPayload(res.map((k, v) => MapEntry('$k', v)));
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
