@@ -371,9 +371,13 @@ def _latest_role_request(user_id: int) -> RoleChangeRequest | None:
 
 def _user_payload_with_role_status(user: User) -> dict:
     payload = user.to_dict()
-    current_role = (payload.get("role") or "buyer").strip().lower()
+    current_role = (str(payload.get("role") or "buyer")).strip().lower()
+    if not current_role:
+        current_role = "buyer"
+    payload["role"] = current_role
     payload["role_status"] = "approved"
     payload["requested_role"] = current_role
+    payload["role_request_status"] = "none"
 
     req = _latest_role_request(int(user.id))
     if not req:
