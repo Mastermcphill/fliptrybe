@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/admin_autopilot_service.dart';
+import '../ui/admin/admin_scaffold.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/app_tokens.dart';
 import 'admin_manual_payments_screen.dart';
 
 class AdminAutopilotScreen extends StatefulWidget {
@@ -218,9 +221,9 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     final missing = missingRaw is List
         ? missingRaw.map((e) => e.toString()).toList()
         : <String>[];
-    return Card(
+    return FTCard(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppTokens.s12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -236,6 +239,7 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final paymentsHealth = Map<String, dynamic>.from(
         (_health['payments'] ?? {}) as Map? ?? <String, dynamic>{});
     final messagingHealth = Map<String, dynamic>.from(
@@ -249,14 +253,10 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
             .map((e) => '$e')
             .toList()
         : <String>[];
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Admin: Autopilot"),
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
-        ],
-      ),
-      body: _loading
+    return AdminScaffold(
+      title: 'Admin: Autopilot',
+      onRefresh: _load,
+      child: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -268,9 +268,9 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                   subtitle: Text("Last run: $_lastRun"),
                 ),
                 const SizedBox(height: 8),
-                Card(
+                FTCard(
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppTokens.s12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -305,60 +305,45 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                         if (_paymentsMode == "manual_company_account")
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(AppTokens.s12),
                             decoration: BoxDecoration(
-                              color: Colors.amber.shade50,
-                              border: Border.all(color: Colors.amber.shade300),
+                              color: scheme.tertiaryContainer,
+                              border: Border.all(color: scheme.tertiary),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
+                            child: Text(
                                 "Manual payment enabled. Paystack is bypassed and admin must mark orders as paid."),
                           ),
                         const SizedBox(height: 10),
                         const Text("Manual Payment Account Details",
                             style: TextStyle(fontWeight: FontWeight.w700)),
                         const SizedBox(height: 8),
-                        TextField(
+                        FTInput(
                           controller: _manualBankNameCtrl,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: "Bank name",
-                          ),
+                          label: "Bank name",
                         ),
                         const SizedBox(height: 8),
-                        TextField(
+                        FTInput(
                           controller: _manualAccountNumberCtrl,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: "Account number",
-                          ),
+                          label: "Account number",
                         ),
                         const SizedBox(height: 8),
-                        TextField(
+                        FTInput(
                           controller: _manualAccountNameCtrl,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: "Account name",
-                          ),
+                          label: "Account name",
                         ),
                         const SizedBox(height: 8),
-                        TextField(
+                        FTInput(
                           controller: _manualNoteCtrl,
                           minLines: 2,
                           maxLines: 4,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: "Manual payment note",
-                          ),
+                          label: "Manual payment note",
                         ),
                         const SizedBox(height: 8),
-                        TextField(
+                        FTInput(
                           controller: _manualSlaCtrl,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: "Manual payment SLA (minutes)",
-                          ),
+                          label: "Manual payment SLA (minutes)",
                         ),
                         const SizedBox(height: 8),
                         OutlinedButton.icon(

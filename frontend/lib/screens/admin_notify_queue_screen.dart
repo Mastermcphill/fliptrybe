@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/admin_notify_queue_service.dart';
+import '../ui/admin/admin_scaffold.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/app_tokens.dart';
 
 class AdminNotifyQueueScreen extends StatefulWidget {
   const AdminNotifyQueueScreen({super.key});
@@ -71,42 +74,35 @@ class _AdminNotifyQueueScreenState extends State<AdminNotifyQueueScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notify Queue'),
-        actions: [
-          IconButton(onPressed: _loading || _busy ? null : _load, icon: const Icon(Icons.refresh)),
-          TextButton(
-            onPressed: _loading || _busy
-                ? null
-                : () => _runAction(
-                      () => _svc.requeueDead(channel: _channelCtrl.text.trim()),
-                      'Dead messages requeued',
-                    ),
-            child: const Text('Requeue dead'),
-          ),
-        ],
-      ),
-      body: Column(
+    return AdminScaffold(
+      title: 'Notify Queue',
+      actions: [
+        TextButton(
+          onPressed: _loading || _busy
+              ? null
+              : () => _runAction(
+                    () => _svc.requeueDead(channel: _channelCtrl.text.trim()),
+                    'Dead messages requeued',
+                  ),
+          child: const Text('Requeue dead'),
+        ),
+      ],
+      onRefresh: _loading || _busy ? null : _load,
+      child: Column(
         children: [
-          if (_loading) const LinearProgressIndicator(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          FTCard(
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: FTInput(
                     controller: _channelCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Channel',
-                      hintText: 'email, sms, push',
-                      border: OutlineInputBorder(),
-                    ),
+                    label: 'Channel',
+                    hint: 'email, sms, push',
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _load(),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppTokens.s12),
                 DropdownButton<String>(
                   value: _status,
                   items: const [
@@ -124,70 +120,98 @@ class _AdminNotifyQueueScreenState extends State<AdminNotifyQueueScreen> {
               ],
             ),
           ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _error!,
-                  style: const TextStyle(color: Colors.red),
-                ),
+          const SizedBox(height: AppTokens.s12),
+          Expanded(
+            child: FTLoadStateLayout(
+              loading: _loading,
+              error: _error,
+              onRetry: _load,
+              empty: _items.isEmpty,
+              loadingState: ListView(
+                children: const [
+                  FTListCardSkeleton(withImage: false),
+                  SizedBox(height: AppTokens.s12),
+                  FTListCardSkeleton(withImage: false),
+                  SizedBox(height: AppTokens.s12),
+                  FTListCardSkeleton(withImage: false),
+                ],
+              ),
+              emptyState: FTEmptyState(
+                icon: Icons.notifications_none_outlined,
+                title: 'No queue items found',
+                subtitle: 'Retry after notifications are queued.',
+                actionLabel: 'Refresh',
+                onAction: _load,
+              ),
+              child: ListView.separated(
+                itemCount: _items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: AppTokens.s8),
+                itemBuilder: (_, i) {
+                  final raw = _items[i];
+                  if (raw is! Map) return const SizedBox.shrink();
+                  final row = Map<String, dynamic>.from(raw);
+                  final id = int.tryParse(_value(row['id'])) ?? 0;
+                  final status = _value(row['status']).toLowerCase();
+                  final subtitle =
+                      '${_value(row['channel'])} -> ${_value(row['to'])}\nstatus: ${_value(row['status'])}  attempts: ${_value(row['attempt_count'])}/${_value(row['max_attempts'])}\n${_value(row['last_error'])}';
+
+                  return FTCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FTTile(
+                          title: 'Queue #$id',
+                          subtitle: subtitle,
+                          trailing: FTBadge(text: status.toUpperCase()),
+                        ),
+                        const SizedBox(height: AppTokens.s8),
+                        Wrap(
+                          spacing: AppTokens.s8,
+                          children: [
+                            if (status != 'sent')
+                              FTButton(
+                                label: 'Mark sent',
+                                icon: Icons.done_all,
+                                variant: FTButtonVariant.secondary,
+                                onPressed: _busy || id <= 0
+                                    ? null
+                                    : () => _runAction(
+                                          () => _svc.markSent(id),
+                                          'Marked as sent',
+                                        ),
+                              ),
+                            if (status == 'failed' || status == 'dead')
+                              FTButton(
+                                label: 'Requeue',
+                                icon: Icons.replay,
+                                variant: FTButtonVariant.ghost,
+                                onPressed: _busy || id <= 0
+                                    ? null
+                                    : () => _runAction(
+                                          () => _svc.requeue(id),
+                                          'Requeued',
+                                        ),
+                              ),
+                            if (status != 'sent')
+                              FTButton(
+                                label: 'Retry now',
+                                icon: Icons.play_circle_outline,
+                                variant: FTButtonVariant.primary,
+                                onPressed: _busy || id <= 0
+                                    ? null
+                                    : () => _runAction(
+                                          () => _svc.retryNow(id),
+                                          'Retry queued',
+                                        ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
-          Expanded(
-            child: _items.isEmpty && !_loading
-                ? const Center(child: Text('No queue items found.'))
-                : ListView.builder(
-                    itemCount: _items.length,
-                    itemBuilder: (_, i) {
-                      final raw = _items[i];
-                      if (raw is! Map) return const SizedBox.shrink();
-                      final row = Map<String, dynamic>.from(raw);
-                      final id = int.tryParse(_value(row['id'])) ?? 0;
-                      final status = _value(row['status']).toLowerCase();
-                      final subtitle =
-                          '${_value(row['channel'])} -> ${_value(row['to'])}\nstatus: ${_value(row['status'])}  attempts: ${_value(row['attempt_count'])}/${_value(row['max_attempts'])}\n${_value(row['last_error'])}';
-
-                      return Card(
-                        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                        child: ListTile(
-                          title: Text('Queue #$id'),
-                          subtitle: Text(subtitle),
-                          isThreeLine: true,
-                          trailing: Wrap(
-                            spacing: 6,
-                            children: [
-                              if (status != 'sent')
-                                IconButton(
-                                  tooltip: 'Mark sent',
-                                  onPressed: _busy || id <= 0
-                                      ? null
-                                      : () => _runAction(() => _svc.markSent(id), 'Marked as sent'),
-                                  icon: const Icon(Icons.done_all),
-                                ),
-                              if (status == 'failed' || status == 'dead')
-                                IconButton(
-                                  tooltip: 'Requeue',
-                                  onPressed: _busy || id <= 0
-                                      ? null
-                                      : () => _runAction(() => _svc.requeue(id), 'Requeued'),
-                                  icon: const Icon(Icons.replay),
-                                ),
-                              if (status != 'sent')
-                                IconButton(
-                                  tooltip: 'Retry now',
-                                  onPressed: _busy || id <= 0
-                                      ? null
-                                      : () => _runAction(() => _svc.retryNow(id), 'Retry queued'),
-                                  icon: const Icon(Icons.play_circle_outline),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
           ),
         ],
       ),

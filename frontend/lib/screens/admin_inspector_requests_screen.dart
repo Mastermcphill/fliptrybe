@@ -1,7 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/api_config.dart';
+import '../ui/admin/admin_scaffold.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/app_tokens.dart';
 
 class AdminInspectorRequestsScreen extends StatefulWidget {
   const AdminInspectorRequestsScreen({super.key});
@@ -14,7 +17,7 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
   bool _loading = false;
   String? _error;
   List<dynamic> _items = const [];
-  String _status = "pending";
+  String _status = 'pending';
 
   @override
   void initState() {
@@ -51,15 +54,15 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
         final userId = user != null ? user['id'] : null;
         if (!mounted) return;
         final msg = userId != null ? 'Approved as user #$userId (created: $created)' : 'Approved';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        FTToast.show(context, msg);
         _load();
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Approve failed')));
+        FTToast.show(context, 'Approve failed');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Approve failed: $e')));
+      FTToast.show(context, 'Approve failed: $e');
     }
   }
 
@@ -70,11 +73,11 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
         _load();
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reject failed')));
+        FTToast.show(context, 'Reject failed');
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reject failed: $e')));
+      FTToast.show(context, 'Reject failed: $e');
     }
   }
 
@@ -93,74 +96,100 @@ class _AdminInspectorRequestsScreenState extends State<AdminInspectorRequestsScr
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inspector Requests'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
-      ),
-      body: Column(
+    return AdminScaffold(
+      title: 'Inspector Requests',
+      onRefresh: _load,
+      child: Column(
         children: [
-          if (_loading) const LinearProgressIndicator(),
-          Padding(
-            padding: const EdgeInsets.all(8),
+          FTCard(
             child: Wrap(
-              spacing: 8,
+              spacing: AppTokens.s8,
               children: [
-                _filterChip("pending", "Pending"),
-                _filterChip("approved", "Approved"),
-                _filterChip("rejected", "Rejected"),
+                _filterChip('pending', 'Pending'),
+                _filterChip('approved', 'Approved'),
+                _filterChip('rejected', 'Rejected'),
               ],
             ),
           ),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text('Load failed: $_error', style: const TextStyle(color: Colors.redAccent)),
-            ),
+          const SizedBox(height: AppTokens.s12),
           Expanded(
-            child: ListView.builder(
-              itemCount: _items.length,
-              itemBuilder: (context, i) {
-                final raw = _items[i];
-                if (raw is! Map) return const SizedBox.shrink();
-                final m = Map<String, dynamic>.from(raw);
-                final id = m['id'];
-                final name = (m['name'] ?? '').toString();
-                final email = (m['email'] ?? '').toString();
-                final phone = (m['phone'] ?? '').toString();
-                final notes = (m['notes'] ?? '').toString();
-                final status = (m['status'] ?? '').toString();
-                final decidedBy = (m['decided_by'] ?? '').toString();
-                return Card(
-                  margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: ListTile(
-                    title: Text(name.isEmpty ? email : name, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text('$email\n$phone\n$notes\nstatus: $status${decidedBy.isNotEmpty ? " • decided_by: $decidedBy" : ""}'),
-                    isThreeLine: true,
-                    trailing: Wrap(
-                      spacing: 8,
+            child: FTLoadStateLayout(
+              loading: _loading,
+              error: _error,
+              onRetry: _load,
+              empty: _items.isEmpty,
+              loadingState: ListView(
+                children: const [
+                  FTListCardSkeleton(withImage: false),
+                  SizedBox(height: AppTokens.s12),
+                  FTListCardSkeleton(withImage: false),
+                ],
+              ),
+              emptyState: FTEmptyState(
+                icon: Icons.assignment_ind_outlined,
+                title: 'No inspector requests',
+                subtitle: 'Requests with selected status will appear here.',
+                actionLabel: 'Refresh',
+                onAction: _load,
+              ),
+              child: ListView.separated(
+                itemCount: _items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: AppTokens.s8),
+                itemBuilder: (context, i) {
+                  final raw = _items[i];
+                  if (raw is! Map) return const SizedBox.shrink();
+                  final m = Map<String, dynamic>.from(raw);
+                  final id = m['id'];
+                  final name = (m['name'] ?? '').toString();
+                  final email = (m['email'] ?? '').toString();
+                  final phone = (m['phone'] ?? '').toString();
+                  final notes = (m['notes'] ?? '').toString();
+                  final status = (m['status'] ?? '').toString();
+                  final decidedBy = (m['decided_by'] ?? '').toString();
+                  return FTCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_status == "pending")
-                          IconButton(
-                            onPressed: () {
-                              final reqId = id is int ? id : int.tryParse(id?.toString() ?? '');
-                              if (reqId != null) _approve(reqId);
-                            },
-                            icon: const Icon(Icons.check_circle_outline),
+                        FTTile(
+                          title: name.isEmpty ? email : name,
+                          subtitle:
+                              '$email\n$phone\n$notes\nstatus: $status${decidedBy.isNotEmpty ? ' - decided_by: $decidedBy' : ''}',
+                          trailing: FTBadge(text: status.toUpperCase()),
+                        ),
+                        if (_status == 'pending') ...[
+                          const SizedBox(height: AppTokens.s8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FTButton(
+                                  label: 'Approve',
+                                  icon: Icons.check_circle_outline,
+                                  onPressed: () {
+                                    final reqId = id is int ? id : int.tryParse(id?.toString() ?? '');
+                                    if (reqId != null) _approve(reqId);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: AppTokens.s8),
+                              Expanded(
+                                child: FTButton(
+                                  label: 'Reject',
+                                  variant: FTButtonVariant.destructive,
+                                  icon: Icons.cancel_outlined,
+                                  onPressed: () {
+                                    final reqId = id is int ? id : int.tryParse(id?.toString() ?? '');
+                                    if (reqId != null) _reject(reqId);
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                        if (_status == "pending")
-                          IconButton(
-                            onPressed: () {
-                              final reqId = id is int ? id : int.tryParse(id?.toString() ?? '');
-                              if (reqId != null) _reject(reqId);
-                            },
-                            icon: const Icon(Icons.cancel_outlined),
-                          ),
+                        ],
                       ],
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ],

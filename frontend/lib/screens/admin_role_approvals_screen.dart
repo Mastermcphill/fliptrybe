@@ -1,6 +1,9 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import '../services/admin_role_service.dart';
+import '../ui/admin/admin_scaffold.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/app_tokens.dart';
 
 class AdminRoleApprovalsScreen extends StatefulWidget {
   const AdminRoleApprovalsScreen({super.key});
@@ -35,7 +38,7 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
     setState(() => _busy = false);
     final ok = res['ok'] == true;
     final msg = (res['message'] ?? (ok ? 'Approved' : 'Approve failed')).toString();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    FTToast.show(context, msg);
     if (ok) _reload();
   }
 
@@ -49,7 +52,7 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
     setState(() => _busy = false);
     final ok = res['ok'] == true;
     final msg = (res['message'] ?? (ok ? 'Rejected' : 'Reject failed')).toString();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    FTToast.show(context, msg);
     if (ok) _reload();
   }
 
@@ -69,37 +72,51 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Role Approvals'),
-        actions: [IconButton(onPressed: _busy ? null : _reload, icon: const Icon(Icons.refresh))],
-      ),
-      body: Column(
+    return AdminScaffold(
+      title: 'Role Approvals',
+      onRefresh: _busy ? null : _reload,
+      child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Wrap(
-              spacing: 8,
-              children: [
-                _statusChip('PENDING'),
-                _statusChip('APPROVED'),
-                _statusChip('REJECTED'),
-              ],
+          FTCard(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppTokens.s4),
+              child: Wrap(
+                spacing: AppTokens.s8,
+                children: [
+                  _statusChip('PENDING'),
+                  _statusChip('APPROVED'),
+                  _statusChip('REJECTED'),
+                ],
+              ),
             ),
           ),
+          const SizedBox(height: AppTokens.s12),
           Expanded(
             child: FutureBuilder<List<dynamic>>(
               future: _items,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return ListView(
+                    children: const [
+                      FTListCardSkeleton(withImage: false),
+                      SizedBox(height: AppTokens.s12),
+                      FTListCardSkeleton(withImage: false),
+                    ],
+                  );
                 }
                 final items = snap.data ?? const [];
                 if (items.isEmpty) {
-                  return Center(child: Text('No ${_status.toLowerCase()} approvals.'));
+                  return FTEmptyState(
+                    icon: Icons.verified_user_outlined,
+                    title: 'No ${_status.toLowerCase()} approvals',
+                    subtitle: 'Role requests will appear here as they are submitted.',
+                    actionLabel: 'Refresh',
+                    onAction: _reload,
+                  );
                 }
-                return ListView.builder(
+                return ListView.separated(
                   itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: AppTokens.s8),
                   itemBuilder: (_, i) {
                     final raw = items[i];
                     if (raw is! Map) return const SizedBox.shrink();
@@ -111,28 +128,39 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
                     final createdAt = (item['created_at'] ?? '').toString();
                     final userId = (item['user_id'] ?? '').toString();
 
-                    return Card(
-                      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                      child: ListTile(
-                        title: Text('User #$userId • $requestedRole'),
-                        subtitle: Text(
-                          'Current: $currentRole\nStatus: $status\n$createdAt${reason.isNotEmpty ? '\nReason: $reason' : ''}',
-                        ),
-                        trailing: _status != 'PENDING'
-                            ? null
-                            : Wrap(
-                                spacing: 8,
-                                children: [
-                                  OutlinedButton(
+                    return FTCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FTTile(
+                            title: 'User #$userId - $requestedRole',
+                            subtitle:
+                                'Current: $currentRole\nStatus: $status\n$createdAt${reason.isNotEmpty ? '\nReason: $reason' : ''}',
+                            trailing: FTBadge(text: status.toUpperCase()),
+                          ),
+                          if (_status == 'PENDING') ...[
+                            const SizedBox(height: AppTokens.s8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FTButton(
+                                    label: 'Reject',
+                                    variant: FTButtonVariant.destructive,
                                     onPressed: _busy ? null : () => _reject(item),
-                                    child: const Text('Reject'),
                                   ),
-                                  ElevatedButton(
+                                ),
+                                const SizedBox(width: AppTokens.s8),
+                                Expanded(
+                                  child: FTButton(
+                                    label: 'Approve',
+                                    variant: FTButtonVariant.primary,
                                     onPressed: _busy ? null : () => _approve(item),
-                                    child: const Text('Approve'),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     );
                   },

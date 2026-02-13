@@ -13,6 +13,7 @@ class FTInput extends StatelessWidget {
     this.obscureText = false,
     this.enabled = true,
     this.maxLines = 1,
+    this.minLines,
     this.onChanged,
     this.onSubmitted,
     this.prefixIcon,
@@ -30,6 +31,7 @@ class FTInput extends StatelessWidget {
   final bool obscureText;
   final bool enabled;
   final int maxLines;
+  final int? minLines;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
   final IconData? prefixIcon;
@@ -55,6 +57,7 @@ class FTInput extends StatelessWidget {
         obscureText: obscureText,
         enabled: enabled,
         maxLines: maxLines,
+        minLines: minLines,
         onChanged: onChanged,
         onSubmitted: onSubmitted,
         textInputAction: textInputAction,
@@ -68,6 +71,7 @@ class FTInput extends StatelessWidget {
       obscureText: obscureText,
       enabled: enabled,
       maxLines: maxLines,
+      minLines: minLines,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
       textInputAction: textInputAction,

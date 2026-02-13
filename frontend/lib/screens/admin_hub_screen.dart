@@ -18,6 +18,8 @@ import 'admin_global_search_screen.dart';
 import 'admin_anomalies_screen.dart';
 import 'admin_risk_events_screen.dart';
 import '../utils/auth_navigation.dart';
+import '../ui/admin/admin_scaffold.dart';
+import '../ui/components/ft_components.dart';
 
 class AdminHubScreen extends StatefulWidget {
   const AdminHubScreen({super.key});
@@ -98,34 +100,36 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
   @override
   Widget build(BuildContext context) {
     if (_checking) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (_guardError != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Admin Hub')),
-        body: Center(child: Text(_guardError!)),
+      return const AdminScaffold(
+        title: 'Admin Hub',
+        child: Center(child: CircularProgressIndicator()),
       );
     }
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Hub'),
-        actions: [
-          TextButton(
-            onPressed: _signingOut ? null : _handleSignOut,
-            child: Text(
-              _signingOut ? 'Signing out...' : 'Sign out',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+    if (_guardError != null) {
+      return AdminScaffold(
+        title: 'Admin Hub',
+        child: FTErrorState(message: _guardError!),
+      );
+    }
+    return AdminScaffold(
+      title: 'Admin Hub',
+      actions: [
+        TextButton(
+          onPressed: _signingOut ? null : _handleSignOut,
+          child: Text(
+            _signingOut ? 'Signing out...' : 'Sign out',
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-        ],
-      ),
+        ),
+      ],
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
-          const Text('Admin tools (demo-ready).',
-              style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text(
+            'Admin tools (demo-ready).',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 12),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.payments_outlined),
             title: const Text('Payout Console'),
             subtitle: const Text('Approve / reject / mark paid'),
@@ -134,14 +138,14 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminPayoutConsoleScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.receipt_long_outlined),
             title: const Text('Audit Logs'),
             subtitle: const Text('Everything the system is doing'),
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const AdminAuditScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.support_agent_outlined),
             title: const Text('Support Chat'),
             subtitle: const Text('View and reply to support threads'),
@@ -150,7 +154,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminSupportThreadsScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.auto_awesome_outlined),
             title: const Text('Autopilot'),
             subtitle: const Text('Automate payouts, queue + driver assignment'),
@@ -159,7 +163,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminAutopilotScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.account_balance_outlined),
             title: const Text('Manual Payments'),
             subtitle: const Text('Review manual payment intents and mark paid'),
@@ -168,7 +172,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminManualPaymentsScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Notify Queue'),
             subtitle:
@@ -178,7 +182,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminNotifyQueueScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.verified_user_outlined),
             title: const Text('Role Approvals'),
             subtitle: const Text('Approve merchants, drivers, inspectors'),
@@ -187,7 +191,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminRoleApprovalsScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.assignment_ind_outlined),
             title: const Text('Inspector Requests'),
             subtitle: const Text('Review inspector access requests'),
@@ -196,7 +200,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminInspectorRequestsScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.badge_outlined),
             title: const Text('KYC Review'),
             subtitle: const Text('Approve or reject KYC submissions'),
@@ -205,7 +209,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminKycReviewScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.manage_search_outlined),
             title: const Text('Global Search'),
             subtitle: const Text('Search users, orders, listings, intents'),
@@ -214,7 +218,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminGlobalSearchScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.storefront_outlined),
             title: const Text('Marketplace'),
             subtitle: const Text('Browse and search listings as admin'),
@@ -223,28 +227,28 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminMarketplaceScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.emoji_events_outlined),
             title: const Text('Leaderboards'),
             subtitle: const Text('Top merchants & drivers'),
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const LeaderboardsScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.rule_folder_outlined),
             title: const Text('Anomalies'),
             subtitle: const Text('Detect payment, escrow and webhook drifts'),
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const AdminAnomaliesScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.security_outlined),
             title: const Text('Risk Events'),
             subtitle: const Text('Review throttles, spam and abuse signals'),
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const AdminRiskEventsScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.percent_outlined),
             title: const Text('Commission Rules'),
             subtitle: const Text('Set commission by kind/state/category'),
@@ -253,7 +257,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
                 MaterialPageRoute(
                     builder: (_) => const AdminCommissionRulesScreen())),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.gavel_outlined),
             title: const Text('Dispute Resolution'),
             subtitle: const Text('Not available yet'),
@@ -267,7 +271,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
               ),
             ),
           ),
-          ListTile(
+          FTTile(
             leading: const Icon(Icons.shield_outlined),
             title: const Text('Inspector Bonds'),
             subtitle: const Text('Not available yet'),

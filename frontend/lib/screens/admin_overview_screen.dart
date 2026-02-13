@@ -8,6 +8,8 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/kyc_service.dart';
 import '../services/leaderboard_service.dart';
+import '../ui/admin/admin_metric_card.dart';
+import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
 import 'not_available_yet_screen.dart';
@@ -159,7 +161,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
 
   Widget _metricTile(String label, int value) {
     return Expanded(
-      child: FTMetricTile(
+      child: AdminMetricCard(
         label: label,
         value: '$value',
       ),
@@ -168,6 +170,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final integrations = (_autopilotStatus['integrations'] is Map)
         ? Map<String, dynamic>.from(_autopilotStatus['integrations'] as Map)
         : <String, dynamic>{};
@@ -198,11 +201,9 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
     final queueQueued = _queueCountByStatus('queued');
     final queueDead = _queueCountByStatus('dead');
 
-    return FTScaffold(
+    return AdminScaffold(
       title: 'Admin Overview',
-      actions: [
-        IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
-      ],
+      onRefresh: _reload,
       child: FTLoadStateLayout(
         loading: _loading,
         error: _error,
@@ -245,13 +246,13 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                 margin: const EdgeInsets.only(top: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
+                  color: scheme.errorContainer,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
+                  border: Border.all(color: scheme.error),
                 ),
-                child: const Text(
+                child: Text(
                   'Live mode is active with missing integration keys. Fix env configuration before processing payments/notifications.',
-                  style: TextStyle(color: Colors.red),
+                  style: TextStyle(color: scheme.onErrorContainer),
                 ),
               ),
             const SizedBox(height: 16),
@@ -295,12 +296,10 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
                                 .toString();
                         final score = (row['score'] ?? 0).toString();
                         final state = (row['state'] ?? '-').toString();
-                        return ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(name),
-                          subtitle: Text('State: $state'),
-                          trailing: Text('Score $score'),
+                        return FTTile(
+                          title: name,
+                          subtitle: 'State: $state',
+                          trailing: FTBadge(text: 'Score $score'),
                         );
                       }).toList(),
                     ),
@@ -315,28 +314,32 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
+                FTButton(
+                  label: 'Seed Nationwide',
+                  icon: Icons.public_outlined,
+                  variant: FTButtonVariant.ghost,
                   onPressed: () =>
                       _seed('/admin/demo/seed-nationwide', 'Seed Nationwide'),
-                  icon: const Icon(Icons.public_outlined),
-                  label: const Text('Seed Nationwide'),
                 ),
-                OutlinedButton.icon(
+                FTButton(
+                  label: 'Seed Leaderboards',
+                  icon: Icons.emoji_events_outlined,
+                  variant: FTButtonVariant.ghost,
                   onPressed: () => _seed(
                       '/admin/demo/seed-leaderboards', 'Seed Leaderboards'),
-                  icon: const Icon(Icons.emoji_events_outlined),
-                  label: const Text('Seed Leaderboards'),
                 ),
-                OutlinedButton.icon(
+                FTButton(
+                  label: 'Run Notify Queue Demo',
+                  icon: Icons.notifications_active_outlined,
+                  variant: FTButtonVariant.secondary,
                   onPressed: () =>
                       _seed('/admin/autopilot/tick', 'Run Notify Queue Demo'),
-                  icon: const Icon(Icons.notifications_active_outlined),
-                  label: const Text('Run Notify Queue Demo'),
                 ),
-                OutlinedButton.icon(
+                FTButton(
+                  label: 'Toggle Autopilot',
+                  icon: Icons.toggle_on_outlined,
                   onPressed: _toggleAutopilot,
-                  icon: const Icon(Icons.toggle_on_outlined),
-                  label: const Text('Toggle Autopilot'),
+                  variant: FTButtonVariant.primary,
                 ),
               ],
             ),
