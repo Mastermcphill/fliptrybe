@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../constants/ng_states.dart';
 import '../../models/marketplace_query_state.dart';
 import '../../models/saved_search_record.dart';
+import '../../services/category_service.dart';
+import '../../services/auth_gate_service.dart';
 import '../../services/marketplace_catalog_service.dart';
 import '../../services/marketplace_prefs_service.dart';
 import '../../ui/components/ft_components.dart';
@@ -41,6 +43,7 @@ class _MarketplaceSearchResultsScreenState
     extends State<MarketplaceSearchResultsScreen> {
   final _catalog = MarketplaceCatalogService();
   final _prefs = MarketplacePrefsService();
+  final _categorySvc = CategoryService();
   final _queryCtrl = TextEditingController();
 
   bool _loading = true;
@@ -54,6 +57,9 @@ class _MarketplaceSearchResultsScreenState
   int _shadowRemoteCount = 0;
   bool _supportsDeliveryFilter = false;
   bool _supportsInspectionFilter = false;
+  List<Map<String, dynamic>> _taxonomy = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _brandOptions = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _modelOptions = const <Map<String, dynamic>>[];
 
   static const _categories = [
     'All',
@@ -102,6 +108,53 @@ class _MarketplaceSearchResultsScreenState
     super.dispose();
   }
 
+  List<Map<String, dynamic>> _flattenCategories(
+      List<Map<String, dynamic>> tree) {
+    final out = <Map<String, dynamic>>[];
+    void walk(Map<String, dynamic> row) {
+      out.add(row);
+      final children = (row['children'] is List)
+          ? (row['children'] as List)
+              .whereType<Map>()
+              .map((child) => Map<String, dynamic>.from(child))
+              .toList(growable: false)
+          : const <Map<String, dynamic>>[];
+      for (final child in children) {
+        walk(child);
+      }
+    }
+
+    for (final row in tree) {
+      walk(row);
+    }
+    return out;
+  }
+
+  List<Map<String, dynamic>> _topCategories() {
+    return _taxonomy
+        .where((row) => row['parent_id'] == null)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _leafCategoriesForParent(int? parentId) {
+    if (parentId == null) return const <Map<String, dynamic>>[];
+    return _taxonomy
+        .where((row) => int.tryParse('${row['parent_id'] ?? ''}') == parentId)
+        .toList(growable: false);
+  }
+
+  Future<void> _reloadTaxonomyFilters() async {
+    final data = await _categorySvc.filters(
+      categoryId: _queryState.categoryId ?? _queryState.parentCategoryId,
+      brandId: _queryState.brandId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _brandOptions = data['brands'] ?? const <Map<String, dynamic>>[];
+      _modelOptions = data['models'] ?? const <Map<String, dynamic>>[];
+    });
+  }
+
   Future<void> _boot() async {
     setState(() {
       _loading = true;
@@ -112,13 +165,18 @@ class _MarketplaceSearchResultsScreenState
         _catalog.listAll(),
         _prefs.loadFavorites(),
         _catalog.searchV2Mode(),
+        _categorySvc.categoriesTree(),
       ]);
       if (!mounted) return;
       _all = values[0] as List<Map<String, dynamic>>;
       _favorites = values[1] as Set<int>;
       _searchMode = (values[2] as String).toLowerCase();
+      _taxonomy = _flattenCategories(
+        (values[3] as List<Map<String, dynamic>>),
+      );
       _apply();
       setState(() => _loading = false);
+      _reloadTaxonomyFilters();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -133,6 +191,10 @@ class _MarketplaceSearchResultsScreenState
       _all,
       query: _queryCtrl.text,
       category: _queryState.category,
+      categoryId: _queryState.categoryId,
+      parentCategoryId: _queryState.parentCategoryId,
+      brandId: _queryState.brandId,
+      modelId: _queryState.modelId,
       state: _queryState.state,
       minPrice: _queryState.minPrice,
       maxPrice: _queryState.maxPrice,
@@ -152,14 +214,20 @@ class _MarketplaceSearchResultsScreenState
       final remoteResult = await _catalog.searchRemoteDetailed(
         query: _queryCtrl.text.trim(),
         category: _queryState.category,
+        categoryId: _queryState.categoryId,
+        parentCategoryId: _queryState.parentCategoryId,
+        brandId: _queryState.brandId,
+        modelId: _queryState.modelId,
         state: _queryState.state,
         minPrice: _queryState.minPrice,
         maxPrice: _queryState.maxPrice,
         condition: firstCondition,
-        deliveryAvailable:
-            _queryState.deliveryAvailable ? _queryState.deliveryAvailable : null,
-        inspectionRequired:
-            _queryState.inspectionRequired ? _queryState.inspectionRequired : null,
+        deliveryAvailable: _queryState.deliveryAvailable
+            ? _queryState.deliveryAvailable
+            : null,
+        inspectionRequired: _queryState.inspectionRequired
+            ? _queryState.inspectionRequired
+            : null,
         sort: _queryState.sort,
         limit: 60,
       );
@@ -189,7 +257,7 @@ class _MarketplaceSearchResultsScreenState
     }
   }
 
-  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+  Future<void> _toggleFavoriteAuthorized(Map<String, dynamic> item) async {
     final id = item['id'] is int
         ? item['id'] as int
         : int.tryParse('${item['id']}') ?? -1;
@@ -202,6 +270,14 @@ class _MarketplaceSearchResultsScreenState
     }
     setState(() => _favorites = next);
     await _prefs.saveFavorites(next);
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+    await requireAuthForAction(
+      context,
+      action: 'save listings to your watchlist',
+      onAuthorized: () => _toggleFavoriteAuthorized(item),
+    );
   }
 
   Future<void> _saveCurrentSearch() async {
@@ -229,10 +305,37 @@ class _MarketplaceSearchResultsScreenState
     final maxCtrl = TextEditingController(
         text: _queryState.maxPrice?.toStringAsFixed(0) ?? '');
     String draftCategory = _queryState.category;
+    int? draftParentCategoryId = _queryState.parentCategoryId;
+    int? draftCategoryId = _queryState.categoryId;
+    int? draftBrandId = _queryState.brandId;
+    int? draftModelId = _queryState.modelId;
     String draftState = _queryState.state;
     final draftConditions = <String>{..._queryState.conditions};
     bool draftDelivery = _queryState.deliveryAvailable;
     bool draftInspection = _queryState.inspectionRequired;
+    var draftBrands = List<Map<String, dynamic>>.from(_brandOptions);
+    var draftModels = List<Map<String, dynamic>>.from(_modelOptions);
+
+    Future<void> loadDraftFilters(StateSetter setModal) async {
+      final data = await _categorySvc.filters(
+        categoryId: draftCategoryId ?? draftParentCategoryId,
+        brandId: draftBrandId,
+      );
+      draftBrands = data['brands'] ?? const <Map<String, dynamic>>[];
+      draftModels = data['models'] ?? const <Map<String, dynamic>>[];
+      setModal(() {
+        if (draftBrandId != null &&
+            !draftBrands.any(
+                (row) => int.tryParse('${row['id'] ?? ''}') == draftBrandId)) {
+          draftBrandId = null;
+        }
+        if (draftModelId != null &&
+            !draftModels.any(
+                (row) => int.tryParse('${row['id'] ?? ''}') == draftModelId)) {
+          draftModelId = null;
+        }
+      });
+    }
 
     await showModalBottomSheet<void>(
       context: context,
@@ -258,17 +361,112 @@ class _MarketplaceSearchResultsScreenState
                     const Text('Category',
                         style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _categories
-                          .map((c) => FTChip(
-                                label: c,
-                                selected: draftCategory == c,
-                                onTap: () => setModal(() => draftCategory = c),
-                              ))
-                          .toList(),
-                    ),
+                    if (_topCategories().isNotEmpty) ...[
+                      DropdownButtonFormField<int>(
+                        initialValue: draftParentCategoryId,
+                        items: _topCategories()
+                            .map(
+                              (row) => DropdownMenuItem<int>(
+                                value: int.tryParse('${row['id']}'),
+                                child: Text((row['name'] ?? '').toString()),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) async {
+                          setModal(() {
+                            draftParentCategoryId = value;
+                            draftCategoryId = null;
+                            draftBrandId = null;
+                            draftModelId = null;
+                          });
+                          await loadDraftFilters(setModal);
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Category group',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        initialValue: draftCategoryId,
+                        items: _leafCategoriesForParent(draftParentCategoryId)
+                            .map(
+                              (row) => DropdownMenuItem<int>(
+                                value: int.tryParse('${row['id']}'),
+                                child: Text((row['name'] ?? '').toString()),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) async {
+                          setModal(() {
+                            draftCategoryId = value;
+                            final row =
+                                _leafCategoriesForParent(draftParentCategoryId)
+                                    .firstWhere(
+                              (entry) =>
+                                  int.tryParse('${entry['id']}') == value,
+                              orElse: () => const <String, dynamic>{},
+                            );
+                            draftCategory =
+                                (row['name'] ?? draftCategory).toString();
+                            draftBrandId = null;
+                            draftModelId = null;
+                          });
+                          await loadDraftFilters(setModal);
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Category',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        initialValue: draftBrandId,
+                        items: draftBrands
+                            .map(
+                              (row) => DropdownMenuItem<int>(
+                                value: int.tryParse('${row['id']}'),
+                                child: Text((row['name'] ?? '').toString()),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) async {
+                          setModal(() {
+                            draftBrandId = value;
+                            draftModelId = null;
+                          });
+                          await loadDraftFilters(setModal);
+                        },
+                        decoration: const InputDecoration(
+                            labelText: 'Brand (optional)'),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        initialValue: draftModelId,
+                        items: draftModels
+                            .map(
+                              (row) => DropdownMenuItem<int>(
+                                value: int.tryParse('${row['id']}'),
+                                child: Text((row['name'] ?? '').toString()),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (value) =>
+                            setModal(() => draftModelId = value),
+                        decoration: const InputDecoration(
+                            labelText: 'Model (optional)'),
+                      ),
+                    ] else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _categories
+                            .map((c) => FTChip(
+                                  label: c,
+                                  selected: draftCategory == c,
+                                  onTap: () =>
+                                      setModal(() => draftCategory = c),
+                                ))
+                            .toList(),
+                      ),
                     const SizedBox(height: 14),
                     const Text('State',
                         style: TextStyle(fontWeight: FontWeight.w700)),
@@ -290,7 +488,7 @@ class _MarketplaceSearchResultsScreenState
                             controller: minCtrl,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                                labelText: 'Min price (₦)'),
+                                labelText: 'Min price (\u20A6)'),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -299,7 +497,7 @@ class _MarketplaceSearchResultsScreenState
                             controller: maxCtrl,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(
-                                labelText: 'Max price (₦)'),
+                                labelText: 'Max price (\u20A6)'),
                           ),
                         ),
                       ],
@@ -376,6 +574,10 @@ class _MarketplaceSearchResultsScreenState
                             onPressed: () {
                               setModal(() {
                                 draftCategory = 'All';
+                                draftParentCategoryId = null;
+                                draftCategoryId = null;
+                                draftBrandId = null;
+                                draftModelId = null;
                                 draftState = allNigeriaLabel;
                                 draftConditions.clear();
                                 draftDelivery = false;
@@ -395,6 +597,10 @@ class _MarketplaceSearchResultsScreenState
                               setState(() {
                                 _queryState = _queryState.copyWith(
                                   category: draftCategory,
+                                  parentCategoryId: draftParentCategoryId,
+                                  categoryId: draftCategoryId,
+                                  brandId: draftBrandId,
+                                  modelId: draftModelId,
                                   state: draftState,
                                   conditions: draftConditions.toList(),
                                   minPrice:
@@ -430,7 +636,38 @@ class _MarketplaceSearchResultsScreenState
           selected: true,
           onTap: () {
             setState(() {
-              _queryState = _queryState.copyWith(category: 'All');
+              _queryState = _queryState.copyWith(
+                category: 'All',
+                clearCategoryId: true,
+                clearParentCategoryId: true,
+                clearBrandId: true,
+                clearModelId: true,
+              );
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.brandId != null) {
+      chips.add(FTChip(
+          label: 'Brand #${_queryState.brandId}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(
+                clearBrandId: true,
+                clearModelId: true,
+              );
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.modelId != null) {
+      chips.add(FTChip(
+          label: 'Model #${_queryState.modelId}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(clearModelId: true);
               _apply();
             });
           }));
@@ -449,7 +686,7 @@ class _MarketplaceSearchResultsScreenState
     if (_queryState.minPrice != null || _queryState.maxPrice != null) {
       chips.add(FTChip(
           label:
-              '${formatNaira(_queryState.minPrice ?? 0, decimals: 0)} - ${_queryState.maxPrice == null ? "₦∞" : formatNaira(_queryState.maxPrice!, decimals: 0)}',
+              '${formatNaira(_queryState.minPrice ?? 0, decimals: 0)} - ${_queryState.maxPrice == null ? "No max" : formatNaira(_queryState.maxPrice!, decimals: 0)}',
           selected: true,
           onTap: () {
             setState(() {
@@ -618,7 +855,8 @@ class _MarketplaceSearchResultsScreenState
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
                                 'Search V2 shadow active (remote hits: $_shadowRemoteCount)',
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
                               ),
                             ),
                         ],

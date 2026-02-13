@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import unittest
 
@@ -41,6 +42,7 @@ class DiscoveryJsonContractTestCase(unittest.TestCase):
                         description="Contract check listing payload.",
                         category="declutter",
                         price=25000.0,
+                        date_posted=datetime.utcnow(),
                         state="Lagos",
                         city="Ikeja",
                         locality="Computer Village",

@@ -275,6 +275,10 @@ class MarketplaceCatalogService {
   Future<List<Map<String, dynamic>>> searchRemote({
     String query = '',
     String category = '',
+    int? categoryId,
+    int? parentCategoryId,
+    int? brandId,
+    int? modelId,
     String state = '',
     double? minPrice,
     double? maxPrice,
@@ -290,6 +294,10 @@ class MarketplaceCatalogService {
     final result = await searchRemoteDetailed(
       query: query,
       category: category,
+      categoryId: categoryId,
+      parentCategoryId: parentCategoryId,
+      brandId: brandId,
+      modelId: modelId,
       state: state,
       minPrice: minPrice,
       maxPrice: maxPrice,
@@ -308,6 +316,10 @@ class MarketplaceCatalogService {
   Future<MarketplaceRemoteSearchResult> searchRemoteDetailed({
     String query = '',
     String category = '',
+    int? categoryId,
+    int? parentCategoryId,
+    int? brandId,
+    int? modelId,
     String state = '',
     double? minPrice,
     double? maxPrice,
@@ -328,6 +340,18 @@ class MarketplaceCatalogService {
     };
     if (category.trim().isNotEmpty && category.trim().toLowerCase() != 'all') {
       qp['category'] = category.trim();
+    }
+    if (categoryId != null && categoryId > 0) {
+      qp['category_id'] = '$categoryId';
+    }
+    if (parentCategoryId != null && parentCategoryId > 0) {
+      qp['parent_category_id'] = '$parentCategoryId';
+    }
+    if (brandId != null && brandId > 0) {
+      qp['brand_id'] = '$brandId';
+    }
+    if (modelId != null && modelId > 0) {
+      qp['model_id'] = '$modelId';
     }
     if (state.trim().isNotEmpty &&
         state.trim().toLowerCase() != 'all nigeria') {
@@ -431,6 +455,10 @@ class MarketplaceCatalogService {
     List<Map<String, dynamic>> source, {
     String query = '',
     String category = 'All',
+    int? categoryId,
+    int? parentCategoryId,
+    int? brandId,
+    int? modelId,
     String state = 'All Nigeria',
     double? minPrice,
     double? maxPrice,
@@ -445,12 +473,27 @@ class MarketplaceCatalogService {
       final description = (item['description'] ?? '').toString().toLowerCase();
       final condition = (item['condition'] ?? '').toString().toLowerCase();
       final itemCategory = (item['category'] ?? '').toString();
+      final itemCategoryId = item['category_id'] is int
+          ? item['category_id'] as int
+          : int.tryParse('${item['category_id'] ?? ''}');
+      final itemBrandId = item['brand_id'] is int
+          ? item['brand_id'] as int
+          : int.tryParse('${item['brand_id'] ?? ''}');
+      final itemModelId = item['model_id'] is int
+          ? item['model_id'] as int
+          : int.tryParse('${item['model_id'] ?? ''}');
       final itemState = (item['state'] ?? '').toString();
       final price = _asNum(item['price']);
 
       final matchesQuery =
           q.isEmpty || title.contains(q) || description.contains(q);
       final matchesCategory = category == 'All' || category == itemCategory;
+      final matchesCategoryId = categoryId == null || itemCategoryId == categoryId;
+      final matchesParentCategory = parentCategoryId == null ||
+          itemCategoryId == parentCategoryId ||
+          itemCategory.toLowerCase().contains(category.toLowerCase());
+      final matchesBrand = brandId == null || itemBrandId == brandId;
+      final matchesModel = modelId == null || itemModelId == modelId;
       final matchesState = state == 'All Nigeria' || state == itemState;
       final matchesMin = minPrice == null || price >= minPrice;
       final matchesMax = maxPrice == null || price <= maxPrice;
@@ -459,6 +502,10 @@ class MarketplaceCatalogService {
 
       return matchesQuery &&
           matchesCategory &&
+          matchesCategoryId &&
+          matchesParentCategory &&
+          matchesBrand &&
+          matchesModel &&
           matchesState &&
           matchesMin &&
           matchesMax &&
@@ -499,6 +546,9 @@ class MarketplaceCatalogService {
       'price': _asNum(raw['price']),
       'condition': (raw['condition'] ?? 'Used').toString(),
       'category': (raw['category'] ?? 'All').toString(),
+      'category_id': int.tryParse('${raw['category_id'] ?? ''}'),
+      'brand_id': int.tryParse('${raw['brand_id'] ?? ''}'),
+      'model_id': int.tryParse('${raw['model_id'] ?? ''}'),
       'state': (raw['state'] ?? '').toString(),
       'city': (raw['city'] ?? '').toString(),
       'locality': (raw['locality'] ?? '').toString(),

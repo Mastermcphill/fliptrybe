@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import and_, or_, text
 
 from app.extensions import db
-from app.models import Listing
+from app.models import Listing, Category
 from app.services.discovery_service import ranking_for_listing
 
 
@@ -41,6 +41,9 @@ def _serialize_listing(row: Listing, *, ranking_score: int = 0, ranking_reason: 
         "description": (row.description or ""),
         "price": float(getattr(row, "price", 0.0) or 0.0),
         "category": (getattr(row, "category", "") or ""),
+        "category_id": int(getattr(row, "category_id", 0)) if getattr(row, "category_id", None) is not None else None,
+        "brand_id": int(getattr(row, "brand_id", 0)) if getattr(row, "brand_id", None) is not None else None,
+        "model_id": int(getattr(row, "model_id", 0)) if getattr(row, "model_id", None) is not None else None,
         "state": (getattr(row, "state", "") or ""),
         "city": (getattr(row, "city", "") or ""),
         "condition": (getattr(row, "condition", "") or ""),
@@ -61,6 +64,10 @@ def search_listings_v2(
     *,
     q: str = "",
     category: str = "",
+    category_id: int | None = None,
+    parent_category_id: int | None = None,
+    brand_id: int | None = None,
+    model_id: int | None = None,
     state: str = "",
     min_price: float | None = None,
     max_price: float | None = None,
@@ -83,6 +90,34 @@ def search_listings_v2(
 
     if category:
         query = query.filter(Listing.category.ilike(category))
+    if category_id is not None and hasattr(Listing, "category_id"):
+        query = query.filter(Listing.category_id == int(category_id))
+    elif parent_category_id is not None and hasattr(Listing, "category_id"):
+        rows = Category.query.with_entities(Category.id, Category.parent_id).all()
+        by_parent: dict[int, list[int]] = {}
+        for cid, pid in rows:
+            if cid is None:
+                continue
+            key = int(pid) if pid is not None else 0
+            by_parent.setdefault(key, []).append(int(cid))
+        stack = [int(parent_category_id)]
+        seen: set[int] = set()
+        descendant_ids: list[int] = []
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            descendant_ids.append(current)
+            for child in by_parent.get(current, []):
+                if child not in seen:
+                    stack.append(child)
+        if descendant_ids:
+            query = query.filter(Listing.category_id.in_(descendant_ids))
+    if brand_id is not None and hasattr(Listing, "brand_id"):
+        query = query.filter(Listing.brand_id == int(brand_id))
+    if model_id is not None and hasattr(Listing, "model_id"):
+        query = query.filter(Listing.model_id == int(model_id))
     if state:
         query = query.filter(Listing.state.ilike(state))
     if condition and hasattr(Listing, "condition"):

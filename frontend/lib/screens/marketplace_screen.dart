@@ -4,6 +4,7 @@ import '../constants/ng_cities.dart';
 import '../services/marketplace_catalog_service.dart';
 import '../services/city_preference_service.dart';
 import '../services/marketplace_prefs_service.dart';
+import '../services/auth_gate_service.dart';
 import '../ui/components/ft_components.dart';
 import '../ui/theme/ft_tokens.dart';
 import '../widgets/listing/listing_card.dart';
@@ -84,7 +85,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
   }
 
-  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+  Future<void> _toggleFavoriteAuthorized(Map<String, dynamic> item) async {
     final id = item['id'] is int
         ? item['id'] as int
         : int.tryParse('${item['id']}') ?? -1;
@@ -97,6 +98,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     }
     setState(() => _favorites = next);
     await _prefs.saveFavorites(next);
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+    await requireAuthForAction(
+      context,
+      action: 'save listings to your watchlist',
+      onAuthorized: () => _toggleFavoriteAuthorized(item),
+    );
   }
 
   Future<void> _pickCity() async {
@@ -278,8 +287,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         ),
       ],
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const CreateListingScreen()),
+        onPressed: () => requireAuthForAction(
+          context,
+          action: 'create a listing',
+          onAuthorized: () async {
+            if (!context.mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateListingScreen()),
+            );
+          },
         ),
         icon: const Icon(Icons.add),
         label: const Text('Sell Item'),

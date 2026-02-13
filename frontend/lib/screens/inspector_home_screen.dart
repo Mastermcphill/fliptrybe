@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/inspector_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
+import '../utils/formatters.dart';
 import 'growth/growth_analytics_screen.dart';
 import 'inspector_bookings_screen.dart';
 import 'moneybox_dashboard_screen.dart';
@@ -55,10 +56,7 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
     }
   }
 
-  String _money(dynamic value) {
-    final parsed = double.tryParse((value ?? 0).toString()) ?? 0;
-    return parsed.toStringAsFixed(2);
-  }
+  String _money(dynamic value) => formatNaira(value);
 
   @override
   Widget build(BuildContext context) {
@@ -102,9 +100,9 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                             style: TextStyle(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 8),
                         Text(
-                            'Available Balance: ₦${_money(_wallet?['balance'])}'),
+                            'Available Balance: ${_money(_wallet?['balance'])}'),
                         Text(
-                            'MoneyBox Locked: ₦${_money(_moneybox['principal_balance'])}'),
+                            'MoneyBox Locked: ${_money(_moneybox['principal_balance'])}'),
                         Text('Pending Bookings: $pending'),
                         Text('Completed Inspections: $completed'),
                         Text('Rating Snapshot: $avgRating'),
@@ -197,14 +195,10 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () {
-                    if (widget.onSelectTab != null) {
-                      widget.onSelectTab!(4);
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const SupportChatScreen()),
-                      );
-                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const SupportChatScreen()),
+                    );
                   },
                   icon: const Icon(Icons.support_agent_outlined),
                   label: const Text('Chat Admin'),

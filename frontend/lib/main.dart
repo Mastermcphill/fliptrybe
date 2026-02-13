@@ -10,6 +10,7 @@ import 'shells/buyer_shell.dart';
 import 'shells/merchant_shell.dart';
 import 'shells/driver_shell.dart';
 import 'shells/inspector_shell.dart';
+import 'shells/public_browse_shell.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
 import 'services/token_storage.dart';
@@ -201,6 +202,20 @@ class _StartupScreenState extends State<StartupScreen> {
       onSignup: () {
         Navigator.of(context).push(
           MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
+        );
+      },
+      onBrowseMarketplace: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const PublicBrowseShell(initialIndex: 1),
+          ),
+        );
+      },
+      onBrowseShortlets: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const PublicBrowseShell(initialIndex: 2),
+          ),
         );
       },
     );

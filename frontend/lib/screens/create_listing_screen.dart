@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/ng_states.dart';
 import '../services/api_service.dart';
+import '../services/auth_gate_service.dart';
+import '../services/category_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
 import '../services/marketplace_catalog_service.dart';
@@ -27,6 +29,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _listingService = ListingService();
   final _feedService = FeedService();
   final _catalog = MarketplaceCatalogService();
+  final _categorySvc = CategoryService();
 
   final _titleCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -44,12 +47,19 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   bool _loadingSuggestions = false;
 
   String _category = 'General';
+  int? _parentCategoryId;
+  int? _categoryId;
+  int? _brandId;
+  int? _modelId;
   String _condition = 'Used - Good';
   String _state = 'Lagos';
 
   List<String> _states = const [];
   Map<String, List<String>> _citiesByState = const {};
   Map<String, List<String>> _majorCities = const {};
+  List<Map<String, dynamic>> _taxonomy = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _brandOptions = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _modelOptions = const <Map<String, dynamic>>[];
 
   File? _selectedImage;
   String? _selectedImagePath;
@@ -59,9 +69,22 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final granted = await requireAuthForAction(
+        context,
+        action: 'create a listing',
+        onAuthorized: () async {},
+      );
+      if (!granted && mounted) {
+        Navigator.of(context).maybePop();
+      }
+    });
     _attachDraftListeners();
     _titleCtrl.addListener(_onTitleChanged);
-    _loadDraft().then((_) => _loadLocations());
+    _loadDraft().then((_) async {
+      await _loadLocations();
+      await _loadTaxonomy();
+    });
   }
 
   @override
@@ -123,6 +146,10 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       _localityCtrl.text = (draft['locality'] ?? '').toString();
       _lgaCtrl.text = (draft['lga'] ?? '').toString();
       _category = (draft['category'] ?? _category).toString();
+      _parentCategoryId = int.tryParse((draft['parent_category_id'] ?? '').toString());
+      _categoryId = int.tryParse((draft['category_id'] ?? '').toString());
+      _brandId = int.tryParse((draft['brand_id'] ?? '').toString());
+      _modelId = int.tryParse((draft['model_id'] ?? '').toString());
       _condition = (draft['condition'] ?? _condition).toString();
       _state = (draft['state'] ?? _state).toString();
       _inspectionEnabled = draft['inspection_enabled'] == true;
@@ -151,6 +178,10 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       'locality': _localityCtrl.text.trim(),
       'lga': _lgaCtrl.text.trim(),
       'category': _category,
+      'parent_category_id': _parentCategoryId,
+      'category_id': _categoryId,
+      'brand_id': _brandId,
+      'model_id': _modelId,
       'condition': _condition,
       'state': _state,
       'inspection_enabled': _inspectionEnabled,
@@ -208,6 +239,71 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _flattenCategories(
+      List<Map<String, dynamic>> tree) {
+    final out = <Map<String, dynamic>>[];
+    void walk(Map<String, dynamic> row) {
+      out.add(row);
+      final children = (row['children'] is List)
+          ? (row['children'] as List)
+              .whereType<Map>()
+              .map((child) => Map<String, dynamic>.from(child))
+              .toList(growable: false)
+          : const <Map<String, dynamic>>[];
+      for (final child in children) {
+        walk(child);
+      }
+    }
+
+    for (final row in tree) {
+      walk(row);
+    }
+    return out;
+  }
+
+  List<Map<String, dynamic>> _topCategories() {
+    return _taxonomy
+        .where((row) => row['parent_id'] == null)
+        .toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _leafCategoriesForParent(int? parentId) {
+    if (parentId == null) return const <Map<String, dynamic>>[];
+    return _taxonomy
+        .where((row) =>
+            int.tryParse('${row['parent_id'] ?? ''}') == int.parse('$parentId'))
+        .toList(growable: false);
+  }
+
+  Future<void> _loadTaxonomy() async {
+    final tree = await _categorySvc.categoriesTree();
+    if (!mounted) return;
+    final flat = _flattenCategories(tree);
+    setState(() => _taxonomy = flat);
+    await _loadBrandModelOptions();
+  }
+
+  Future<void> _loadBrandModelOptions() async {
+    final selectedCategory = _categoryId ?? _parentCategoryId;
+    final data = await _categorySvc.filters(
+      categoryId: selectedCategory,
+      brandId: _brandId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _brandOptions = data['brands'] ?? const <Map<String, dynamic>>[];
+      _modelOptions = data['models'] ?? const <Map<String, dynamic>>[];
+      if (_brandId != null &&
+          !_brandOptions.any((row) => int.tryParse('${row['id']}') == _brandId)) {
+        _brandId = null;
+      }
+      if (_modelId != null &&
+          !_modelOptions.any((row) => int.tryParse('${row['id']}') == _modelId)) {
+        _modelId = null;
+      }
+    });
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final source = await showModalBottomSheet<ImageSource>(
@@ -250,7 +346,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   bool _validateCurrentStep() {
     switch (_step) {
       case 0:
-        if (_category.trim().isEmpty) {
+        if (_categoryId == null && _category.trim().isEmpty) {
           _showSnack('Select a category.');
           setState(() => _showValidation = true);
           return false;
@@ -289,7 +385,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   bool _isStepComplete(int index) {
     switch (index) {
       case 0:
-        return _category.trim().isNotEmpty;
+        return _categoryId != null || _category.trim().isNotEmpty;
       case 1:
         return _titleCtrl.text.trim().isNotEmpty &&
             (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0;
@@ -338,6 +434,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         if (_lgaCtrl.text.trim().isNotEmpty) 'LGA: ${_lgaCtrl.text.trim()}',
       ].where((line) => line.trim().isNotEmpty).join('\n'),
       price: price,
+      category: _category,
+      categoryId: _categoryId,
+      brandId: _brandId,
+      modelId: _modelId,
+      state: _state,
+      city: _cityCtrl.text.trim(),
+      locality: _localityCtrl.text.trim(),
       imagePath: _selectedImage!.path,
     );
 
@@ -401,6 +504,10 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       _selectedImage = null;
                       _selectedImagePath = null;
                       _category = 'General';
+                      _parentCategoryId = null;
+                      _categoryId = null;
+                      _brandId = null;
+                      _modelId = null;
                       _condition = 'Used - Good';
                       _inspectionEnabled = true;
                       _deliveryEnabled = true;
@@ -468,31 +575,133 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                DropdownButtonFormField<String>(
-                  value: _category,
-                  items: const [
-                    'General',
-                    'Electronics',
-                    'Phones',
-                    'Furniture',
-                    'Fashion',
-                    'Home',
-                    'Sports',
-                    'Shortlet',
-                  ]
-                      .map((item) =>
-                          DropdownMenuItem(value: item, child: Text(item)))
-                      .toList(),
-                  onChanged: (value) async {
-                    if (value == null) return;
-                    setState(() => _category = value);
-                    await _saveDraft();
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
+                if (_topCategories().isNotEmpty) ...[
+                  DropdownButtonFormField<int>(
+                    initialValue: _parentCategoryId,
+                    items: _topCategories()
+                        .map(
+                          (row) => DropdownMenuItem<int>(
+                            value: int.tryParse('${row['id']}'),
+                            child: Text((row['name'] ?? '').toString()),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) async {
+                      setState(() {
+                        _parentCategoryId = value;
+                        _categoryId = null;
+                        _brandId = null;
+                        _modelId = null;
+                      });
+                      await _loadBrandModelOptions();
+                      await _saveDraft();
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Category group',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _categoryId,
+                    items: _leafCategoriesForParent(_parentCategoryId)
+                        .map(
+                          (row) => DropdownMenuItem<int>(
+                            value: int.tryParse('${row['id']}'),
+                            child: Text((row['name'] ?? '').toString()),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      final row = _leafCategoriesForParent(_parentCategoryId)
+                          .firstWhere(
+                            (entry) => int.tryParse('${entry['id']}') == value,
+                            orElse: () => const <String, dynamic>{},
+                          );
+                      setState(() {
+                        _categoryId = value;
+                        _category = (row['name'] ?? _category).toString();
+                        _brandId = null;
+                        _modelId = null;
+                      });
+                      await _loadBrandModelOptions();
+                      await _saveDraft();
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _brandId,
+                    items: _brandOptions
+                        .map(
+                          (row) => DropdownMenuItem<int>(
+                            value: int.tryParse('${row['id']}'),
+                            child: Text((row['name'] ?? '').toString()),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) async {
+                      setState(() {
+                        _brandId = value;
+                        _modelId = null;
+                      });
+                      await _loadBrandModelOptions();
+                      await _saveDraft();
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Brand (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: _modelId,
+                    items: _modelOptions
+                        .map(
+                          (row) => DropdownMenuItem<int>(
+                            value: int.tryParse('${row['id']}'),
+                            child: Text((row['name'] ?? '').toString()),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) async {
+                      setState(() => _modelId = value);
+                      await _saveDraft();
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Model (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ] else
+                  DropdownButtonFormField<String>(
+                    value: _category,
+                    items: const [
+                      'General',
+                      'Electronics',
+                      'Phones',
+                      'Furniture',
+                      'Fashion',
+                      'Home',
+                      'Sports',
+                    ]
+                        .map((item) =>
+                            DropdownMenuItem(value: item, child: Text(item)))
+                        .toList(),
+                    onChanged: (value) async {
+                      if (value == null) return;
+                      setState(() => _category = value);
+                      await _saveDraft();
+                    },
+                    decoration: const InputDecoration(
+                      labelText: 'Category',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: _state,
@@ -520,7 +729,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
-                if (_showValidation && _category.trim().isEmpty)
+                if (_showValidation &&
+                    _category.trim().isEmpty &&
+                    _categoryId == null)
                   const Padding(
                     padding: EdgeInsets.only(top: 6),
                     child: Text(

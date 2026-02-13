@@ -57,6 +57,9 @@ from .inspection_reputation import InspectorProfile, InspectionReview, Inspectio
 from .inspector_bond import InspectorBond, BondEvent  # noqa: F401
 from .merchant_follow import MerchantFollow  # noqa: F401
 from .inspector_request import InspectorRequest  # noqa: F401
+from .category import Category  # noqa: F401
+from .brand import Brand  # noqa: F401
+from .brand_model import BrandModel  # noqa: F401
 from .discovery import (
     ItemDictionary,
     ListingFavorite,

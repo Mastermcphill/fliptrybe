@@ -68,6 +68,17 @@ class MerchantService {
     }
   }
 
+  Future<Map<String, dynamic>> publicMerchantCard(int userId) async {
+    try {
+      final res = await _client.dio.get(ApiConfig.api('/public/merchants/$userId'));
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return <String, dynamic>{'ok': false};
+    } catch (_) {
+      return <String, dynamic>{'ok': false};
+    }
+  }
+
   Future<Map<String, dynamic>> followMerchant(int userId) async {
     try {
       final res =
@@ -221,6 +232,20 @@ class MerchantService {
         'locality': locality,
         'lga': lga,
       });
+      final data = res.data;
+      if (data is Map) return Map<String, dynamic>.from(data);
+      return <String, dynamic>{'ok': false};
+    } catch (_) {
+      return <String, dynamic>{'ok': false};
+    }
+  }
+
+  Future<Map<String, dynamic>> updateProfilePhoto(String profileImageUrl) async {
+    try {
+      final res = await _client.dio.post(
+        ApiConfig.api('/me/profile/photo'),
+        data: {'profile_image_url': profileImageUrl},
+      );
       final data = res.data;
       if (data is Map) return Map<String, dynamic>.from(data);
       return <String, dynamic>{'ok': false};

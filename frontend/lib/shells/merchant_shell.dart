@@ -5,7 +5,7 @@ import '../screens/merchant_home_screen.dart';
 import '../screens/merchant_growth_screen.dart';
 import '../screens/merchant_listings_screen.dart';
 import '../screens/merchant_orders_screen.dart';
-import '../screens/support_chat_screen.dart';
+import '../screens/shortlet_screen.dart';
 
 class MerchantShell extends StatefulWidget {
   const MerchantShell({super.key, this.debugUseLightweightTabs = false});
@@ -26,7 +26,7 @@ class _MerchantShellState extends State<MerchantShell> {
         SizedBox.expand(child: Center(child: Text('Merchant Listings'))),
         SizedBox.expand(child: Center(child: Text('Merchant Orders'))),
         SizedBox.expand(child: Center(child: Text('Merchant Growth'))),
-        SizedBox.expand(child: Center(child: Text('Merchant Support'))),
+        SizedBox.expand(child: Center(child: Text('Merchant Shortlet'))),
       ];
     }
     return [
@@ -34,7 +34,7 @@ class _MerchantShellState extends State<MerchantShell> {
       const MerchantListingsScreen(),
       const MerchantOrdersScreen(),
       const MerchantGrowthScreen(),
-      const SupportChatScreen(),
+      const ShortletScreen(),
     ];
   }
 
@@ -84,7 +84,7 @@ class _MerchantShellState extends State<MerchantShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.trending_up_outlined), label: 'Growth'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.support_agent_outlined), label: 'Support'),
+                icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
           ],
         ),
       ),

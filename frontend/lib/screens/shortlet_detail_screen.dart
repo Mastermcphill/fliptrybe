@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/payment_service.dart';
 import '../services/shortlet_service.dart';
+import '../services/auth_gate_service.dart';
 import '../utils/formatters.dart';
 import '../ui/components/ft_components.dart';
 import '../widgets/safe_image.dart';
@@ -104,7 +105,7 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     }
   }
 
-  Future<void> _toggleFavorite() async {
+  Future<void> _toggleFavoriteAuthorized() async {
     if (_favoriteBusy) return;
     final id = _id();
     if (id <= 0) return;
@@ -132,7 +133,15 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     }
   }
 
-  Future<void> _submitManualProof() async {
+  Future<void> _toggleFavorite() async {
+    await requireAuthForAction(
+      context,
+      action: 'save shortlets to your watchlist',
+      onAuthorized: _toggleFavoriteAuthorized,
+    );
+  }
+
+  Future<void> _submitManualProofAuthorized() async {
     final intentId = _paymentIntentId;
     if (intentId == null || intentId <= 0) return;
     final res = await _payments.submitManualProof(
@@ -153,7 +162,15 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     );
   }
 
-  Future<void> _book() async {
+  Future<void> _submitManualProof() async {
+    await requireAuthForAction(
+      context,
+      action: 'submit manual payment proof',
+      onAuthorized: _submitManualProofAuthorized,
+    );
+  }
+
+  Future<void> _bookAuthorized() async {
     final id = _id();
     if (id <= 0) return;
     final checkIn = _checkInCtrl.text.trim();
@@ -211,6 +228,14 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Booking confirmed.')),
+    );
+  }
+
+  Future<void> _book() async {
+    await requireAuthForAction(
+      context,
+      action: 'book this shortlet',
+      onAuthorized: _bookAuthorized,
     );
   }
 

@@ -14,6 +14,7 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(255), unique=True, index=True, nullable=False)
 
     phone = db.Column(db.String(32), unique=True, index=True, nullable=True)
+    profile_image_url = db.Column(db.String(1024), nullable=True)
 
     password_hash = db.Column(db.String(255), nullable=False)
 
@@ -41,6 +42,7 @@ class User(db.Model, UserMixin):
             "name": self.name,
             "email": self.email,
             "phone": getattr(self, "phone", None),
+            "profile_image_url": (getattr(self, "profile_image_url", None) or ""),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "is_verified": bool(self.is_verified),
             "role": self.role or "buyer",

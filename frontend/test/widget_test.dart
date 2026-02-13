@@ -13,6 +13,9 @@ import 'package:fliptrybe/shells/buyer_shell.dart';
 import 'package:fliptrybe/shells/driver_shell.dart';
 import 'package:fliptrybe/shells/inspector_shell.dart';
 import 'package:fliptrybe/shells/merchant_shell.dart';
+import 'package:fliptrybe/shells/public_browse_shell.dart';
+
+void _noop() {}
 
 void main() {
   testWidgets('MaterialApp smoke test', (WidgetTester tester) async {
@@ -51,6 +54,27 @@ void main() {
     expect(find.byType(RoleSignupScreen), findsOneWidget);
   });
 
+  testWidgets('Landing highlights Declutter and Shortlet browse entries',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: LandingScreen(
+          enableTicker: false,
+          onLogin: _noop,
+          onSignup: _noop,
+          onBrowseMarketplace: _noop,
+          onBrowseShortlets: _noop,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final browseMarketplace = find.text('Browse Marketplace');
+    final browseShortlets = find.text('Browse Shortlets');
+    expect(browseMarketplace, findsOneWidget);
+    expect(browseShortlets, findsOneWidget);
+  });
+
   testWidgets('Merchant shell renders 5 tabs', (WidgetTester tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -63,7 +87,7 @@ void main() {
     expect(find.text('Listings'), findsOneWidget);
     expect(find.text('Orders'), findsOneWidget);
     expect(find.text('Growth'), findsOneWidget);
-    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Shortlet'), findsOneWidget);
   });
 
   testWidgets('Merchant home shows action buttons',
@@ -123,8 +147,8 @@ void main() {
 
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Marketplace'), findsOneWidget);
+    expect(find.text('Shortlet'), findsOneWidget);
     expect(find.text('Orders'), findsOneWidget);
-    expect(find.text('Support'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
   });
 
@@ -176,7 +200,7 @@ void main() {
     expect(find.text('Jobs'), findsOneWidget);
     expect(find.text('Growth'), findsOneWidget);
     expect(find.text('MoneyBox'), findsOneWidget);
-    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Shortlet'), findsOneWidget);
   });
 
   testWidgets('Inspector shell renders 5 tabs', (WidgetTester tester) async {
@@ -191,7 +215,21 @@ void main() {
     expect(find.text('Bookings'), findsOneWidget);
     expect(find.text('Growth'), findsOneWidget);
     expect(find.text('MoneyBox'), findsOneWidget);
-    expect(find.text('Support'), findsOneWidget);
+    expect(find.text('Shortlet'), findsOneWidget);
+  });
+
+  testWidgets('Public browse shell exposes marketplace and shortlet tabs',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PublicBrowseShell(debugUseLightweightTabs: true),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Marketplace'), findsOneWidget);
+    expect(find.text('Shortlet'), findsOneWidget);
+    expect(find.text('Account'), findsOneWidget);
   });
 
   testWidgets('Admin overview renders quick actions',

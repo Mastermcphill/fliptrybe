@@ -45,9 +45,46 @@ class _LeaderboardsScreenState extends State<LeaderboardsScreen> {
     final orders = (m['total_orders'] ?? 0).toString();
     final deliveries = (m['successful_deliveries'] ?? 0).toString();
     final rating = (m['avg_rating'] ?? 0).toString();
+    final profileImage = (m['profile_image_url'] ?? '').toString().trim();
 
     return ListTile(
-      leading: CircleAvatar(child: Text(rank > 0 ? '$rank' : '#')),
+      leading: SizedBox(
+        width: 44,
+        height: 44,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: const Color(0xFFE2E8F0),
+              backgroundImage:
+                  profileImage.isNotEmpty ? NetworkImage(profileImage) : null,
+              child: profileImage.isNotEmpty
+                  ? null
+                  : Text(name.isEmpty ? 'M' : name[0].toUpperCase()),
+            ),
+            Positioned(
+              right: -3,
+              bottom: -3,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  rank > 0 ? '$rank' : '#',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
       title: Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
       subtitle: Text(
         '$badge  |  Score $score\n$city, $state\nOrders: $orders  Deliveries: $deliveries  Rating: $rating',

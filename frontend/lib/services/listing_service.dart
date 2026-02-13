@@ -45,6 +45,13 @@ class ListingService {
     String description = '',
     double price = 0,
     String? imagePath,
+    String category = 'declutter',
+    int? categoryId,
+    int? brandId,
+    int? modelId,
+    String state = '',
+    String city = '',
+    String locality = '',
   }) async {
     try {
       final url = ApiConfig.api('/listings');
@@ -55,6 +62,13 @@ class ListingService {
           'title': title,
           'description': description,
           'price': price.toString(),
+          'category': category,
+          if (categoryId != null) 'category_id': '$categoryId',
+          if (brandId != null) 'brand_id': '$brandId',
+          if (modelId != null) 'model_id': '$modelId',
+          if (state.trim().isNotEmpty) 'state': state.trim(),
+          if (city.trim().isNotEmpty) 'city': city.trim(),
+          if (locality.trim().isNotEmpty) 'locality': locality.trim(),
           'image': await MultipartFile.fromFile(imagePath, filename: filename),
         });
         final res = await _client.dio.post(url, data: form);
@@ -72,6 +86,13 @@ class ListingService {
         'title': title,
         'description': description,
         'price': price,
+        'category': category,
+        if (categoryId != null) 'category_id': categoryId,
+        if (brandId != null) 'brand_id': brandId,
+        if (modelId != null) 'model_id': modelId,
+        if (state.trim().isNotEmpty) 'state': state.trim(),
+        if (city.trim().isNotEmpty) 'city': city.trim(),
+        if (locality.trim().isNotEmpty) 'locality': locality.trim(),
       });
       final data = _asMap(res.data);
       final status = res.statusCode ?? 0;

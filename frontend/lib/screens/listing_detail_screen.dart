@@ -9,6 +9,7 @@ import '../services/marketplace_prefs_service.dart';
 import '../services/merchant_service.dart';
 import '../services/order_service.dart';
 import '../services/payment_service.dart';
+import '../services/auth_gate_service.dart';
 import '../utils/formatters.dart';
 import '../ui/components/ft_components.dart';
 import '../widgets/email_verification_dialog.dart';
@@ -54,6 +55,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   int _followersCount = 0;
   int? _viewerId;
   Map<String, dynamic> _detail = const {};
+  Map<String, dynamic> _merchantCard = const {};
   List<String> _images = const [];
   List<Map<String, dynamic>> _similar = const [];
   String? _error;
@@ -67,6 +69,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _loadViewer();
     _loadSimilar();
     _loadFollowState();
+    _loadMerchantCard();
     _loadFavorites();
     _recordViewOnce();
   }
@@ -90,9 +93,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     try {
       final data = await _listings.getListing(id);
       if (data.isNotEmpty && mounted) {
+        final payload = data['listing'] is Map
+            ? Map<String, dynamic>.from(data['listing'] as Map)
+            : data;
         setState(() {
-          _detail = data;
-          _images = _extractImages(data);
+          _detail = payload;
+          _images = _extractImages(payload);
         });
         _loadFollowState();
       }
@@ -136,7 +142,21 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     } catch (_) {}
   }
 
-  Future<void> _toggleFollow() async {
+  Future<void> _loadMerchantCard() async {
+    final merchantId = _merchantId();
+    if (merchantId <= 0) return;
+    try {
+      final payload = await _merchantSvc.publicMerchantCard(merchantId);
+      if (!mounted) return;
+      if (payload['ok'] == true && payload['merchant'] is Map) {
+        setState(() {
+          _merchantCard = Map<String, dynamic>.from(payload['merchant'] as Map);
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFollowAuthorized() async {
     final merchantId = _merchantId();
     if (_followBusy || merchantId <= 0) return;
     if (_viewerId != null && merchantId == _viewerId) {
@@ -158,6 +178,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
+  }
+
+  Future<void> _toggleFollow() async {
+    await requireAuthForAction(
+      context,
+      action: 'follow merchants',
+      onAuthorized: _toggleFollowAuthorized,
+    );
   }
 
   Future<void> _loadSimilar() async {
@@ -199,7 +227,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     setState(() => _favoriteIds = values);
   }
 
-  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+  Future<void> _toggleFavoriteAuthorized(Map<String, dynamic> item) async {
     final id = _asInt(item['id']);
     if (id == null || id <= 0) return;
     final next = <int>{..._favoriteIds};
@@ -221,6 +249,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       });
     }
     await _prefs.saveFavorites(next);
+  }
+
+  Future<void> _toggleFavorite(Map<String, dynamic> item) async {
+    await requireAuthForAction(
+      context,
+      action: 'save listings to your watchlist',
+      onAuthorized: () => _toggleFavoriteAuthorized(item),
+    );
   }
 
   Future<void> _recordViewOnce() async {
@@ -275,7 +311,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _addToCart() async {
+  Future<void> _addToCartAuthorized() async {
     final listingId = _asInt(_detail['id']);
     if (listingId == null || listingId <= 0) {
       _toast('Listing is unavailable for cart.');
@@ -302,7 +338,15 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     _toast((res['message'] ?? 'Unable to add item to cart').toString());
   }
 
-  Future<void> _buyNowAndRequestDelivery() async {
+  Future<void> _addToCart() async {
+    await requireAuthForAction(
+      context,
+      action: 'add items to cart',
+      onAuthorized: _addToCartAuthorized,
+    );
+  }
+
+  Future<void> _buyNowAndRequestDeliveryAuthorized() async {
     final merchantId = _asInt(_detail['user_id']) ??
         _asInt(_detail['merchant_id']) ??
         _asInt(_detail['owner_id']);
@@ -422,6 +466,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     }
   }
 
+  Future<void> _buyNowAndRequestDelivery() async {
+    await requireAuthForAction(
+      context,
+      action: 'buy this listing',
+      onAuthorized: _buyNowAndRequestDeliveryAuthorized,
+    );
+  }
+
   Widget _metaChip(IconData icon, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -463,9 +515,19 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         : heatLevel == 'hot'
             ? 'Hot'
             : '';
-    final merchantName =
-        (_detail['merchant_name'] ?? _detail['shop_name'] ?? 'Merchant')
-            .toString();
+    final merchantName = (_merchantCard['name'] ??
+            _detail['merchant_name'] ??
+            _detail['shop_name'] ??
+            'Merchant')
+        .toString();
+    final merchantPhoto = (_merchantCard['profile_image_url'] ??
+            _detail['merchant_profile_image_url'] ??
+            '')
+        .toString()
+        .trim();
+    final followersCount = int.tryParse(
+            '${_merchantCard['followers_count'] ?? _followersCount}') ??
+        _followersCount;
     final merchantId = _asInt(_detail['user_id']) ??
         _asInt(_detail['merchant_id']) ??
         _asInt(_detail['owner_id']);
@@ -569,13 +631,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFFE2E8F0),
-                child: Text(
-                  merchantName.isEmpty ? 'M' : merchantName[0].toUpperCase(),
-                ),
+                backgroundImage: merchantPhoto.isNotEmpty
+                    ? NetworkImage(merchantPhoto)
+                    : null,
+                child: merchantPhoto.isNotEmpty
+                    ? null
+                    : Text(
+                        merchantName.isEmpty
+                            ? 'M'
+                            : merchantName[0].toUpperCase(),
+                      ),
               ),
               title: Text(merchantName),
               subtitle: Text(
-                'Seller #${merchantId?.toString() ?? '-'} • Rating 4.8 • $_followersCount followers',
+                'Seller #${merchantId?.toString() ?? '-'} - Rating 4.8 - $followersCount followers',
               ),
               trailing: OutlinedButton(
                 onPressed: _followBusy ? null : _toggleFollow,

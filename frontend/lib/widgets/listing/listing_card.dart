@@ -31,6 +31,16 @@ class ListingCard extends StatelessWidget {
     final condition = (item['condition'] ?? '').toString();
     final created = (item['created_at'] ?? '').toString();
     final image = (item['image_path'] ?? item['image'] ?? '').toString();
+    final sellerName = (item['merchant_name'] ??
+            item['shop_name'] ??
+            item['seller_name'] ??
+            '')
+        .toString()
+        .trim();
+    final sellerPhoto =
+        (item['merchant_profile_image_url'] ?? item['profile_image_url'] ?? '')
+            .toString()
+            .trim();
     final viewsCount = int.tryParse('${item['views_count'] ?? 0}') ?? 0;
     final favoritesCount = int.tryParse('${item['favorites_count'] ?? 0}') ?? 0;
     final heatLevel =
@@ -175,6 +185,39 @@ class ListingCard extends StatelessWidget {
                         color: FTTokens.textSecondary,
                         fontSize: 11,
                       ),
+                    ),
+                  ],
+                  if (sellerName.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 9,
+                          backgroundColor: const Color(0xFFE2E8F0),
+                          backgroundImage: sellerPhoto.isNotEmpty
+                              ? NetworkImage(sellerPhoto)
+                              : null,
+                          child: sellerPhoto.isNotEmpty
+                              ? null
+                              : Text(
+                                  sellerName[0].toUpperCase(),
+                                  style: const TextStyle(fontSize: 9),
+                                ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Sold by $sellerName',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: FTTokens.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                   const SizedBox(height: 4),

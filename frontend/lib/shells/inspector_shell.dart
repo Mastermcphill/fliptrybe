@@ -4,7 +4,7 @@ import '../screens/inspector_bookings_screen.dart';
 import '../screens/inspector_home_screen.dart';
 import '../screens/growth/growth_analytics_screen.dart';
 import '../screens/moneybox_dashboard_screen.dart';
-import '../screens/support_chat_screen.dart';
+import '../screens/shortlet_screen.dart';
 
 class InspectorShell extends StatefulWidget {
   const InspectorShell({super.key, this.debugUseLightweightTabs = false});
@@ -25,7 +25,7 @@ class _InspectorShellState extends State<InspectorShell> {
         SizedBox.expand(child: Center(child: Text('Inspector Bookings'))),
         SizedBox.expand(child: Center(child: Text('Inspector Earnings'))),
         SizedBox.expand(child: Center(child: Text('Inspector MoneyBox'))),
-        SizedBox.expand(child: Center(child: Text('Inspector Support'))),
+        SizedBox.expand(child: Center(child: Text('Inspector Shortlet'))),
       ];
     }
     return [
@@ -34,7 +34,7 @@ class _InspectorShellState extends State<InspectorShell> {
       InspectorBookingsScreen(),
       const GrowthAnalyticsScreen(role: 'inspector'),
       const MoneyBoxDashboardScreen(),
-      const SupportChatScreen(),
+      const ShortletScreen(),
     ];
   }
 
@@ -68,7 +68,7 @@ class _InspectorShellState extends State<InspectorShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.support_agent_outlined), label: 'Support'),
+                icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
           ],
         ),
       ),

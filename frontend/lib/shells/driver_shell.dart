@@ -4,7 +4,7 @@ import '../screens/driver_home_screen.dart';
 import '../screens/driver_jobs_screen.dart';
 import '../screens/growth/growth_analytics_screen.dart';
 import '../screens/moneybox_dashboard_screen.dart';
-import '../screens/support_chat_screen.dart';
+import '../screens/shortlet_screen.dart';
 
 class DriverShell extends StatefulWidget {
   const DriverShell({super.key, this.debugUseLightweightTabs = false});
@@ -25,7 +25,7 @@ class _DriverShellState extends State<DriverShell> {
         SizedBox.expand(child: Center(child: Text('Driver Jobs'))),
         SizedBox.expand(child: Center(child: Text('Driver Earnings'))),
         SizedBox.expand(child: Center(child: Text('Driver MoneyBox'))),
-        SizedBox.expand(child: Center(child: Text('Driver Support'))),
+        SizedBox.expand(child: Center(child: Text('Driver Shortlet'))),
       ];
     }
     return [
@@ -34,7 +34,7 @@ class _DriverShellState extends State<DriverShell> {
       DriverJobsScreen(),
       const GrowthAnalyticsScreen(role: 'driver'),
       const MoneyBoxDashboardScreen(),
-      const SupportChatScreen(),
+      const ShortletScreen(),
     ];
   }
 
@@ -68,7 +68,7 @@ class _DriverShellState extends State<DriverShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.savings_outlined), label: 'MoneyBox'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.support_agent_outlined), label: 'Support'),
+                icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
           ],
         ),
       ),

@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import text
 
 from app.extensions import db
-from app.models import User, MerchantProfile, MerchantReview, Wallet, Transaction
+from app.models import User, MerchantProfile, MerchantReview, Wallet, Transaction, MerchantFollow
 from app.utils.jwt_utils import decode_token
 from app.utils.commission import compute_commission, RATES
 from app.utils.receipts import create_receipt
@@ -100,6 +100,26 @@ def _is_admin(u: User | None) -> bool:
         return False
 
 
+def _merchant_public_payload(user_id: int) -> dict:
+    user = User.query.get(int(user_id))
+    profile = MerchantProfile.query.filter_by(user_id=int(user_id)).first()
+    followers = MerchantFollow.query.filter_by(merchant_id=int(user_id)).count()
+    display_name = ""
+    if profile and (profile.shop_name or "").strip():
+        display_name = (profile.shop_name or "").strip()
+    elif user and (user.name or "").strip():
+        display_name = (user.name or "").strip()
+    else:
+        display_name = f"Merchant {int(user_id)}"
+    return {
+        "id": int(user_id),
+        "name": display_name,
+        "profile_image_url": (getattr(user, "profile_image_url", "") or "") if user else "",
+        "joined_at": user.created_at.isoformat() if user and user.created_at else None,
+        "followers_count": int(followers or 0),
+    }
+
+
 @merchants_bp.get("/merchants")
 def list_merchants():
     state = (request.args.get("state") or "").strip()
@@ -118,7 +138,42 @@ def list_merchants():
     # Sort by score desc
     items.sort(key=lambda x: float(x.score()), reverse=True)
 
-    return jsonify({"ok": True, "items": [x.to_dict() for x in items]}), 200
+    payload = []
+    for row in items:
+        item = row.to_dict()
+        user = User.query.get(int(row.user_id)) if row.user_id is not None else None
+        item["profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
+        payload.append(item)
+    return jsonify({"ok": True, "items": payload}), 200
+
+
+@merchants_bp.post("/me/profile/photo")
+def set_profile_photo():
+    user = _current_user()
+    if not user:
+        return jsonify({"message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    url = str(payload.get("profile_image_url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "PROFILE_IMAGE_REQUIRED", "message": "profile_image_url is required"}), 400
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return jsonify({"ok": False, "error": "PROFILE_IMAGE_INVALID", "message": "profile_image_url must be an absolute URL"}), 400
+    user.profile_image_url = url[:1024]
+    try:
+        db.session.add(user)
+        db.session.commit()
+        return jsonify({"ok": True, "profile_image_url": user.profile_image_url}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "PROFILE_IMAGE_UPDATE_FAILED", "message": str(exc)}), 500
+
+
+@merchants_bp.get("/public/merchants/<int:user_id>")
+def public_merchant_card(user_id: int):
+    user = User.query.get(int(user_id))
+    if not user:
+        return jsonify({"message": "Merchant not found"}), 404
+    return jsonify({"ok": True, "merchant": _merchant_public_payload(int(user_id))}), 200
 
 
 @merchants_bp.get("/merchants/top")
@@ -136,7 +191,13 @@ def top_merchants():
 
     items = MerchantProfile.query.all()
     items.sort(key=lambda x: float(x.score()), reverse=True)
-    return jsonify({"ok": True, "items": [x.to_dict() for x in items[:limit]]}), 200
+    payload = []
+    for row in items[:limit]:
+        item = row.to_dict()
+        user = User.query.get(int(row.user_id)) if row.user_id is not None else None
+        item["profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
+        payload.append(item)
+    return jsonify({"ok": True, "items": payload}), 200
 
 
 @merchants_bp.get("/merchants/<int:user_id>")
@@ -146,7 +207,9 @@ def merchant_detail(user_id: int):
         return jsonify({"message": "Merchant not found"}), 404
 
     reviews = MerchantReview.query.filter_by(merchant_user_id=user_id).order_by(MerchantReview.created_at.desc()).limit(30).all()
-    return jsonify({"ok": True, "merchant": mp.to_dict(), "reviews": [x.to_dict() for x in reviews]}), 200
+    merchant_payload = mp.to_dict()
+    merchant_payload["profile_image_url"] = (getattr(User.query.get(int(user_id)), "profile_image_url", "") or "")
+    return jsonify({"ok": True, "merchant": merchant_payload, "public_card": _merchant_public_payload(int(user_id)), "reviews": [x.to_dict() for x in reviews]}), 200
 
 
 @merchants_bp.post("/merchants/profile")

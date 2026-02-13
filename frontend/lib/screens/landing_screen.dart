@@ -6,12 +6,16 @@ import '../services/api_config.dart';
 class LandingScreen extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onSignup;
+  final VoidCallback? onBrowseMarketplace;
+  final VoidCallback? onBrowseShortlets;
   final bool enableTicker;
 
   const LandingScreen({
     super.key,
     required this.onLogin,
     required this.onSignup,
+    this.onBrowseMarketplace,
+    this.onBrowseShortlets,
     this.enableTicker = true,
   });
 
@@ -173,7 +177,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        "Trade with trust.\nMove with confidence.",
+                        "Declutter and shortlet.\nBrowse instantly.",
                         style: TextStyle(
                           fontSize: headlineSize,
                           height: 1.05,
@@ -183,7 +187,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        "Listings, inspections, and delivery that keep your money safe. Built for real-world hustle, without the chaos.",
+                        "FlipTrybe combines a declutter marketplace with shortlet stays. Browse immediately, then sign in only when you are ready to transact.",
                         style: TextStyle(
                           fontSize: bodySize,
                           height: 1.4,
@@ -192,6 +196,62 @@ class _LandingScreenState extends State<LandingScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      if (widget.onBrowseMarketplace != null ||
+                          widget.onBrowseShortlets != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.16)),
+                          ),
+                          child: Column(
+                            children: [
+                              if (widget.onBrowseMarketplace != null)
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: widget.onBrowseMarketplace,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0EA5E9),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(ctaRadius),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.storefront_outlined),
+                                    label: const Text('Browse Marketplace'),
+                                  ),
+                                ),
+                              if (widget.onBrowseMarketplace != null &&
+                                  widget.onBrowseShortlets != null)
+                                const SizedBox(height: 8),
+                              if (widget.onBrowseShortlets != null)
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: widget.onBrowseShortlets,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF22C55E),
+                                      foregroundColor: const Color(0xFF052E16),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(ctaRadius),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.home_work_outlined),
+                                    label: const Text('Browse Shortlets'),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      if (widget.onBrowseMarketplace != null ||
+                          widget.onBrowseShortlets != null)
+                        const SizedBox(height: 12),
                       SizedBox(
                         width: double.infinity,
                         height: ctaHeight,
@@ -231,7 +291,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        "Merchants can sell globally, while we handle inspection and delivery in Nigeria.",
+                        "Guest browsing is open. Login is required for buy, checkout, sell, and booking actions.",
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.85),
                           fontWeight: FontWeight.w600,

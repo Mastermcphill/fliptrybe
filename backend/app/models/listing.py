@@ -24,6 +24,9 @@ class Listing(db.Model):
 
     # Listing category (e.g., declutter)
     category = db.Column(db.String(64), nullable=False, default="declutter", server_default="declutter")
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True)
+    brand_id = db.Column(db.Integer, db.ForeignKey("brands.id"), nullable=True, index=True)
+    model_id = db.Column(db.Integer, db.ForeignKey("brand_models.id"), nullable=True, index=True)
 
     # Keep float for now (matches your current usage)
     price = db.Column(db.Float, nullable=False, default=0.0)
@@ -92,6 +95,9 @@ class Listing(db.Model):
             "city": (self.city or ""),
             "locality": (self.locality or ""),
             "category": (getattr(self, "category", None) or ""),
+            "category_id": int(getattr(self, "category_id", 0)) if getattr(self, "category_id", None) is not None else None,
+            "brand_id": int(getattr(self, "brand_id", 0)) if getattr(self, "brand_id", None) is not None else None,
+            "model_id": int(getattr(self, "model_id", 0)) if getattr(self, "model_id", None) is not None else None,
             "title": self.title,
             "description": self.description or "",
             "price": float(final_price),

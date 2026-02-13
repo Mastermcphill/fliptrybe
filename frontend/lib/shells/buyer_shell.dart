@@ -4,7 +4,7 @@ import '../screens/buyer_home_screen.dart';
 import '../screens/marketplace_screen.dart';
 import '../screens/orders_screen.dart';
 import '../screens/profile_screen.dart';
-import '../screens/support_chat_screen.dart';
+import '../screens/shortlet_screen.dart';
 
 class BuyerShell extends StatefulWidget {
   const BuyerShell({super.key, this.debugUseLightweightTabs = false});
@@ -23,16 +23,16 @@ class _BuyerShellState extends State<BuyerShell> {
       return const [
         SizedBox.expand(child: Center(child: Text('Buyer Home'))),
         SizedBox.expand(child: Center(child: Text('Buyer Marketplace'))),
+        SizedBox.expand(child: Center(child: Text('Buyer Shortlet'))),
         SizedBox.expand(child: Center(child: Text('Buyer Orders'))),
-        SizedBox.expand(child: Center(child: Text('Buyer Support'))),
         SizedBox.expand(child: Center(child: Text('Buyer Profile'))),
       ];
     }
     return const [
       BuyerHomeScreen(),
       MarketplaceScreen(),
+      ShortletScreen(),
       OrdersScreen(),
-      SupportChatScreen(),
       ProfileScreen(),
     ];
   }
@@ -60,9 +60,9 @@ class _BuyerShellState extends State<BuyerShell> {
             BottomNavigationBarItem(
                 icon: Icon(Icons.storefront_outlined), label: 'Marketplace'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
+                icon: Icon(Icons.home_work_outlined), label: 'Shortlet'),
             BottomNavigationBarItem(
-                icon: Icon(Icons.support_agent_outlined), label: 'Support'),
+                icon: Icon(Icons.receipt_long_outlined), label: 'Orders'),
             BottomNavigationBarItem(
                 icon: Icon(Icons.person_outline), label: 'Profile'),
           ],

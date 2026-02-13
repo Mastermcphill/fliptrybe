@@ -9,7 +9,16 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.utils.ng_locations import NIGERIA_LOCATIONS
-from app.models import User, Listing, ItemDictionary, UserSettings
+from app.models import (
+    User,
+    Listing,
+    ItemDictionary,
+    UserSettings,
+    Category,
+    Brand,
+    BrandModel,
+    MerchantProfile,
+)
 from app.utils.commission import compute_commission, RATES
 from app.utils.listing_caps import enforce_listing_cap
 from app.utils.jwt_utils import decode_token, get_bearer_token
@@ -165,6 +174,15 @@ def _user_preferences(user: User | None) -> tuple[str, str]:
 
 
 def _search_args():
+    def _to_int(raw):
+        if raw in (None, ""):
+            return None
+        try:
+            value = int(str(raw).strip())
+            return value if value > 0 else None
+        except Exception:
+            return None
+
     def _to_bool(raw: str | None):
         if raw is None:
             return None
@@ -206,6 +224,10 @@ def _search_args():
     return {
         "q": q,
         "category": category,
+        "category_id": _to_int(request.args.get("category_id")),
+        "parent_category_id": _to_int(request.args.get("parent_category_id")),
+        "brand_id": _to_int(request.args.get("brand_id")),
+        "model_id": _to_int(request.args.get("model_id")),
         "state": state,
         "condition": condition,
         "status": status,
@@ -219,6 +241,32 @@ def _search_args():
     }
 
 
+def _descendant_category_ids(parent_id: int) -> list[int]:
+    try:
+        rows = Category.query.with_entities(Category.id, Category.parent_id).all()
+    except Exception:
+        return []
+    by_parent: dict[int, list[int]] = {}
+    for cid, pid in rows:
+        if cid is None:
+            continue
+        key = int(pid) if pid is not None else 0
+        by_parent.setdefault(key, []).append(int(cid))
+    out: list[int] = []
+    seen: set[int] = set()
+    stack = [int(parent_id)]
+    while stack:
+        current = stack.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        out.append(current)
+        for child in by_parent.get(current, []):
+            if child not in seen:
+                stack.append(child)
+    return out
+
+
 def _normalize_ranking_reason(value) -> list[str]:
     if isinstance(value, list):
         return [str(x) for x in value if str(x).strip()]
@@ -227,6 +275,15 @@ def _normalize_ranking_reason(value) -> list[str]:
     if value:
         return [str(value)]
     return []
+
+
+def _maybe_int(value):
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
 
 
 def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_reason=None) -> dict:
@@ -243,9 +300,15 @@ def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_
         "id": int(row.get("id") or 0),
         "user_id": int(row.get("user_id") or row.get("owner_id") or 0),
         "owner_id": int(row.get("owner_id") or row.get("user_id") or 0),
+        "merchant_id": int(row.get("merchant_id") or row.get("user_id") or row.get("owner_id") or 0),
+        "merchant_name": str(row.get("merchant_name") or row.get("shop_name") or ""),
+        "merchant_profile_image_url": str(row.get("merchant_profile_image_url") or row.get("profile_image_url") or ""),
         "title": str(row.get("title") or ""),
         "description": str(row.get("description") or ""),
         "category": str(row.get("category") or ""),
+        "category_id": _maybe_int(row.get("category_id")),
+        "brand_id": _maybe_int(row.get("brand_id")),
+        "model_id": _maybe_int(row.get("model_id")),
         "state": str(row.get("state") or ""),
         "city": str(row.get("city") or ""),
         "locality": str(row.get("locality") or ""),
@@ -451,6 +514,81 @@ def public_features():
     ), 200
 
 
+def _category_tree_payload() -> list[dict]:
+    rows = (
+        Category.query.filter(Category.is_active.is_(True))
+        .order_by(Category.parent_id.asc(), Category.sort_order.asc(), Category.name.asc())
+        .all()
+    )
+    items_by_id: dict[int, dict] = {}
+    roots: list[dict] = []
+    for row in rows:
+        node = row.to_dict()
+        node["children"] = []
+        items_by_id[int(row.id)] = node
+    for row in rows:
+        node = items_by_id.get(int(row.id))
+        if node is None:
+            continue
+        if row.parent_id is None:
+            roots.append(node)
+        else:
+            parent = items_by_id.get(int(row.parent_id))
+            if parent is not None:
+                parent.setdefault("children", []).append(node)
+            else:
+                roots.append(node)
+    return roots
+
+
+@market_bp.get("/public/categories")
+def public_categories():
+    try:
+        items = _category_tree_payload()
+        return jsonify({"ok": True, "items": items}), 200
+    except Exception as exc:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "CATEGORIES_READ_FAILED", "message": str(exc), "items": []}), 500
+
+
+@market_bp.get("/public/filters")
+def public_filters():
+    category_id = _maybe_int(request.args.get("category_id"))
+    brand_id = _maybe_int(request.args.get("brand_id"))
+    try:
+        brands_q = Brand.query.filter(Brand.is_active.is_(True))
+        if category_id is not None:
+            brands_q = brands_q.filter(
+                or_(
+                    Brand.category_id == int(category_id),
+                    Brand.category_id.is_(None),
+                )
+            )
+        brands = [row.to_dict() for row in brands_q.order_by(Brand.sort_order.asc(), Brand.name.asc()).all()]
+
+        models_q = BrandModel.query.filter(BrandModel.is_active.is_(True))
+        if category_id is not None:
+            models_q = models_q.filter(
+                or_(
+                    BrandModel.category_id == int(category_id),
+                    BrandModel.category_id.is_(None),
+                )
+            )
+        if brand_id is not None:
+            models_q = models_q.filter(BrandModel.brand_id == int(brand_id))
+        models = [row.to_dict() for row in models_q.order_by(BrandModel.sort_order.asc(), BrandModel.name.asc()).all()]
+        return jsonify({"ok": True, "brands": brands, "models": models}), 200
+    except Exception as exc:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "FILTERS_READ_FAILED", "message": str(exc), "brands": [], "models": []}), 500
+
+
 @market_bp.get("/public/listings/search")
 def public_listings_search():
     args = _search_args()
@@ -465,6 +603,10 @@ def public_listings_search():
         raw_payload = search_listings_v2(
             q=args["q"],
             category=args["category"],
+            category_id=args["category_id"],
+            parent_category_id=args["parent_category_id"],
+            brand_id=args["brand_id"],
+            model_id=args["model_id"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -524,6 +666,10 @@ def admin_listings_search():
         raw_payload = search_listings_v2(
             q=args["q"],
             category=args["category"],
+            category_id=args["category_id"],
+            parent_category_id=args["parent_category_id"],
+            brand_id=args["brand_id"],
+            model_id=args["model_id"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -578,19 +724,41 @@ def public_listings_recommended():
         limit = 20
     city = (request.args.get("city") or "").strip()
     state = (request.args.get("state") or "").strip()
+    category_id = _maybe_int(request.args.get("category_id"))
+    parent_category_id = _maybe_int(request.args.get("parent_category_id"))
+    brand_id = _maybe_int(request.args.get("brand_id"))
+    model_id = _maybe_int(request.args.get("model_id"))
     u = _current_user()
     if not city and not state:
         pref_city, pref_state = _user_preferences(u)
         city = pref_city or city
         state = pref_state or state
-    rows = _apply_listing_ordering(_apply_listing_active_filter(Listing.query)).limit(500).all()
-    ranked = []
-    for row in rows:
-        score, reasons = ranking_for_listing(row, preferred_city=city, preferred_state=state)
-        payload = _listing_item_from_raw(row.to_dict(base_url=_base_url()), ranking_score=int(score), ranking_reason=reasons)
-        ranked.append(payload)
-    ranked.sort(key=lambda item: (int(item.get("ranking_score", 0)), item.get("created_at") or ""), reverse=True)
-    return jsonify({"ok": True, "city": city, "state": state, "items": ranked[:limit], "limit": limit}), 200
+    try:
+        q = _apply_listing_ordering(_apply_listing_active_filter(Listing.query))
+        if category_id is not None and hasattr(Listing, "category_id"):
+            q = q.filter(Listing.category_id == int(category_id))
+        elif parent_category_id is not None and hasattr(Listing, "category_id"):
+            descendant_ids = _descendant_category_ids(int(parent_category_id))
+            if descendant_ids:
+                q = q.filter(Listing.category_id.in_(descendant_ids))
+        if brand_id is not None and hasattr(Listing, "brand_id"):
+            q = q.filter(Listing.brand_id == int(brand_id))
+        if model_id is not None and hasattr(Listing, "model_id"):
+            q = q.filter(Listing.model_id == int(model_id))
+        rows = q.limit(500).all()
+        ranked = []
+        for row in rows:
+            score, reasons = ranking_for_listing(row, preferred_city=city, preferred_state=state)
+            payload = _listing_item_from_raw(row.to_dict(base_url=_base_url()), ranking_score=int(score), ranking_reason=reasons)
+            ranked.append(payload)
+        ranked.sort(key=lambda item: (int(item.get("ranking_score", 0)), item.get("created_at") or ""), reverse=True)
+        return jsonify({"ok": True, "city": city, "state": state, "items": ranked[:limit], "limit": limit}), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "city": city, "state": state, "items": [], "limit": limit}), 200
 
 
 @market_bp.get("/public/listings/title-suggestions")
@@ -1025,7 +1193,17 @@ def get_listing(listing_id: int):
     item = Listing.query.get(listing_id)
     if not item:
         return jsonify({"message": "Not found"}), 404
-    return jsonify({"ok": True, "listing": item.to_dict(base_url=_base_url())}), 200
+    payload = item.to_dict(base_url=_base_url())
+    seller_id = _maybe_int(payload.get("user_id")) or _maybe_int(payload.get("owner_id"))
+    if seller_id:
+        merchant = MerchantProfile.query.filter_by(user_id=int(seller_id)).first()
+        user = User.query.get(int(seller_id))
+        if merchant and (merchant.shop_name or "").strip():
+            payload["merchant_name"] = (merchant.shop_name or "").strip()
+        elif user and (user.name or "").strip():
+            payload["merchant_name"] = (user.name or "").strip()
+        payload["merchant_profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
+    return jsonify({"ok": True, "listing": payload}), 200
 
 
 @market_bp.put("/listings/<int:listing_id>")
@@ -1080,6 +1258,14 @@ def update_listing(listing_id: int):
         item.city = (payload.get("city") or "").strip()
     if "locality" in payload:
         item.locality = (payload.get("locality") or "").strip()
+    if "category" in payload:
+        item.category = (payload.get("category") or "").strip() or item.category
+    if "category_id" in payload and hasattr(item, "category_id"):
+        item.category_id = _maybe_int(payload.get("category_id"))
+    if "brand_id" in payload and hasattr(item, "brand_id"):
+        item.brand_id = _maybe_int(payload.get("brand_id"))
+    if "model_id" in payload and hasattr(item, "model_id"):
+        item.model_id = _maybe_int(payload.get("model_id"))
     if "price" in payload:
         try:
             base_price = float(payload.get("price") or 0.0)
@@ -1164,6 +1350,10 @@ def create_listing():
     state = ""
     city = ""
     locality = ""  # store RELATIVE path: /api/uploads/<filename>
+    category = "declutter"
+    category_id = None
+    brand_id = None
+    model_id = None
 
     # 1) Multipart upload
     if request.content_type and "multipart/form-data" in (request.content_type or ""):
@@ -1173,6 +1363,10 @@ def create_listing():
         state = (request.form.get("state") or "").strip()
         city = (request.form.get("city") or "").strip()
         locality = (request.form.get("locality") or "").strip()
+        category = (request.form.get("category") or category).strip() or category
+        category_id = _maybe_int(request.form.get("category_id"))
+        brand_id = _maybe_int(request.form.get("brand_id"))
+        model_id = _maybe_int(request.form.get("model_id"))
 
         raw_price = request.form.get("price")
         try:
@@ -1205,6 +1399,10 @@ def create_listing():
         state = (payload.get("state") or "").strip()
         city = (payload.get("city") or "").strip()
         locality = (payload.get("locality") or "").strip()
+        category = (payload.get("category") or category).strip() or category
+        category_id = _maybe_int(payload.get("category_id"))
+        brand_id = _maybe_int(payload.get("brand_id"))
+        model_id = _maybe_int(payload.get("model_id"))
 
         raw_price = payload.get("price")
         try:
@@ -1255,6 +1453,10 @@ def create_listing():
         city=city,
         locality=locality,
         description=description,
+        category=category,
+        category_id=category_id,
+        brand_id=brand_id,
+        model_id=model_id,
         price=price,
         image_path=stored_image_path,
     )

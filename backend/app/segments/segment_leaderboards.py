@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
-from app.models import MerchantProfile
+from app.models import MerchantProfile, User
 
 leaderboards_bp = Blueprint("leaderboards_bp", __name__, url_prefix="/api/leaderboards")
 
@@ -54,6 +54,8 @@ def ranked():
     rank = 1
     for m in items[:limit]:
         row = m.to_dict()
+        user = User.query.get(int(m.user_id)) if m.user_id is not None else None
+        row["profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
         row["rank"] = rank
         out.append(row)
         rank += 1
@@ -91,7 +93,13 @@ def top_by_state():
     out = {}
     for st, items in by_state.items():
         _sort(items)
-        out[st] = [x.to_dict() for x in items[:limit]]
+        rows = []
+        for x in items[:limit]:
+            row = x.to_dict()
+            user = User.query.get(int(x.user_id)) if x.user_id is not None else None
+            row["profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
+            rows.append(row)
+        out[st] = rows
     return jsonify({"ok": True, "items": out}), 200
 
 
@@ -119,5 +127,11 @@ def top_by_city():
     out = {}
     for key, items in by_city.items():
         _sort(items)
-        out[key] = [x.to_dict() for x in items[:limit]]
+        rows = []
+        for x in items[:limit]:
+            row = x.to_dict()
+            user = User.query.get(int(x.user_id)) if x.user_id is not None else None
+            row["profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
+            rows.append(row)
+        out[key] = rows
     return jsonify({"ok": True, "items": out}), 200

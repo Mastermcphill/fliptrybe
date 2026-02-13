@@ -7,6 +7,7 @@ import '../services/api_service.dart';
 import '../services/kpi_service.dart';
 import '../services/leaderboard_service.dart';
 import '../services/listing_service.dart';
+import '../services/merchant_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
 import '../ui/components/ft_components.dart';
@@ -40,6 +41,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final _kpiSvc = KpiService();
   final _leaderSvc = LeaderboardService();
   final _listingSvc = ListingService();
+  final _merchantSvc = MerchantService();
+  final _photoUrlCtrl = TextEditingController();
 
   bool _loading = true;
   bool _signingOut = false;
@@ -62,6 +65,12 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     } else {
       _loading = false;
     }
+  }
+
+  @override
+  void dispose() {
+    _photoUrlCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _reload() async {
@@ -95,6 +104,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
       setState(() {
         _profile = Map<String, dynamic>.from(me);
+        _photoUrlCtrl.text =
+            (me['profile_image_url'] ?? me['avatar_url'] ?? '').toString();
         _wallet = (values[0] as Map<String, dynamic>?) ?? <String, dynamic>{};
         _moneyBox = values[1] as Map<String, dynamic>;
         _kpis = values[2] as Map<String, dynamic>;
@@ -153,6 +164,72 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       return;
     }
     onAllowed();
+  }
+
+  Future<void> _openPhotoUploadDialog() async {
+    _photoUrlCtrl.text =
+        (_profile['profile_image_url'] ?? _photoUrlCtrl.text).toString();
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Upload merchant photo'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Paste your Cloudinary image URL. This single photo appears on your profile, listings, and leaderboards.',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _photoUrlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Cloudinary image URL',
+                hintText: 'https://res.cloudinary.com/.../image/upload/...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (shouldSave != true) return;
+    final url = _photoUrlCtrl.text.trim();
+    if (!(url.startsWith('http://') || url.startsWith('https://'))) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid image URL.')),
+      );
+      return;
+    }
+    final res = await _merchantSvc.updateProfilePhoto(url);
+    if (!mounted) return;
+    if (res['ok'] == true) {
+      setState(() => _profile['profile_image_url'] = url);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Merchant photo updated.')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          (res['message'] ?? 'Unable to update profile photo').toString(),
+        ),
+      ),
+    );
   }
 
   List<FlSpot> _trendSpots() {
@@ -225,12 +302,14 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
             _moneyBox['projected_bonus_percent'] ??
             '-')
         .toString();
+    final profilePhoto =
+        (_profile['profile_image_url'] ?? '').toString().trim();
     final spots = _trendSpots();
 
     return FTScaffold(
       title: _merchantName.trim().isEmpty
           ? 'Merchant Dashboard'
-          : 'Merchant Dashboard • $_merchantName',
+          : 'Merchant Dashboard - $_merchantName',
       actions: [
         IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
         TextButton(
@@ -274,6 +353,48 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: FTErrorState(message: _error!, onRetry: _reload),
                     ),
+                  FTCard(
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: const Color(0xFFE2E8F0),
+                          backgroundImage: profilePhoto.isNotEmpty
+                              ? NetworkImage(profilePhoto)
+                              : null,
+                          child: profilePhoto.isNotEmpty
+                              ? null
+                              : Text(
+                                  _merchantName.trim().isEmpty
+                                      ? 'M'
+                                      : _merchantName.trim()[0].toUpperCase(),
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Merchant Photo',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'Used on merchant profile, listing seller badge, and leaderboards.',
+                                style: TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        OutlinedButton(
+                          onPressed: _openPhotoUploadDialog,
+                          child: const Text('Upload Photo'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   const FTSectionHeader(
                     title: 'Business Snapshot',
                     subtitle:
@@ -422,13 +543,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   _quickAction(
                     icon: Icons.support_agent_outlined,
                     label: 'Support Chat (Admin)',
-                    onTap: () {
-                      if (widget.onSelectTab != null) {
-                        widget.onSelectTab!(4);
-                      } else {
-                        _safePush(const SupportChatScreen());
-                      }
-                    },
+                    onTap: () => _safePush(const SupportChatScreen()),
                   ),
                   const SizedBox(height: 8),
                   _quickAction(

@@ -272,19 +272,26 @@ def recommended_shortlets():
         limit = max(1, min(int(request.args.get("limit") or 20), 60))
     except Exception:
         limit = 20
-    rows = Shortlet.query.order_by(Shortlet.created_at.desc()).limit(500).all()
-    base = _base_url()
-    items = []
-    for row in rows:
-        score, reasons = ranking_for_shortlet(row, preferred_city=city, preferred_state=state)
-        payload = _shortlet_item_from_raw(
-            row.to_dict(base_url=base),
-            ranking_score=int(score),
-            ranking_reason=reasons,
-        )
-        items.append(payload)
-    items.sort(key=lambda row: (int(row.get("ranking_score", 0)), row.get("created_at") or ""), reverse=True)
-    return jsonify({"ok": True, "city": city, "state": state, "items": items[:limit], "limit": limit}), 200
+    try:
+        rows = Shortlet.query.order_by(Shortlet.created_at.desc()).limit(500).all()
+        base = _base_url()
+        items = []
+        for row in rows:
+            score, reasons = ranking_for_shortlet(row, preferred_city=city, preferred_state=state)
+            payload = _shortlet_item_from_raw(
+                row.to_dict(base_url=base),
+                ranking_score=int(score),
+                ranking_reason=reasons,
+            )
+            items.append(payload)
+        items.sort(key=lambda row: (int(row.get("ranking_score", 0)), row.get("created_at") or ""), reverse=True)
+        return jsonify({"ok": True, "city": city, "state": state, "items": items[:limit], "limit": limit}), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "city": city, "state": state, "items": [], "limit": limit}), 200
 
 
 @shortlets_bp.get("/shortlets/<int:shortlet_id>")
