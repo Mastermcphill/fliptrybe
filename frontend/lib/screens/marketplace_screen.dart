@@ -123,10 +123,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _pickCity() async {
+    final scheme = Theme.of(context).colorScheme;
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: scheme.surfaceContainerLow,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -156,13 +157,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       subtitle: Text(
                           'City-first discovery for recommendations and search'),
                     ),
-                    TextField(
+                    FTInput(
                       controller: ctrl,
                       onChanged: (_) => setModal(() {}),
-                      decoration: const InputDecoration(
-                        hintText: 'Search city',
-                        prefixIcon: Icon(Icons.search),
-                      ),
+                      hint: 'Search city',
+                      prefixIcon: Icons.search,
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -175,8 +174,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           return ListTile(
                             title: Text(city),
                             trailing: isCurrent
-                                ? const Icon(Icons.check_circle,
-                                    color: Colors.green)
+                                ? Icon(Icons.check_circle, color: scheme.primary)
                                 : null,
                             onTap: () => Navigator.of(ctx).pop(city),
                           );

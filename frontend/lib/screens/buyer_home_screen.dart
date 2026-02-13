@@ -190,6 +190,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final txs = _ledger
         .whereType<Map>()
         .take(3)
@@ -388,21 +389,24 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                                     final direction =
                                         (tx['direction'] ?? '').toString();
                                     final kind = (tx['kind'] ?? '').toString();
-                                    return ListTile(
-                                      dense: true,
-                                      contentPadding: EdgeInsets.zero,
-                                      leading: Icon(
-                                        direction.toLowerCase() == 'credit'
-                                            ? Icons.south_west_outlined
-                                            : Icons.north_east_outlined,
-                                        color:
-                                            direction.toLowerCase() == 'credit'
-                                                ? Colors.green
-                                                : Colors.redAccent,
+                                    return FTTile(
+                                      leading:
+                                          direction.toLowerCase() == 'credit'
+                                              ? Icons.south_west_outlined
+                                              : Icons.north_east_outlined,
+                                      title: kind.isEmpty
+                                          ? 'Transaction'
+                                          : kind,
+                                      trailing: Text(
+                                        formatNaira(amount),
+                                        style: TextStyle(
+                                          color: direction.toLowerCase() ==
+                                                  'credit'
+                                              ? scheme.primary
+                                              : scheme.error,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                      title: Text(
-                                          kind.isEmpty ? 'Transaction' : kind),
-                                      trailing: Text(formatNaira(amount)),
                                     );
                                   }),
                               ],

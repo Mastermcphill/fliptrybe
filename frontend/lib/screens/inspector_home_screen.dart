@@ -4,6 +4,7 @@ import '../services/inspector_service.dart';
 import '../services/moneybox_service.dart';
 import '../services/wallet_service.dart';
 import '../ui/components/app_components.dart';
+import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import 'growth/growth_analytics_screen.dart';
 import 'inspector_bookings_screen.dart';
@@ -80,12 +81,11 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
       );
       if (!mounted) return;
       final ok = res['ok'] == true;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ok
-              ? 'Autosave settings updated.'
-              : (res['message'] ?? 'Autosave update failed').toString()),
-        ),
+      FTToast.show(
+        context,
+        ok
+            ? 'Autosave settings updated.'
+            : (res['message'] ?? 'Autosave update failed').toString(),
       );
       if (ok) {
         await _reload();
@@ -115,17 +115,22 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
     }).length;
     final avgRating =
         ratedCount == 0 ? '-' : (rating / ratedCount).toStringAsFixed(1);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inspector Home'),
-        actions: [
-          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
+    return FTScaffold(
+      title: 'Inspector Home',
+      actions: [
+        IconButton(onPressed: _reload, icon: const Icon(Icons.refresh)),
+      ],
+      child: _loading
+          ? ListView(
+              children: const [
+                FTMetricSkeletonTile(),
+                SizedBox(height: 10),
+                FTListCardSkeleton(withImage: false),
+                SizedBox(height: 10),
+                FTListCardSkeleton(withImage: false),
+              ],
+            )
           : ListView(
-              padding: const EdgeInsets.all(16),
               children: [
                 AppCard(
                   child: Column(
@@ -148,72 +153,66 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 const SizedBox(height: 10),
                 const RoleHowItWorksEntryCard(role: 'inspector'),
                 const SizedBox(height: 10),
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Earnings Rules',
-                            style: TextStyle(fontWeight: FontWeight.w800)),
-                        SizedBox(height: 8),
-                        Text(
-                            'Inspection payout is inspection fee minus 10% platform commission.'),
-                        Text('Withdraw fee: instant 1%, standard 0%.'),
-                      ],
-                    ),
+                const FTCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Earnings Rules',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      SizedBox(height: 8),
+                      Text(
+                          'Inspection payout is inspection fee minus 10% platform commission.'),
+                      Text('Withdraw fee: instant 1%, standard 0%.'),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Autosave Earnings',
-                            style: TextStyle(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: _autosaveEnabled,
-                          onChanged: (value) =>
-                              setState(() => _autosaveEnabled = value),
-                          title: const Text('Enable autosave'),
-                          subtitle: const Text(
-                              'Automatically move part of eligible credits into MoneyBox.'),
-                        ),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Slider(
-                                value: _autosavePercent.toDouble(),
-                                min: 1,
-                                max: 30,
-                                divisions: 29,
-                                label: '$_autosavePercent%',
-                                onChanged: _autosaveEnabled
-                                    ? (value) => setState(
-                                        () => _autosavePercent = value.round())
-                                    : null,
-                              ),
+                FTCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Autosave Earnings',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _autosaveEnabled,
+                        onChanged: (value) =>
+                            setState(() => _autosaveEnabled = value),
+                        title: const Text('Enable autosave'),
+                        subtitle: const Text(
+                            'Automatically move part of eligible credits into MoneyBox.'),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Slider(
+                              value: _autosavePercent.toDouble(),
+                              min: 1,
+                              max: 30,
+                              divisions: 29,
+                              label: '$_autosavePercent%',
+                              onChanged: _autosaveEnabled
+                                  ? (value) => setState(
+                                      () => _autosavePercent = value.round())
+                                  : null,
                             ),
-                            Text('$_autosavePercent%'),
-                          ],
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: _autosaveSaving ? null : _saveAutosave,
-                          icon: const Icon(Icons.save_outlined),
-                          label: Text(_autosaveSaving
-                              ? 'Saving...'
-                              : 'Save autosave settings'),
-                        ),
-                      ],
-                    ),
+                          ),
+                          Text('$_autosavePercent%'),
+                        ],
+                      ),
+                      FTPrimaryButton(
+                        onPressed: _autosaveSaving ? null : _saveAutosave,
+                        icon: Icons.save_outlined,
+                        label: _autosaveSaving
+                            ? 'Saving...'
+                            : 'Save autosave settings',
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                OutlinedButton.icon(
+                FTSecondaryButton(
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -222,11 +221,11 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.calculate_outlined),
-                  label: const Text('Estimate Earnings'),
+                  icon: Icons.calculate_outlined,
+                  label: 'Estimate Earnings',
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
+                FTSecondaryButton(
                   onPressed: () {
                     if (widget.onSelectTab != null) {
                       widget.onSelectTab!(3);
@@ -237,11 +236,11 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                       );
                     }
                   },
-                  icon: const Icon(Icons.assignment_outlined),
-                  label: const Text('View Bookings'),
+                  icon: Icons.assignment_outlined,
+                  label: 'View Bookings',
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
+                FTSecondaryButton(
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
@@ -253,30 +252,30 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                       ),
                     );
                   },
-                  icon: const Icon(Icons.power_settings_new_outlined),
-                  label: const Text('Update Availability'),
+                  icon: Icons.power_settings_new_outlined,
+                  label: 'Update Availability',
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
+                FTSecondaryButton(
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                           builder: (_) => const MoneyBoxDashboardScreen()),
                     );
                   },
-                  icon: const Icon(Icons.savings_outlined),
-                  label: const Text('MoneyBox'),
+                  icon: Icons.savings_outlined,
+                  label: 'MoneyBox',
                 ),
                 const SizedBox(height: 8),
-                OutlinedButton.icon(
+                FTSecondaryButton(
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                           builder: (_) => const SupportChatScreen()),
                     );
                   },
-                  icon: const Icon(Icons.support_agent_outlined),
-                  label: const Text('Chat Admin'),
+                  icon: Icons.support_agent_outlined,
+                  label: 'Chat Admin',
                 ),
               ],
             ),
