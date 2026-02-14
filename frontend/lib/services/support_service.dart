@@ -59,4 +59,47 @@ class SupportService {
       return false;
     }
   }
+
+  Future<List<Map<String, dynamic>>> adminThreadMessages(int threadId) async {
+    try {
+      final res = await _client.dio.get(
+        ApiConfig.api('/admin/support/threads/$threadId/messages'),
+      );
+      final data = _asMap(res.data);
+      final raw = data['items'];
+      if (raw is! List) return const <Map<String, dynamic>>[];
+      return raw
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    } catch (_) {
+      return const <Map<String, dynamic>>[];
+    }
+  }
+
+  Future<Map<String, dynamic>> adminReply({
+    required int threadId,
+    required String body,
+  }) async {
+    try {
+      final res = await _client.dio.post(
+        ApiConfig.api('/admin/support/threads/$threadId/messages'),
+        data: {'body': body},
+      );
+      final data = _asMap(res.data);
+      final status = res.statusCode ?? 0;
+      data['ok'] = status >= 200 && status < 300 && data['ok'] != false;
+      data['status'] = status;
+      if (data['message'] is Map) {
+        data['message'] = Map<String, dynamic>.from(data['message'] as Map);
+      }
+      return data;
+    } catch (e) {
+      return {
+        'ok': false,
+        'message': 'Request failed',
+        'error': e.toString(),
+      };
+    }
+  }
 }

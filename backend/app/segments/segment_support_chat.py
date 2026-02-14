@@ -64,6 +64,46 @@ def _is_admin(u: User | None) -> bool:
     return _role(u) == "admin"
 
 
+def _resolve_thread_user(thread_id: int) -> User | None:
+    try:
+        target = User.query.get(int(thread_id))
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        target = None
+    if not target:
+        return None
+    if _is_admin(target):
+        return None
+    return target
+
+
+def _admin_thread_messages(thread_id: int):
+    rows = (
+        SupportMessage.query
+        .filter_by(user_id=int(thread_id))
+        .order_by(SupportMessage.created_at.asc())
+        .limit(1000)
+        .all()
+    )
+    return jsonify({"ok": True, "items": [r.to_dict() for r in rows]}), 200
+
+
+def _admin_send_to_thread(*, admin_user: User, thread_id: int, body: str):
+    msg = SupportMessage(
+        user_id=int(thread_id),
+        sender_role="admin",
+        sender_id=int(admin_user.id),
+        body=body[:2000],
+        created_at=datetime.utcnow(),
+    )
+    db.session.add(msg)
+    db.session.commit()
+    return jsonify({"ok": True, "message": msg.to_dict()}), 201
+
+
 def _rate_limit_response(action: str, *, user: User | None, limit: int, window_seconds: int):
     try:
         settings = get_settings()
@@ -266,10 +306,13 @@ def admin_get_thread(user_id: int):
             pass
         return jsonify({"message": "Forbidden"}), 403
 
+    target = _resolve_thread_user(int(user_id))
+    if not target:
+        return jsonify({"message": "Not found"}), 404
+
     try:
         db.session.rollback()
-        rows = SupportMessage.query.filter_by(user_id=int(user_id)).order_by(SupportMessage.created_at.asc()).limit(1000).all()
-        return jsonify({"ok": True, "items": [r.to_dict() for r in rows]}), 200
+        return _admin_thread_messages(int(user_id))
     except Exception:
         db.session.rollback()
         try:
@@ -291,7 +334,7 @@ def admin_send(user_id: int):
 
     try:
         db.session.rollback()
-        target = User.query.get(int(user_id))
+        target = _resolve_thread_user(int(user_id))
         if not target:
             return jsonify({"message": "Not found"}), 404
     except Exception:
@@ -307,18 +350,48 @@ def admin_send(user_id: int):
     if not body:
         return jsonify({"message": "body required"}), 400
 
-    msg = SupportMessage(
-        user_id=int(user_id),
-        sender_role="admin",
-        sender_id=int(u.id),
-        body=body[:2000],
-        created_at=datetime.utcnow(),
-    )
+    try:
+        return _admin_send_to_thread(admin_user=u, thread_id=int(user_id), body=body)
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+@support_admin_bp.get("/threads/<int:thread_id>/messages")
+def admin_get_thread_messages(thread_id: int):
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    target = _resolve_thread_user(int(thread_id))
+    if not target:
+        return jsonify({"message": "Not found"}), 404
 
     try:
-        db.session.add(msg)
-        db.session.commit()
-        return jsonify({"ok": True, "message": msg.to_dict()}), 201
+        db.session.rollback()
+        return _admin_thread_messages(int(thread_id))
+    except Exception:
+        db.session.rollback()
+        return jsonify({"ok": True, "items": []}), 200
+
+
+@support_admin_bp.post("/threads/<int:thread_id>/messages")
+def admin_reply_thread(thread_id: int):
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+
+    target = _resolve_thread_user(int(thread_id))
+    if not target:
+        return jsonify({"message": "Not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    body = (payload.get("body") or "").strip()
+    if not body:
+        return jsonify({"message": "body required"}), 400
+
+    try:
+        return _admin_send_to_thread(admin_user=u, thread_id=int(thread_id), body=body)
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500

@@ -43,8 +43,10 @@ class SupportMessage(db.Model):
     def to_dict(self):
         return {
             "id": int(self.id),
+            "thread_id": int(self.user_id),
             "user_id": int(self.user_id),
             "sender_role": self.sender_role,
+            "sender_user_id": int(self.sender_id),
             "sender_id": int(self.sender_id),
             "body": self.body,
             "created_at": self.created_at.isoformat() if self.created_at else None,

@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_client.dart';
-import '../services/api_config.dart';
 import '../services/api_service.dart';
+import '../services/support_service.dart';
 
 class AdminSupportThreadScreen extends StatefulWidget {
   final int userId;
   final String userEmail;
+  final SupportService? supportService;
+  final bool forceAdmin;
+
   const AdminSupportThreadScreen(
-      {super.key, required this.userId, this.userEmail = ''});
+      {super.key,
+      required this.userId,
+      this.userEmail = '',
+      this.supportService,
+      this.forceAdmin = false});
 
   @override
   State<AdminSupportThreadScreen> createState() =>
@@ -16,17 +22,54 @@ class AdminSupportThreadScreen extends StatefulWidget {
 }
 
 class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
+  late final SupportService _supportService;
   bool _authChecking = true;
   bool _isAdmin = false;
   bool _loading = false;
+  bool _canSend = false;
   String? _error;
   List<dynamic> _items = const [];
   final _msgCtrl = TextEditingController();
+  final _listCtrl = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _supportService = widget.supportService ?? SupportService();
+    _msgCtrl.addListener(_syncSendState);
+    if (widget.forceAdmin) {
+      _isAdmin = true;
+      _authChecking = false;
+      _load();
+      return;
+    }
     _ensureAdmin();
+  }
+
+  @override
+  void dispose() {
+    _msgCtrl.removeListener(_syncSendState);
+    _msgCtrl.dispose();
+    _listCtrl.dispose();
+    super.dispose();
+  }
+
+  void _syncSendState() {
+    final canSendNow = _msgCtrl.text.trim().isNotEmpty && !_loading;
+    if (canSendNow == _canSend) return;
+    setState(() => _canSend = canSendNow);
+  }
+
+  void _scrollToBottom() {
+    if (!_listCtrl.hasClients) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_listCtrl.hasClients) return;
+      _listCtrl.animateTo(
+        _listCtrl.position.maxScrollExtent + 64,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   Future<void> _ensureAdmin() async {
@@ -64,19 +107,18 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
       _error = null;
     });
     try {
-      final res = await ApiClient.instance.dio
-          .get(ApiConfig.api('/admin/support/messages/${widget.userId}'));
-      final data = res.data;
-      final items = (data is Map && data['items'] is List)
-          ? (data['items'] as List)
-          : <dynamic>[];
+      final items = await _supportService.adminThreadMessages(widget.userId);
       if (!mounted) return;
       setState(() => _items = items);
+      _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        _syncSendState();
+      }
     }
   }
 
@@ -84,18 +126,28 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
     if (!_isAdmin) return;
     final body = _msgCtrl.text.trim();
     if (body.isEmpty) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _canSend = false;
+    });
     try {
-      final res = await ApiClient.instance.dio.post(
-        ApiConfig.api('/admin/support/messages/${widget.userId}'),
-        data: {'body': body},
+      final res = await _supportService.adminReply(
+        threadId: widget.userId,
+        body: body,
       );
       if (!mounted) return;
-      if (res.statusCode != null &&
-          res.statusCode! >= 200 &&
-          res.statusCode! < 300) {
+      if (res['ok'] == true) {
+        final created = res['message'];
         _msgCtrl.clear();
-        await _load();
+        if (created is Map) {
+          final next = List<Map<String, dynamic>>.from(
+            _items.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+          )..add(Map<String, dynamic>.from(created));
+          setState(() => _items = next);
+          _scrollToBottom();
+        } else {
+          await _load();
+        }
       } else {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Send failed.')));
@@ -105,7 +157,10 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Send failed: $e')));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+        _syncSendState();
+      }
     }
   }
 
@@ -113,8 +168,11 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
     final body = (m['body'] ?? '').toString();
     final role = (m['sender_role'] ?? '').toString().toLowerCase();
     final isAdmin = role == 'admin';
+    final cs = Theme.of(context).colorScheme;
     final align = isAdmin ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final bg = isAdmin ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9);
+    final bg = isAdmin ? cs.primaryContainer : cs.surfaceContainerHighest;
+    final fg = isAdmin ? cs.onPrimaryContainer : cs.onSurface;
+    final label = isAdmin ? 'Admin' : 'User';
     return Column(
       crossAxisAlignment: align,
       children: [
@@ -125,8 +183,26 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
             color: bg,
             borderRadius: BorderRadius.circular(12),
           ),
-          child:
-              Text(body, style: const TextStyle(fontWeight: FontWeight.w600)),
+          child: Column(
+            crossAxisAlignment: align,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                body,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: fg,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -167,6 +243,7 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
             ),
           Expanded(
             child: ListView(
+              controller: _listCtrl,
               padding: const EdgeInsets.all(12),
               children: [
                 if (items.isEmpty)
@@ -194,7 +271,7 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _loading ? null : _send,
+                  onPressed: _canSend ? _send : null,
                   child: const Text('Send'),
                 ),
               ],
