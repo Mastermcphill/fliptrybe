@@ -72,7 +72,8 @@ void main() {
     final result = await ApiService.restoreSession(
       readAccessToken: () async => 'expired-access-token',
       readRefreshToken: () async => 'expired-refresh-token',
-      meCall: () async => _response(401, {'message': 'Invalid or expired token'}),
+      meCall: () async =>
+          _response(401, {'message': 'Invalid or expired token'}),
       refreshCall: (_) async => false,
       resetAuthSessionCall: () async {
         resetCalled = true;

@@ -36,8 +36,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     final data = await _store.load();
     if (!mounted) return;
     if ((data['bank_name'] ?? '').isNotEmpty) _bank.text = data['bank_name']!;
-    if ((data['account_number'] ?? '').isNotEmpty) _acctNo.text = data['account_number']!;
-    if ((data['account_name'] ?? '').isNotEmpty) _acctName.text = data['account_name']!;
+    if ((data['account_number'] ?? '').isNotEmpty)
+      _acctNo.text = data['account_number']!;
+    if ((data['account_name'] ?? '').isNotEmpty)
+      _acctName.text = data['account_name']!;
   }
 
   Future<void> _load() async {
@@ -70,8 +72,13 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
 
     if (!mounted) return;
     final ok = res['ok'] == true;
-    final msg = (res['message'] ?? res['error'] ?? (ok ? 'Payout requested' : 'Request failed')).toString();
-    if (!ok && (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(msg))) {
+    final msg = (res['message'] ??
+            res['error'] ??
+            (ok ? 'Payout requested' : 'Request failed'))
+        .toString();
+    if (!ok &&
+        (ApiService.isEmailNotVerified(res) ||
+            ApiService.isEmailNotVerified(msg))) {
       await showEmailVerificationRequiredDialog(
         context,
         message: msg,
@@ -97,34 +104,42 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Payouts'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text('Request payout', style: TextStyle(fontWeight: FontWeight.w900)),
+                const Text('Request payout',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _amount,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Amount', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Amount', border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _bank,
-                  decoration: const InputDecoration(labelText: 'Bank name', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Bank name', border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _acctNo,
-                  decoration: const InputDecoration(labelText: 'Account number', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Account number',
+                      border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _acctName,
-                  decoration: const InputDecoration(labelText: 'Account name', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                      labelText: 'Account name', border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 10),
                 ElevatedButton.icon(
@@ -133,7 +148,8 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                   label: const Text('Request'),
                 ),
                 const Divider(height: 28),
-                const Text('History', style: TextStyle(fontWeight: FontWeight.w900)),
+                const Text('History',
+                    style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 if (_rows.isEmpty)
                   const Text('No payout requests yet.')
@@ -142,8 +158,10 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
                     final m = Map<String, dynamic>.from(raw);
                     return Card(
                       child: ListTile(
-                        title: Text('NGN ${m['amount'] ?? 0} - ${m['status'] ?? ''}',
-                            style: const TextStyle(fontWeight: FontWeight.w900)),
+                        title: Text(
+                            'NGN ${m['amount'] ?? 0} - ${m['status'] ?? ''}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                         subtitle: Text(
                           '${m['bank_name'] ?? ''} - ${m['account_number'] ?? ''}\n${m['account_name'] ?? ''}',
                         ),

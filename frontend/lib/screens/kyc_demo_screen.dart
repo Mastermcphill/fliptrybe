@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../services/kyc_service.dart';
 
@@ -40,11 +40,13 @@ class _KycDemoScreenState extends State<KycDemoScreen> {
     final num = _idNumCtrl.text.trim();
     if (name.isEmpty || num.isEmpty) return;
 
-    final res = await _svc.submit(fullName: name, idType: _idType, idNumber: num);
+    final res =
+        await _svc.submit(fullName: name, idType: _idType, idNumber: num);
     if (!mounted) return;
     if (res != null) {
       _reload();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('KYC submitted')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('KYC submitted')));
     }
   }
 
@@ -77,7 +79,9 @@ class _KycDemoScreenState extends State<KycDemoScreen> {
                       Icon(Icons.verified_user, color: _statusColor(status)),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text('Status: $status', style: const TextStyle(fontWeight: FontWeight.w900)),
+                        child: Text('Status: $status',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                       ),
                     ],
                   ),
@@ -86,24 +90,29 @@ class _KycDemoScreenState extends State<KycDemoScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'Full name', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Full name', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _idType,
-                decoration: const InputDecoration(labelText: 'ID type', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'ID type', border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'nin', child: Text('NIN')),
                   DropdownMenuItem(value: 'bvn', child: Text('BVN')),
                   DropdownMenuItem(value: 'passport', child: Text('Passport')),
-                  DropdownMenuItem(value: 'drivers_license', child: Text("Driver's License")),
+                  DropdownMenuItem(
+                      value: 'drivers_license',
+                      child: Text("Driver's License")),
                 ],
                 onChanged: (v) => setState(() => _idType = v ?? 'nin'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: _idNumCtrl,
-                decoration: const InputDecoration(labelText: 'ID number', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'ID number', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 12),
               SizedBox(
@@ -134,4 +143,3 @@ class _KycDemoScreenState extends State<KycDemoScreen> {
     );
   }
 }
-

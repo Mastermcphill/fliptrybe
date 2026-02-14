@@ -12,17 +12,20 @@ class MoneyBoxService {
   }
 
   Future<Map<String, dynamic>> openTier(int tier) async {
-    final data = await _client.postJson(ApiConfig.api('/moneybox/open'), {'tier': tier});
+    final data =
+        await _client.postJson(ApiConfig.api('/moneybox/open'), {'tier': tier});
     return _asMap(data);
   }
 
   Future<Map<String, dynamic>> setTier(int tier) async {
-    final data = await _client.postJson(ApiConfig.api('/moneybox/tier'), {'tier': tier});
+    final data =
+        await _client.postJson(ApiConfig.api('/moneybox/tier'), {'tier': tier});
     return _asMap(data);
   }
 
   Future<Map<String, dynamic>> autosaveSettings() async {
-    final data = await _client.getJson(ApiConfig.api('/moneybox/autosave/settings'));
+    final data =
+        await _client.getJson(ApiConfig.api('/moneybox/autosave/settings'));
     return _asMap(data);
   }
 
@@ -56,7 +59,8 @@ class MoneyBoxService {
   Future<Map<String, dynamic>> withdraw({double? amount}) async {
     final body = <String, dynamic>{};
     if (amount != null) body['amount'] = amount;
-    final data = await _client.postJson(ApiConfig.api('/moneybox/withdraw'), body);
+    final data =
+        await _client.postJson(ApiConfig.api('/moneybox/withdraw'), body);
     return _asMap(data);
   }
 

@@ -27,7 +27,8 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
   Future<void> _loadStatus() async {
     try {
       final me = await ApiService.getProfile();
-      final verified = me['is_verified'] == true || me['email_verified'] == true;
+      final verified =
+          me['is_verified'] == true || me['email_verified'] == true;
       final email = me['email']?.toString() ?? '';
       if (_emailCtrl.text.trim().isEmpty && email.isNotEmpty) {
         _emailCtrl.text = email;
@@ -126,7 +127,8 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
           const SizedBox(height: 12),
           ElevatedButton(
             onPressed: _loading ? null : _send,
-            child: Text(_loading ? 'Please wait...' : 'Resend verification link'),
+            child:
+                Text(_loading ? 'Please wait...' : 'Resend verification link'),
           ),
           const SizedBox(height: 10),
           OutlinedButton(
@@ -135,7 +137,8 @@ class _EmailVerifyScreenState extends State<EmailVerifyScreen> {
           ),
           const SizedBox(height: 8),
           if (_verified)
-            const Text('Your email is verified.', style: TextStyle(color: Colors.green)),
+            const Text('Your email is verified.',
+                style: TextStyle(color: Colors.green)),
         ],
       ),
     );

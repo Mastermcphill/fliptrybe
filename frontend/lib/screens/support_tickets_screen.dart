@@ -41,21 +41,27 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
             children: [
               TextField(
                 controller: subjectCtrl,
-                decoration: const InputDecoration(labelText: 'Subject', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Subject', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: msgCtrl,
                 minLines: 4,
                 maxLines: 6,
-                decoration: const InputDecoration(labelText: 'Message', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Message', border: OutlineInputBorder()),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Submit')),
         ],
       ),
     );
@@ -88,21 +94,27 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
               TextField(
                 controller: orderCtrl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Order ID', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Order ID', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: msgCtrl,
                 minLines: 3,
                 maxLines: 6,
-                decoration: const InputDecoration(labelText: 'Reason', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                    labelText: 'Reason', border: OutlineInputBorder()),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Submit')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Submit')),
         ],
       ),
     );
@@ -115,11 +127,15 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
     await _submitTicket(subject: 'Dispute: Order #$orderId', message: reason);
   }
 
-  Future<void> _submitTicket({required String subject, required String message}) async {
+  Future<void> _submitTicket(
+      {required String subject, required String message}) async {
     final res = await _svc.createTicket(subject: subject, message: message);
     if (!mounted) return;
     final ok = res['ok'] == true;
-    final msg = (res['message'] ?? res['error'] ?? (ok ? 'Ticket created.' : 'Request failed')).toString();
+    final msg = (res['message'] ??
+            res['error'] ??
+            (ok ? 'Ticket created.' : 'Request failed'))
+        .toString();
     if (!ok && ApiService.isChatNotAllowed(res)) {
       await showChatNotAllowedDialog(context, onChatWithAdmin: _contactAdmin);
       return;
@@ -177,8 +193,10 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
             return Card(
               margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
               child: ListTile(
-                title: Text((m['subject'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.w900)),
-                subtitle: Text((m['message'] ?? '').toString(), maxLines: 2, overflow: TextOverflow.ellipsis),
+                title: Text((m['subject'] ?? '').toString(),
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                subtitle: Text((m['message'] ?? '').toString(),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
                 trailing: _chip((m['status'] ?? 'open').toString()),
                 onTap: () {
                   showDialog(
@@ -187,7 +205,9 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                       title: Text((m['subject'] ?? '').toString()),
                       content: Text((m['message'] ?? '').toString()),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                        TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Close')),
                       ],
                     ),
                   );
@@ -206,12 +226,13 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Quick Help', style: TextStyle(fontWeight: FontWeight.w900)),
+                      const Text('Quick Help',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                       const SizedBox(height: 8),
                       ...faqItems.map((t) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text('- $t'),
-                      )),
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text('- $t'),
+                          )),
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -233,7 +254,10 @@ class _SupportTicketsScreenState extends State<SupportTicketsScreen> {
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
                         onPressed: () {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportChatScreen()));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const SupportChatScreen()));
                         },
                         icon: const Icon(Icons.chat_bubble_outline),
                         label: const Text('Chat with Admin'),

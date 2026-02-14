@@ -39,10 +39,11 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
       notifSms = (s['notif_sms'] == true);
       notifWhatsapp = (s['notif_whatsapp'] == true);
       darkMode = (s['dark_mode'] == true);
-      _themeMode =
-          s['theme_mode']?.toString() ?? themeModeToRaw(theme?.themeMode ?? ThemeMode.system);
+      _themeMode = s['theme_mode']?.toString() ??
+          themeModeToRaw(theme?.themeMode ?? ThemeMode.system);
       _backgroundPalette = s['background_palette']?.toString() ??
-          (theme?.backgroundPalette.value ?? AppBackgroundPalette.neutral.value);
+          (theme?.backgroundPalette.value ??
+              AppBackgroundPalette.neutral.value);
       _loading = false;
     });
   }
@@ -51,7 +52,8 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
     final theme = ThemeControllerProvider.maybeOf(context);
     if (theme != null) {
       await theme.setThemeMode(themeModeFromRaw(_themeMode));
-      await theme.setBackgroundPalette(AppBackgroundPalette.fromRaw(_backgroundPalette));
+      await theme.setBackgroundPalette(
+          AppBackgroundPalette.fromRaw(_backgroundPalette));
     }
     await _svc.updateSettings(
       notifInApp: notifInApp,
@@ -88,7 +90,8 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
               children: [
                 Text(
                   'Notifications',
-                  style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900, color: cs.onSurface),
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
@@ -98,20 +101,23 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
                 ),
                 SwitchListTile(
                   title: const Text('SMS alerts (demo-ready)'),
-                  subtitle: const Text('Persisted to backend. Add Termii/NG SMS later.'),
+                  subtitle: const Text(
+                      'Persisted to backend. Add Termii/NG SMS later.'),
                   value: notifSms,
                   onChanged: (v) => _toggle(() => notifSms = v),
                 ),
                 SwitchListTile(
                   title: const Text('WhatsApp alerts (demo-ready)'),
-                  subtitle: const Text('Persisted to backend. Add WhatsApp Cloud later.'),
+                  subtitle: const Text(
+                      'Persisted to backend. Add WhatsApp Cloud later.'),
                   value: notifWhatsapp,
                   onChanged: (v) => _toggle(() => notifWhatsapp = v),
                 ),
                 const Divider(height: 26),
                 Text(
                   'Appearance',
-                  style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900, color: cs.onSurface),
                 ),
                 SwitchListTile(
                   title: const Text('Dark mode (legacy compatibility)'),
@@ -122,8 +128,10 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
                 DropdownButtonFormField<String>(
                   value: _themeMode,
                   items: const [
-                    DropdownMenuItem(value: 'system', child: Text('Theme: System')),
-                    DropdownMenuItem(value: 'light', child: Text('Theme: Light')),
+                    DropdownMenuItem(
+                        value: 'system', child: Text('Theme: System')),
+                    DropdownMenuItem(
+                        value: 'light', child: Text('Theme: Light')),
                     DropdownMenuItem(value: 'dark', child: Text('Theme: Dark')),
                   ],
                   onChanged: (value) {
@@ -135,9 +143,12 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
                 DropdownButtonFormField<String>(
                   value: _backgroundPalette,
                   items: const [
-                    DropdownMenuItem(value: 'neutral', child: Text('Palette: Neutral')),
-                    DropdownMenuItem(value: 'mint', child: Text('Palette: Mint')),
-                    DropdownMenuItem(value: 'sand', child: Text('Palette: Sand')),
+                    DropdownMenuItem(
+                        value: 'neutral', child: Text('Palette: Neutral')),
+                    DropdownMenuItem(
+                        value: 'mint', child: Text('Palette: Mint')),
+                    DropdownMenuItem(
+                        value: 'sand', child: Text('Palette: Sand')),
                   ],
                   onChanged: (value) {
                     if (value == null) return;

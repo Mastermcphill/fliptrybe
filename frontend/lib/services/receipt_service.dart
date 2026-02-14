@@ -3,7 +3,6 @@ import 'api_client.dart';
 import 'api_config.dart';
 
 class ReceiptService {
-
   ReceiptService({ApiClient? client}) : _client = client ?? ApiClient.instance;
   final ApiClient _client;
 
@@ -18,9 +17,13 @@ class ReceiptService {
     }
   }
 
-  Future<bool> createDemoReceipt({required String kind, required double amount, String reference = 'demo-ref'}) async {
+  Future<bool> createDemoReceipt(
+      {required String kind,
+      required double amount,
+      String reference = 'demo-ref'}) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/receipts/demo'), data: {'kind': kind, 'amount': amount, 'reference': reference});
+      final res = await _client.dio.post(ApiConfig.api('/receipts/demo'),
+          data: {'kind': kind, 'amount': amount, 'reference': reference});
       final code = res.statusCode ?? 0;
       return code == 201 || code == 200;
     } catch (_) {

@@ -39,7 +39,8 @@ class _AdminNotifyQueueScreenState extends State<AdminNotifyQueueScreen> {
       _error = null;
     });
     try {
-      final rows = await _svc.list(channel: _channelCtrl.text.trim(), status: _status.trim());
+      final rows = await _svc.list(
+          channel: _channelCtrl.text.trim(), status: _status.trim());
       if (!mounted) return;
       setState(() => _items = rows);
     } catch (e) {
@@ -50,21 +51,25 @@ class _AdminNotifyQueueScreenState extends State<AdminNotifyQueueScreen> {
     }
   }
 
-  Future<void> _runAction(Future<Map<String, dynamic>> Function() action, String okText) async {
+  Future<void> _runAction(
+      Future<Map<String, dynamic>> Function() action, String okText) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final res = await action();
       if (!mounted) return;
       final ok = res['ok'] == true;
-      final msg = ok ? okText : ((res['message'] ?? res['error'] ?? 'Action failed').toString());
+      final msg = ok
+          ? okText
+          : ((res['message'] ?? res['error'] ?? 'Action failed').toString());
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       if (ok) {
         await _load();
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Action failed: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -145,7 +150,8 @@ class _AdminNotifyQueueScreenState extends State<AdminNotifyQueueScreen> {
               ),
               child: ListView.separated(
                 itemCount: _items.length,
-                separatorBuilder: (_, __) => const SizedBox(height: AppTokens.s8),
+                separatorBuilder: (_, __) =>
+                    const SizedBox(height: AppTokens.s8),
                 itemBuilder: (_, i) {
                   final raw = _items[i];
                   if (raw is! Map) return const SizedBox.shrink();

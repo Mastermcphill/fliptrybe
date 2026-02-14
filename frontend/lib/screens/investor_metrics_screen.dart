@@ -35,7 +35,8 @@ class _InvestorMetricsScreenState extends State<InvestorMetricsScreen> {
       final me = await ApiService.getProfile();
       final uid = me['id'];
       final o = await _admin.overview();
-      final my = (uid is int) ? await _orders.myOrders(userId: uid) : <dynamic>[];
+      final my =
+          (uid is int) ? await _orders.myOrders(userId: uid) : <dynamic>[];
       if (!mounted) return;
       setState(() {
         _overview = o;
@@ -71,7 +72,8 @@ class _InvestorMetricsScreenState extends State<InvestorMetricsScreen> {
                   children: [
                     const Text(
                       "Demo KPIs (Live backend data)",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 12),
                     ListTile(

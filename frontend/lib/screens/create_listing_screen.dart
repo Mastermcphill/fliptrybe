@@ -14,8 +14,10 @@ import '../services/category_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
 import '../services/marketplace_catalog_service.dart';
+import '../services/analytics_hooks.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
+import '../utils/role_gates.dart';
 import '../widgets/email_verification_dialog.dart';
 
 class CreateListingScreen extends StatefulWidget {
@@ -455,6 +457,15 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   Future<void> _submitListing() async {
     if (_loading) return;
+    final profile = await ApiService.getProfile();
+    final block = RoleGates.forPostListing(profile);
+    final allowed = await guardRestrictedAction(
+      context,
+      block: block,
+      authAction: 'create a listing',
+      onAllowed: () async {},
+    );
+    if (!allowed) return;
     if (!_validateCurrentStep()) return;
 
     final title = _titleCtrl.text.trim();
@@ -508,6 +519,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     }
 
     if (ok) {
+      await AnalyticsHooks.instance.track(
+        'listing_created',
+        properties: <String, Object?>{
+          'category': _category,
+          'category_id': _categoryId,
+          'brand_id': _brandId,
+        },
+      );
       await _clearDraft();
       if (!mounted) return;
       _showSnack('Listing published successfully.');

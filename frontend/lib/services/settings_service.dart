@@ -8,7 +8,8 @@ class SettingsService {
     try {
       final res = await _client.dio.get(ApiConfig.api('/settings'));
       final data = res.data;
-      if (data is Map && data['settings'] is Map) return Map<String, dynamic>.from(data['settings'] as Map);
+      if (data is Map && data['settings'] is Map)
+        return Map<String, dynamic>.from(data['settings'] as Map);
       return <String, dynamic>{};
     } catch (_) {
       return <String, dynamic>{};

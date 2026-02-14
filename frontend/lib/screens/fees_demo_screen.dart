@@ -28,7 +28,8 @@ class _FeesDemoScreenState extends State<FeesDemoScreen> {
     });
 
     final amount = _amountCtrl.text.trim();
-    final url = ApiConfig.api('/fees/quote') + '?kind=${Uri.encodeComponent(_kind)}&amount=${Uri.encodeComponent(amount)}';
+    final url = ApiConfig.api('/fees/quote') +
+        '?kind=${Uri.encodeComponent(_kind)}&amount=${Uri.encodeComponent(amount)}';
 
     try {
       final data = await ApiClient.instance.getJson(url);
@@ -53,23 +54,32 @@ class _FeesDemoScreenState extends State<FeesDemoScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text("Commission engine (MVP)", style: TextStyle(fontWeight: FontWeight.w900)),
+          const Text("Commission engine (MVP)",
+              style: TextStyle(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             value: _kind,
-            decoration: const InputDecoration(labelText: "Fee type", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Fee type", border: OutlineInputBorder()),
             items: const [
-              DropdownMenuItem(value: "listing_sale", child: Text("Listing sale commission")),
-              DropdownMenuItem(value: "delivery", child: Text("Delivery commission")),
-              DropdownMenuItem(value: "withdrawal", child: Text("Withdrawal commission")),
-              DropdownMenuItem(value: "shortlet_booking", child: Text("Shortlet booking commission")),
+              DropdownMenuItem(
+                  value: "listing_sale",
+                  child: Text("Listing sale commission")),
+              DropdownMenuItem(
+                  value: "delivery", child: Text("Delivery commission")),
+              DropdownMenuItem(
+                  value: "withdrawal", child: Text("Withdrawal commission")),
+              DropdownMenuItem(
+                  value: "shortlet_booking",
+                  child: Text("Shortlet booking commission")),
             ],
             onChanged: (v) => setState(() => _kind = v ?? _kind),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _amountCtrl,
-            decoration: const InputDecoration(labelText: "Amount (₦)", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Amount (₦)", border: OutlineInputBorder()),
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 10),
@@ -89,9 +99,11 @@ class _FeesDemoScreenState extends State<FeesDemoScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Rate: ${(100 * (_result!['rate'] ?? 0)).toString()}%"),
+                    Text(
+                        "Rate: ${(100 * (_result!['rate'] ?? 0)).toString()}%"),
                     Text("Fee: ₦${_result!['fee'] ?? '-'}"),
-                    Text("Total: ₦${_result!['total'] ?? '-'}", style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text("Total: ₦${_result!['total'] ?? '-'}",
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                   ],
                 ),
               ),

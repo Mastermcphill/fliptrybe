@@ -27,8 +27,10 @@ class _AdminListsScreenState extends State<AdminListsScreen> {
       _error = null;
     });
     try {
-      final users = await ApiClient.instance.getJson(ApiConfig.api("/admin/users"));
-      final listings = await ApiClient.instance.getJson(ApiConfig.api("/admin/listings"));
+      final users =
+          await ApiClient.instance.getJson(ApiConfig.api("/admin/users"));
+      final listings =
+          await ApiClient.instance.getJson(ApiConfig.api("/admin/listings"));
       if (!mounted) return;
       setState(() {
         _users = users is List ? users : const [];
@@ -49,7 +51,11 @@ class _AdminListsScreenState extends State<AdminListsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Admin Lists"),
-        actions: [IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -58,7 +64,8 @@ class _AdminListsScreenState extends State<AdminListsScreen> {
               : ListView(
                   padding: const EdgeInsets.all(12),
                   children: [
-                    const Text("Users", style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text("Users",
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     ..._users.take(20).map((u) {
                       final m = (u as Map).cast<String, dynamic>();
@@ -70,7 +77,8 @@ class _AdminListsScreenState extends State<AdminListsScreen> {
                       );
                     }),
                     const Divider(height: 28),
-                    const Text("Listings", style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text("Listings",
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 8),
                     ..._listings.take(20).map((l) {
                       final m = (l as Map).cast<String, dynamic>();
@@ -78,7 +86,8 @@ class _AdminListsScreenState extends State<AdminListsScreen> {
                         dense: true,
                         leading: const Icon(Icons.inventory_2_outlined),
                         title: Text(m['title']?.toString() ?? "Listing"),
-                        subtitle: Text("id: ${m['id']} • seller: ${m['seller_id'] ?? ''} • ₦${m['price'] ?? ''}"),
+                        subtitle: Text(
+                            "id: ${m['id']} • seller: ${m['seller_id'] ?? ''} • ₦${m['price'] ?? ''}"),
                       );
                     }),
                   ],

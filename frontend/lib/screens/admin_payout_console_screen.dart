@@ -6,7 +6,8 @@ class AdminPayoutConsoleScreen extends StatefulWidget {
   const AdminPayoutConsoleScreen({super.key});
 
   @override
-  State<AdminPayoutConsoleScreen> createState() => _AdminPayoutConsoleScreenState();
+  State<AdminPayoutConsoleScreen> createState() =>
+      _AdminPayoutConsoleScreenState();
 }
 
 class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
@@ -74,7 +75,8 @@ class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
             padding: const EdgeInsets.all(12),
             child: DropdownButtonFormField<String>(
               value: _status,
-              decoration: const InputDecoration(border: OutlineInputBorder(), labelText: "Status"),
+              decoration: const InputDecoration(
+                  border: OutlineInputBorder(), labelText: "Status"),
               items: const [
                 DropdownMenuItem(value: "pending", child: Text("pending")),
                 DropdownMenuItem(value: "approved", child: Text("approved")),
@@ -98,7 +100,8 @@ class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
                           final raw = _rows[i];
                           if (raw is! Map) return const SizedBox.shrink();
                           final m = Map<String, dynamic>.from(raw);
-                          final id = int.tryParse((m["id"] ?? "").toString()) ?? 0;
+                          final id =
+                              int.tryParse((m["id"] ?? "").toString()) ?? 0;
                           final userId = m["user_id"] ?? "";
                           final amount = m["amount"] ?? 0;
                           final status = (m["status"] ?? "").toString();
@@ -112,20 +115,39 @@ class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("Payout #$id", style: const TextStyle(fontWeight: FontWeight.w900)),
+                                  Text("Payout #$id",
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w900)),
                                   const SizedBox(height: 4),
                                   Text("User: $userId   •   ₦$amount"),
                                   Text("Status: $status"),
-                                  if (bank.isNotEmpty || acct.isNotEmpty) Text("Bank: $bank  $acct"),
+                                  if (bank.isNotEmpty || acct.isNotEmpty)
+                                    Text("Bank: $bank  $acct"),
                                   const SizedBox(height: 10),
                                   Wrap(
                                     spacing: 10,
                                     children: [
-                                      ElevatedButton(onPressed: () => _approve(id), child: const Text("Approve")),
-                                      ElevatedButton(onPressed: () => _reject(id), child: const Text("Reject")),
-                                      ElevatedButton(onPressed: () async { final ok = await _svc.process(id); _toast(ok ? 'Processed ✅' : 'Process failed'); _load(); }, child: const Text('Process')),
-                                      ElevatedButton(onPressed: () => _pay(id), child: const Text("Pay (Provider)")),
-                                      ElevatedButton(onPressed: () => _markPaid(id), child: const Text("Mark Paid")),
+                                      ElevatedButton(
+                                          onPressed: () => _approve(id),
+                                          child: const Text("Approve")),
+                                      ElevatedButton(
+                                          onPressed: () => _reject(id),
+                                          child: const Text("Reject")),
+                                      ElevatedButton(
+                                          onPressed: () async {
+                                            final ok = await _svc.process(id);
+                                            _toast(ok
+                                                ? 'Processed ✅'
+                                                : 'Process failed');
+                                            _load();
+                                          },
+                                          child: const Text('Process')),
+                                      ElevatedButton(
+                                          onPressed: () => _pay(id),
+                                          child: const Text("Pay (Provider)")),
+                                      ElevatedButton(
+                                          onPressed: () => _markPaid(id),
+                                          child: const Text("Mark Paid")),
                                     ],
                                   ),
                                 ],

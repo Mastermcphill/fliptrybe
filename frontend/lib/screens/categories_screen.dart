@@ -34,10 +34,14 @@ class CategoriesScreen extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
               if (c == "Shortlets") {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ShortletScreen()));
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const ShortletScreen()));
                 return;
               }
-              Navigator.push(context, MaterialPageRoute(builder: (_) => SearchDemoScreen(initialQuery: c)));
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => SearchDemoScreen(initialQuery: c)));
             },
           );
         },

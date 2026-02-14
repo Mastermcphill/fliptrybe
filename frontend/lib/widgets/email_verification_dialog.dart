@@ -32,7 +32,8 @@ Future<void> showEmailVerificationRequiredDialog(
                 onPressed: () {
                   Navigator.of(ctx).pop();
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const EmailVerifyScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const EmailVerifyScreen()),
                   );
                 },
                 child: const Text('Verify Email'),
@@ -56,7 +57,9 @@ Future<void> showEmailVerificationRequiredDialog(
                           if (!context.mounted) return;
                           Navigator.of(ctx).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Verification link sent. Check your inbox or server logs.')),
+                            const SnackBar(
+                                content: Text(
+                                    'Verification link sent. Check your inbox or server logs.')),
                           );
                         } catch (e) {
                           if (!context.mounted) return;

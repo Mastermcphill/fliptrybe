@@ -24,7 +24,8 @@ class SafeImage extends StatelessWidget {
     final lower = s.toLowerCase();
 
     // Only allow http/https network images
-    if (!(lower.startsWith('http://') || lower.startsWith('https://'))) return false;
+    if (!(lower.startsWith('http://') || lower.startsWith('https://')))
+      return false;
 
     // Block svg (Image.network won’t render it properly)
     if (lower.endsWith('.svg')) return false;

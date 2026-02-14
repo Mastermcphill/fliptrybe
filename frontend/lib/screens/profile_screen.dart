@@ -1,26 +1,31 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../services/api_service.dart';
+
 import '../services/api_config.dart';
+import '../services/api_service.dart';
+import '../services/notification_service.dart';
 import '../services/token_storage.dart';
-import 'merchant_listings_demo_screen.dart';
-import 'settings_demo_screen.dart';
-import 'wallet_screen.dart';
-import 'receipts_screen.dart';
-import 'support_tickets_screen.dart';
-import 'support_chat_screen.dart';
-import 'kyc_demo_screen.dart';
-import 'orders_screen.dart';
-import 'investor_metrics_screen.dart';
-import 'sales_analytics_screen.dart';
-import 'email_verify_screen.dart';
-import 'following_merchants_screen.dart';
-import 'marketplace/favorites_screen.dart';
-import 'marketplace/saved_searches_screen.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/formatters.dart';
 import '../utils/ui_feedback.dart';
+import 'email_verify_screen.dart';
+import 'following_merchants_screen.dart';
+import 'investor_metrics_screen.dart';
+import 'kyc_demo_screen.dart';
+import 'marketplace/favorites_screen.dart';
+import 'marketplace/saved_searches_screen.dart';
+import 'merchant_listings_demo_screen.dart';
+import 'notifications_inbox_screen.dart';
+import 'orders_screen.dart';
+import 'receipts_screen.dart';
+import 'report_problem_screen.dart';
+import 'sales_analytics_screen.dart';
+import 'settings_demo_screen.dart';
+import 'support_chat_screen.dart';
+import 'support_tickets_screen.dart';
+import 'wallet_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -30,487 +35,380 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  final NotificationService _notifications = NotificationService.instance;
+
   Map<String, dynamic>? _profile;
-  bool _isLoading = true;
+  bool _loading = true;
   String? _error;
-  bool _sendingVerify = false;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
+    _primeNotifications();
+  }
+
+  Future<void> _primeNotifications() async {
+    try {
+      await _notifications.loadInbox(refresh: false);
+    } catch (_) {
+      // non-blocking
+    }
   }
 
   bool _looksLikeUserProfile(Map<String, dynamic> data) {
     final id = data['id'];
     final email = data['email'];
     final name = data['name'];
-
     final emailOk = email is String && email.trim().isNotEmpty;
     final nameOk = name is String && name.trim().isNotEmpty;
-
     return id != null && (emailOk || nameOk);
   }
 
   Future<void> _loadProfile() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
     try {
       final data = await ApiService.getProfile();
-
-      // If backend returns a 401 message map, treat it as "not logged in"
-      final hasUserShape = _looksLikeUserProfile(data);
-
-      if (!hasUserShape) {
-        if (!mounted) return;
+      if (!mounted) return;
+      if (!_looksLikeUserProfile(data)) {
         setState(() {
           _profile = null;
-          _isLoading = false;
-          _error = data['message']?.toString() ?? "Not logged in";
+          _loading = false;
+          _error = data['message']?.toString() ?? 'Session not available';
         });
         return;
       }
-
-      if (!mounted) return;
       setState(() {
         _profile = data;
-        _isLoading = false;
-        _error = null;
+        _loading = false;
       });
     } catch (e) {
-      final message = UIFeedback.mapDioErrorToMessage(e);
       if (!mounted) return;
+      final message = UIFeedback.mapDioErrorToMessage(e);
       setState(() {
         _profile = null;
-        _isLoading = false;
+        _loading = false;
         _error = message;
       });
       UIFeedback.showErrorSnack(context, message);
     }
   }
 
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsDemoScreen()),
+    );
+    if (!mounted) return;
+    _loadProfile();
+  }
+
   Future<void> _handleLogout() async {
     await logoutToLanding(context);
   }
 
-  Future<void> _resendVerify() async {
-    if (_sendingVerify) return;
-    setState(() => _sendingVerify = true);
-    try {
-      await ApiService.verifySend();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Verification email sent (check inbox).')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Resend failed: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _sendingVerify = false);
-    }
+  String _apiHostSummary() {
+    final uri = Uri.tryParse(ApiConfig.baseUrl);
+    final host = uri?.host ?? ApiConfig.baseUrl;
+    if (host.length <= 24) return host;
+    return '${host.substring(0, 12)}...${host.substring(host.length - 8)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    // Default values if loading or missing profile
-    final String name = _profile?['name']?.toString() ?? "FlipTrybe User";
-    final double balance =
-        double.tryParse(_profile?['wallet_balance']?.toString() ?? "0") ?? 0.0;
+    final role = (_profile?['role'] ?? 'buyer').toString().toLowerCase();
+    final isMerchant = role == 'merchant' || role == 'admin';
+    final isVerified = _profile?['is_verified'] == true;
+    final balance = double.tryParse('${_profile?['wallet_balance'] ?? 0}') ?? 0;
+    final tierLabel = (_profile?['tier'] ?? 'Novice').toString();
+    final name = (_profile?['name'] ?? 'FlipTrybe User').toString();
 
-    final dynamic verifiedRaw = _profile?['is_verified'];
-    final bool isVerified = verifiedRaw == true;
-
-    final String tier = _profile?['tier']?.toString() ?? "Novice";
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("My Hub", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.black,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const SettingsDemoScreen()));
-            },
+    return FTScaffold(
+      title: 'My Hub',
+      onRefresh: _loadProfile,
+      actions: [
+        Semantics(
+          label: 'Appearance',
+          button: true,
+          child: IconButton(
+            icon: const Icon(Icons.palette_outlined),
+            onPressed: _openSettings,
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.redAccent),
+        ),
+        Semantics(
+          label: 'Sign out',
+          button: true,
+          child: IconButton(
+            icon: const Icon(Icons.logout),
             onPressed: _handleLogout,
-            tooltip: 'Sign out',
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? FTSkeletonList(
-              itemCount: 4,
-              itemBuilder: (context, index) =>
-                  const FTSkeletonCard(height: 112),
-            )
-          : (_error != null)
-              ? FTEmptyState(
-                  icon: Icons.lock_outline,
-                  title: 'Session not available',
-                  subtitle: _error!,
-                  primaryCtaText: 'Try again',
-                  onPrimaryCta: _loadProfile,
-                  secondaryCtaText: 'Go to Login',
-                  onSecondaryCta: _handleLogout,
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      // 1. WALLET CARD
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(25),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF00C853), Color(0xFF009624)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00C853).withOpacity(0.4),
-                              blurRadius: 15,
-                              offset: const Offset(0, 10),
-                            )
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "Escrow Balance",
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 14),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              "₦${balance.toStringAsFixed(2)}",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black26,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    tier,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 12),
-                                  ),
-                                )
-                              ],
-                            )
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 25),
-
-                      if (!isVerified) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2A2A2A),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: Colors.orangeAccent.withOpacity(0.6)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Verify your email to unlock withdrawals, tier upgrades, and selling.',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.3),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'We will email you a secure link to confirm your account.',
-                                style: TextStyle(
-                                    color: Colors.white.withOpacity(0.8),
-                                    fontSize: 12.5),
-                              ),
-                              const SizedBox(height: 10),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed:
-                                      _sendingVerify ? null : _resendVerify,
-                                  icon: _sendingVerify
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2))
-                                      : const Icon(Icons.mail_outline),
-                                  label: Text(_sendingVerify
-                                      ? 'Sending...'
-                                      : 'Resend verification link'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                      ],
-
-                      // 2. ACTION GRID
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildActionButton(
-                              Icons.account_balance_wallet, "Withdraw",
-                              onTap: () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const WalletScreen()));
-                          }),
-                          _buildActionButton(Icons.history, "History",
-                              onTap: () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const ReceiptsScreen()));
-                          }),
-                          _buildActionButton(
-                            Icons.verified_user,
-                            "Verify ID",
-                            isAlert: !isVerified,
-                            onTap: () {
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => const KycDemoScreen()));
-                            },
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 30),
-
-                      // 3. MENU LIST
-                      _buildMenuItem(Icons.shopping_bag, "My Orders",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const OrdersScreen()));
-                      }),
-                      _buildMenuItem(Icons.people_outline, "Following",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    const FollowingMerchantsScreen()));
-                      }),
-                      _buildMenuItem(Icons.bookmarks_outlined, "Saved Searches",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SavedSearchesScreen()));
-                      }),
-                      _buildMenuItem(Icons.favorite_border, "Favorites",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const FavoritesScreen()));
-                      }),
-                      _buildMenuItem(
-                        Icons.store,
-                        "My Listings",
-                        onTap: (() {
-                          final role =
-                              (_profile?["role"] ?? "buyer").toString();
-                          final isMerchant =
-                              role == "merchant" || role == "admin";
-                          if (!isMerchant) return null;
-                          return () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) =>
-                                        const MerchantListingsDemoScreen()));
-                          };
-                        })(),
-                      ),
-                      _buildMenuItem(Icons.analytics, "Sales Analytics",
-                          onTap: () {
-                        final role = (_profile?["role"] ?? "buyer").toString();
-                        if (role == "merchant" || role == "admin") {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) =>
-                                      const SalesAnalyticsScreen()));
-                        } else {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) =>
-                                      const InvestorMetricsScreen()));
-                        }
-                      }),
-                      _buildMenuItem(Icons.support_agent, "Help & Disputes",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SupportTicketsScreen()));
-                      }),
-                      _buildMenuItem(Icons.chat_outlined, "Support Chat",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SupportChatScreen()));
-                      }),
-                      _buildMenuItem(Icons.mark_email_read, "Verify Email",
-                          onTap: () {
-                        final email = _profile?['email']?.toString();
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    EmailVerifyScreen(initialEmail: email)));
-                      }),
-                      _buildMenuItem(Icons.palette_outlined, "Appearance",
-                          onTap: () {
-                        Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SettingsDemoScreen()));
-                      }, semanticLabel: 'Open appearance settings'),
-
-                      const SizedBox(height: 20),
-
-                      if (kDebugMode) ...[
-                        const SizedBox(height: 6),
-                        ListTile(
-                          leading: const Icon(Icons.bug_report_outlined,
-                              color: Colors.orange),
-                          title: const Text('Auth Debug',
-                              style: TextStyle(color: Colors.white)),
-                          subtitle: const Text('Dev-only auth diagnostics',
-                              style: TextStyle(color: Colors.grey)),
-                          onTap: () {
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => const AuthDebugScreen()));
-                          },
-                        ),
-                      ],
-
-                      Semantics(
-                        label: 'Sign out',
-                        button: true,
-                        child: ListTile(
-                          leading: const Icon(Icons.logout, color: Colors.red),
-                          title: const Text("Log Out",
-                              style: TextStyle(color: Colors.red)),
-                          onTap: _handleLogout,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-      backgroundColor: Colors.black,
-    );
-  }
-
-  Widget _buildActionButton(IconData icon, String label,
-      {bool isAlert = false, VoidCallback? onTap}) {
-    return Column(
-      children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(15),
-          onTap: onTap,
-          child: Stack(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E1E1E),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(icon, color: Colors.white, size: 28),
-              ),
-              if (isAlert)
-                const Positioned(
-                  right: 0,
-                  top: 0,
-                  child: CircleAvatar(radius: 6, backgroundColor: Colors.red),
-                )
-            ],
           ),
         ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
       ],
-    );
-  }
-
-  Widget _buildMenuItem(
-    IconData icon,
-    String title, {
-    VoidCallback? onTap,
-    String? semanticLabel,
-  }) {
-    final enabled = onTap != null;
-    return Semantics(
-      label: semanticLabel ?? title,
-      button: true,
-      enabled: enabled,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 15),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E),
-          borderRadius: BorderRadius.circular(12),
+      child: FTLoadStateLayout(
+        loading: _loading,
+        error: _error,
+        onRetry: _loadProfile,
+        empty: _profile == null,
+        loadingState: FTSkeletonList(
+          itemCount: 4,
+          itemBuilder: (context, index) => const FTSkeletonCard(height: 96),
         ),
-        child: ListTile(
-          leading: Icon(icon, color: Colors.white),
-          title: Text(title, style: const TextStyle(color: Colors.white)),
-          subtitle: enabled
-              ? null
-              : const Text('In next release',
-                  style: TextStyle(color: Colors.grey)),
-          trailing: Icon(enabled ? Icons.arrow_forward_ios : Icons.lock_outline,
-              color: Colors.grey, size: 16),
-          onTap: onTap,
+        emptyState: FTEmptyState(
+          icon: Icons.person_off_outlined,
+          title: 'Session not available',
+          subtitle: _error ?? 'Please sign in again.',
+          primaryCtaText: 'Sign in',
+          onPrimaryCta: _handleLogout,
+          secondaryCtaText: 'Retry',
+          onSecondaryCta: _loadProfile,
+        ),
+        child: ListView(
+          children: [
+            FTSection(
+              title: 'Account summary',
+              subtitle: '$name - Tier $tierLabel',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    formatNaira(balance),
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    isVerified
+                        ? 'Email verified'
+                        : 'Verify your email to unlock full payouts.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isVerified
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            FTSection(
+              title: 'Quick actions',
+              child: FTPrimaryCtaRow(
+                primaryLabel: 'Wallet',
+                onPrimary: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const WalletScreen()),
+                  );
+                },
+                secondaryLabel: 'Receipts',
+                onSecondary: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ReceiptsScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            FTSection(
+              title: 'Activity',
+              child: Column(
+                children: [
+                  FTListTile(
+                    leading: const Icon(Icons.shopping_bag_outlined),
+                    title: 'My Orders',
+                    subtitle: 'Track order progress and delivery timelines.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.people_outline),
+                    title: 'Following merchants',
+                    subtitle: 'Stay updated on merchants you follow.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const FollowingMerchantsScreen(),
+                      ),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.bookmarks_outlined),
+                    title: 'Saved searches',
+                    subtitle: 'Reopen your saved discovery filters quickly.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SavedSearchesScreen(),
+                      ),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.favorite_border),
+                    title: 'Favorites',
+                    subtitle: 'Watchlist of listings you liked.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const FavoritesScreen()),
+                    ),
+                  ),
+                  if (isMerchant)
+                    FTListTile(
+                      leading: const Icon(Icons.storefront_outlined),
+                      title: 'My Listings',
+                      subtitle: 'Manage your marketplace inventory.',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MerchantListingsDemoScreen(),
+                        ),
+                      ),
+                    ),
+                  FTListTile(
+                    leading: const Icon(Icons.analytics_outlined),
+                    title: 'Analytics',
+                    subtitle: isMerchant
+                        ? 'Sales and revenue trends.'
+                        : 'Investor and growth metrics.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => isMerchant
+                            ? const SalesAnalyticsScreen()
+                            : const InvestorMetricsScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            FTSection(
+              title: 'Support',
+              child: Column(
+                children: [
+                  ValueListenableBuilder<int>(
+                    valueListenable: _notifications.unreadCount,
+                    builder: (context, unread, _) => FTListTile(
+                      leading: const Icon(Icons.notifications_outlined),
+                      title: 'Notification Center',
+                      subtitle: unread > 0
+                          ? '$unread unread updates'
+                          : 'View alerts and product updates.',
+                      badgeText: unread > 0 ? '$unread' : null,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationsInboxScreen(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.support_agent_outlined),
+                    title: 'Support tickets',
+                    subtitle: 'View and manage your support tickets.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SupportTicketsScreen(),
+                      ),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.chat_outlined),
+                    title: 'Support chat',
+                    subtitle: 'Chat with support for urgent help.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SupportChatScreen(),
+                      ),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.bug_report_outlined),
+                    title: 'Report a problem',
+                    subtitle: 'Send diagnostics with your issue report.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ReportProblemScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            FTSection(
+              title: 'Security & appearance',
+              child: Column(
+                children: [
+                  FTListTile(
+                    leading: const Icon(Icons.mark_email_read_outlined),
+                    title: 'Verify email',
+                    subtitle: 'Confirm your email to unlock sensitive actions.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => EmailVerifyScreen(
+                          initialEmail: _profile?['email']?.toString(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  FTListTile(
+                    leading: const Icon(Icons.verified_user_outlined),
+                    title: 'KYC verification',
+                    subtitle: 'Increase limits and tier eligibility.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const KycDemoScreen()),
+                    ),
+                  ),
+                  Semantics(
+                    label: 'Appearance',
+                    button: true,
+                    child: FTListTile(
+                      leading: const Icon(Icons.palette_outlined),
+                      title: 'Appearance',
+                      subtitle: 'Theme mode and background palette.',
+                      onTap: _openSettings,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            FTSection(
+              title: 'About',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('App version: ${ApiConfig.appVersion}'),
+                  Text('API host: ${_apiHostSummary()}'),
+                  Text(
+                    "Git SHA: ${String.fromEnvironment('GIT_SHA', defaultValue: 'dev')}",
+                  ),
+                  const SizedBox(height: 10),
+                  FTButton(
+                    label: 'Sign out',
+                    variant: FTButtonVariant.destructive,
+                    expand: true,
+                    onPressed: _handleLogout,
+                  ),
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 8),
+                    FTButton(
+                      label: 'Auth debug tools',
+                      variant: FTButtonVariant.ghost,
+                      expand: true,
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AuthDebugScreen(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -539,7 +437,7 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     final t = token?.trim() ?? '';
     if (t.isEmpty) return '***';
     if (t.length > 20) {
-      return '${t.substring(0, 12)}?${t.substring(t.length - 6)}';
+      return '${t.substring(0, 12)}...${t.substring(t.length - 6)}';
     }
     return '***';
   }
@@ -585,19 +483,15 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     if (!mounted) return;
     if (token == null || token.isEmpty) {
       setState(() => _checking = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No token found. Login first.')),
-      );
+      UIFeedback.showErrorSnack(context, 'No token found. Log in first.');
       return;
     }
 
     ApiService.setToken(token);
     try {
       final res = await ApiService.getProfileResponse();
-      if (res.statusCode == 401) {
-        if (!mounted) return;
+      if (res.statusCode == 401 && mounted) {
         await logoutToLanding(context);
-        return;
       }
     } finally {
       if (mounted) {
@@ -610,9 +504,7 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
   Future<void> _copyPreview() async {
     await Clipboard.setData(ClipboardData(text: _tokenPreview));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Token preview copied.')),
-    );
+    UIFeedback.showSuccessSnack(context, 'Token preview copied.');
   }
 
   @override
@@ -622,46 +514,55 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     final lastAt = _formatTimestamp(ApiService.lastMeAt);
     final lastError = ApiService.lastAuthError ?? 'None';
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Auth Debug')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return FTScaffold(
+      title: 'Auth Debug',
+      child: ListView(
         children: [
-          ListTile(
-            title: const Text('Token present'),
-            subtitle: Text(_tokenPresent ? 'Yes' : 'No'),
-          ),
-          ListTile(
-            title: const Text('Token preview'),
-            subtitle: Text(_tokenPreview),
-            trailing: IconButton(
-              icon: const Icon(Icons.copy),
-              onPressed: _copyPreview,
+          FTSection(
+            title: 'Session diagnostics',
+            child: Column(
+              children: [
+                FTListTile(
+                  title: 'Token present',
+                  subtitle: _tokenPresent ? 'Yes' : 'No',
+                  onTap: null,
+                ),
+                FTListTile(
+                  title: 'Token preview',
+                  subtitle: _tokenPreview,
+                  trailing: IconButton(
+                    icon: const Icon(Icons.copy),
+                    onPressed: _copyPreview,
+                  ),
+                  onTap: null,
+                ),
+                FTListTile(
+                  title: 'Last /api/auth/me',
+                  subtitle: '$statusText @ $lastAt',
+                  onTap: null,
+                ),
+                FTListTile(
+                  title: 'Last auth error',
+                  subtitle: lastError,
+                  onTap: null,
+                ),
+              ],
             ),
           ),
-          ListTile(
-            title: const Text('Last /api/auth/me'),
-            subtitle: Text('$statusText @ $lastAt'),
-          ),
-          ListTile(
-            title: const Text('Last auth error'),
-            subtitle: Text(lastError),
-          ),
-          ListTile(
-            title: const Text('Base API URL'),
-            subtitle: Text(ApiConfig.baseUrl),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
+          const SizedBox(height: 12),
+          FTAsyncButton(
+            label: _checking ? 'Checking...' : 'Recheck session',
+            icon: Icons.refresh,
+            externalLoading: _checking,
             onPressed: _checking ? null : _recheckSession,
-            icon: const Icon(Icons.refresh),
-            label: Text(_checking ? 'Checking...' : 'Recheck session'),
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
+          FTButton(
+            label: 'Clear token',
+            icon: Icons.logout,
+            variant: FTButtonVariant.destructive,
+            expand: true,
             onPressed: _checking ? null : _clearToken,
-            icon: const Icon(Icons.logout),
-            label: const Text('Clear token'),
           ),
         ],
       ),

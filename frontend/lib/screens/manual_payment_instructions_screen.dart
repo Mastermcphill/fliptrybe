@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,8 +72,8 @@ class _ManualPaymentInstructionsScreenState
       } else {
         final resp = await _service.manualInstructions();
         if (resp['instructions'] is Map) {
-          _instructions =
-              Map<String, dynamic>.from(resp['instructions'] as Map<dynamic, dynamic>);
+          _instructions = Map<String, dynamic>.from(
+              resp['instructions'] as Map<dynamic, dynamic>);
         }
       }
       await _refreshStatus();
@@ -138,7 +138,9 @@ class _ManualPaymentInstructionsScreenState
     final intentId = _paymentIntentId;
     if (intentId == null || intentId <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment intent not available yet. Please refresh status.')),
+        const SnackBar(
+            content: Text(
+                'Payment intent not available yet. Please refresh status.')),
       );
       return;
     }
@@ -146,7 +148,8 @@ class _ManualPaymentInstructionsScreenState
     final note = _noteCtrl.text.trim();
     if (txn.isEmpty && note.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter bank transaction reference or note.')),
+        const SnackBar(
+            content: Text('Enter bank transaction reference or note.')),
       );
       return;
     }
@@ -161,11 +164,17 @@ class _ManualPaymentInstructionsScreenState
       if (!mounted) return;
       if (resp['ok'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment proof submitted. Awaiting admin confirmation.')),
+          const SnackBar(
+              content: Text(
+                  'Payment proof submitted. Awaiting admin confirmation.')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text((resp['message'] ?? resp['error'] ?? 'Proof submission failed').toString())),
+          SnackBar(
+              content: Text((resp['message'] ??
+                      resp['error'] ??
+                      'Proof submission failed')
+                  .toString())),
         );
       }
       await _refreshStatus();
@@ -239,7 +248,8 @@ class _ManualPaymentInstructionsScreenState
                   padding: const EdgeInsets.all(16),
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: _statusColor(_paymentStatus),
                         borderRadius: BorderRadius.circular(999),
@@ -315,7 +325,9 @@ class _ManualPaymentInstructionsScreenState
                     const SizedBox(height: 10),
                     ElevatedButton(
                       onPressed: _submitting ? null : _submitProof,
-                      child: Text(_submitting ? 'Submitting...' : 'Submit payment proof'),
+                      child: Text(_submitting
+                          ? 'Submitting...'
+                          : 'Submit payment proof'),
                     ),
                     const SizedBox(height: 10),
                     const Text(
@@ -326,4 +338,3 @@ class _ManualPaymentInstructionsScreenState
     );
   }
 }
-

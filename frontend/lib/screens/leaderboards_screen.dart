@@ -37,7 +37,9 @@ class _LeaderboardsScreenState extends State<LeaderboardsScreen> {
   Widget _merchantTile(Map<String, dynamic> m) {
     final uid = int.tryParse((m['user_id'] ?? '').toString()) ?? 0;
     final rank = int.tryParse((m['rank'] ?? '').toString()) ?? 0;
-    final name = (m['shop_name'] ?? '').toString().trim().isEmpty ? 'Merchant $uid' : (m['shop_name'] ?? '').toString();
+    final name = (m['shop_name'] ?? '').toString().trim().isEmpty
+        ? 'Merchant $uid'
+        : (m['shop_name'] ?? '').toString();
     final badge = (m['badge'] ?? 'New').toString();
     final score = (m['score'] ?? 0).toString();
     final city = (m['city'] ?? '').toString();
@@ -90,7 +92,12 @@ class _LeaderboardsScreenState extends State<LeaderboardsScreen> {
         '$badge  |  Score $score\n$city, $state\nOrders: $orders  Deliveries: $deliveries  Rating: $rating',
       ),
       isThreeLine: true,
-      onTap: uid > 0 ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => MerchantDetailScreen(userId: uid))) : null,
+      onTap: uid > 0
+          ? () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => MerchantDetailScreen(userId: uid)))
+          : null,
     );
   }
 
@@ -146,7 +153,8 @@ class _LeaderboardsScreenState extends State<LeaderboardsScreen> {
                   border: OutlineInputBorder(),
                 ),
                 items: [
-                  const DropdownMenuItem(value: allNigeriaLabel, child: Text(allNigeriaLabel)),
+                  const DropdownMenuItem(
+                      value: allNigeriaLabel, child: Text(allNigeriaLabel)),
                   ...nigeriaStates.map(
                     (s) => DropdownMenuItem<String>(
                       value: s,
@@ -178,7 +186,9 @@ class _LeaderboardsScreenState extends State<LeaderboardsScreen> {
                       padding: const EdgeInsets.all(16),
                       children: const [
                         SizedBox(height: 120),
-                        Center(child: Text('No leaderboard entries found for this scope.')),
+                        Center(
+                            child: Text(
+                                'No leaderboard entries found for this scope.')),
                       ],
                     );
                   }

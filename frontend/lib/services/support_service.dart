@@ -23,9 +23,11 @@ class SupportService {
     }
   }
 
-  Future<Map<String, dynamic>> createTicket({required String subject, required String message}) async {
+  Future<Map<String, dynamic>> createTicket(
+      {required String subject, required String message}) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/support/tickets'), data: {
+      final res =
+          await _client.dio.post(ApiConfig.api('/support/tickets'), data: {
         'subject': subject,
         'message': message,
       });
@@ -48,7 +50,9 @@ class SupportService {
 
   Future<bool> updateStatus(int ticketId, String status) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/support/tickets/$ticketId/status'), data: {'status': status});
+      final res = await _client.dio.post(
+          ApiConfig.api('/support/tickets/$ticketId/status'),
+          data: {'status': status});
       final code = res.statusCode ?? 0;
       return code >= 200 && code < 300;
     } catch (_) {

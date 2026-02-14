@@ -60,7 +60,8 @@ class AuthService {
   /// ApiService.register/login will automatically set the token into Dio headers.
   Future<String?> verifyOtp(String phone, String code) async {
     final safePhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final demoEmail = 'phone_${safePhone.isEmpty ? "user" : safePhone}@fliptrybe.dev';
+    final demoEmail =
+        'phone_${safePhone.isEmpty ? "user" : safePhone}@fliptrybe.dev';
     const demoPassword = '12345678';
 
     try {
@@ -92,7 +93,6 @@ class AuthService {
     return null;
   }
 
-
   Future<bool> setRole(String role) async {
     try {
       final res = await _client.dio.post(
@@ -104,5 +104,4 @@ class AuthService {
       return false;
     }
   }
-
 }

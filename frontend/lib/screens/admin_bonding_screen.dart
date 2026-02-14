@@ -15,7 +15,8 @@ class AdminBondingScreen extends StatelessWidget {
             child: ListTile(
               title: Text(
                 "Underfunded Inspectors",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
               trailing: Icon(Icons.priority_high, color: Colors.white),
             ),
@@ -25,7 +26,8 @@ class AdminBondingScreen extends StatelessWidget {
             leading: const CircleAvatar(child: Text("JD")),
             title: const Text("John Doe"),
             subtitle: const Text("Bond Balance: ?2,000 (Min: ?50,000)"),
-            trailing: ElevatedButton(onPressed: () {}, child: const Text("SUSPEND")),
+            trailing:
+                ElevatedButton(onPressed: () {}, child: const Text("SUSPEND")),
           ),
         ],
       ),

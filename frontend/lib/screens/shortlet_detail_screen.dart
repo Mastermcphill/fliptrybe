@@ -433,8 +433,9 @@ class _ShortletDetailScreenState extends State<ShortletDetailScreen> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue:
-                      _isMethodAvailable(_paymentMethod) ? _paymentMethod : null,
+                  initialValue: _isMethodAvailable(_paymentMethod)
+                      ? _paymentMethod
+                      : null,
                   items: [
                     if (_isMethodAvailable('wallet'))
                       const DropdownMenuItem(

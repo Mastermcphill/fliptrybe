@@ -126,7 +126,8 @@ class TokenStorage {
       refreshToken: ((await _secure.read(key: _refreshTokenKey)) ?? '').trim(),
       userMode: ((await _secure.read(key: _userModeKey)) ?? '').trim(),
       lastLoginAt: ((await _secure.read(key: _lastLoginAtKey)) ?? '').trim(),
-      tokenExpiresAt: ((await _secure.read(key: _tokenExpiresAtKey)) ?? '').trim(),
+      tokenExpiresAt:
+          ((await _secure.read(key: _tokenExpiresAtKey)) ?? '').trim(),
     );
   }
 
@@ -151,4 +152,3 @@ class TokenStorage {
 class TokenStorageConfig {
   static String api(String path) => ApiConfig.api(path);
 }
-

@@ -53,11 +53,16 @@ class _DriverJobMapScreenState extends State<DriverJobMapScreen> {
           title: const Text('Enter pickup code'),
           content: TextField(
             controller: ctrl,
-            decoration: const InputDecoration(labelText: 'Pickup code', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Pickup code', border: OutlineInputBorder()),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Confirm')),
           ],
         ),
       );
@@ -79,7 +84,9 @@ class _DriverJobMapScreenState extends State<DriverJobMapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Driver: Active Job'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -91,7 +98,8 @@ class _DriverJobMapScreenState extends State<DriverJobMapScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Order #${_job!['id']}',
-                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 18)),
                       const SizedBox(height: 10),
                       Card(
                         child: ListTile(
@@ -108,14 +116,21 @@ class _DriverJobMapScreenState extends State<DriverJobMapScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const Text('Quick Actions', style: TextStyle(fontWeight: FontWeight.w900)),
+                      const Text('Quick Actions',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 10,
                         children: [
-                          ElevatedButton(onPressed: () => _setStatus('picked_up'), child: const Text('Picked Up')),
-                          OutlinedButton(onPressed: () => _setStatus('delivered'), child: const Text('Delivered')),
-                          OutlinedButton(onPressed: () => _setStatus('completed'), child: const Text('Complete')),
+                          ElevatedButton(
+                              onPressed: () => _setStatus('picked_up'),
+                              child: const Text('Picked Up')),
+                          OutlinedButton(
+                              onPressed: () => _setStatus('delivered'),
+                              child: const Text('Delivered')),
+                          OutlinedButton(
+                              onPressed: () => _setStatus('completed'),
+                              child: const Text('Complete')),
                         ],
                       ),
                       const SizedBox(height: 10),

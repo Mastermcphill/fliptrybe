@@ -7,10 +7,12 @@ import '../services/api_service.dart';
 class AdminSupportThreadScreen extends StatefulWidget {
   final int userId;
   final String userEmail;
-  const AdminSupportThreadScreen({super.key, required this.userId, this.userEmail = ''});
+  const AdminSupportThreadScreen(
+      {super.key, required this.userId, this.userEmail = ''});
 
   @override
-  State<AdminSupportThreadScreen> createState() => _AdminSupportThreadScreenState();
+  State<AdminSupportThreadScreen> createState() =>
+      _AdminSupportThreadScreenState();
 }
 
 class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
@@ -62,9 +64,12 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
       _error = null;
     });
     try {
-      final res = await ApiClient.instance.dio.get(ApiConfig.api('/admin/support/messages/${widget.userId}'));
+      final res = await ApiClient.instance.dio
+          .get(ApiConfig.api('/admin/support/messages/${widget.userId}'));
       final data = res.data;
-      final items = (data is Map && data['items'] is List) ? (data['items'] as List) : <dynamic>[];
+      final items = (data is Map && data['items'] is List)
+          ? (data['items'] as List)
+          : <dynamic>[];
       if (!mounted) return;
       setState(() => _items = items);
     } catch (e) {
@@ -86,15 +91,19 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
         data: {'body': body},
       );
       if (!mounted) return;
-      if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
+      if (res.statusCode != null &&
+          res.statusCode! >= 200 &&
+          res.statusCode! < 300) {
         _msgCtrl.clear();
         await _load();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Send failed.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Send failed.')));
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Send failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Send failed: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -116,7 +125,8 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
             color: bg,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(body, style: const TextStyle(fontWeight: FontWeight.w600)),
+          child:
+              Text(body, style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
       ],
     );
@@ -135,11 +145,16 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
         body: Center(child: Text(_error ?? 'Admin access required.')),
       );
     }
-    final items = _items.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    final items = _items
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.userEmail.isEmpty ? 'Thread' : widget.userEmail),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: Column(
         children: [
@@ -147,7 +162,8 @@ class _AdminSupportThreadScreenState extends State<AdminSupportThreadScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Text('Load failed: $_error', style: const TextStyle(color: Colors.redAccent)),
+              child: Text('Load failed: $_error',
+                  style: const TextStyle(color: Colors.redAccent)),
             ),
           Expanded(
             child: ListView(

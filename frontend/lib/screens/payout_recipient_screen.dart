@@ -15,7 +15,8 @@ class _PayoutRecipientScreenState extends State<PayoutRecipientScreen> {
   bool _loading = true;
   String _current = "";
 
-  void _toast(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _toast(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   @override
   void initState() {

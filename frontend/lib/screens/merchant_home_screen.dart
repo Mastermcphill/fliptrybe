@@ -262,7 +262,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text((res['message'] ?? 'Autosave update failed').toString()),
+            content:
+                Text((res['message'] ?? 'Autosave update failed').toString()),
           ),
         );
       }
@@ -694,8 +695,9 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                                       _saveAutosaveSettings,
                                     ),
                             icon: const Icon(Icons.save_outlined),
-                            label: Text(
-                                _autosaveSaving ? 'Saving...' : 'Save Autosave'),
+                            label: Text(_autosaveSaving
+                                ? 'Saving...'
+                                : 'Save Autosave'),
                           ),
                         ),
                         const SizedBox(height: 8),

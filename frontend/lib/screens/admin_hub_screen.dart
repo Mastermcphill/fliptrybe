@@ -13,6 +13,7 @@ import 'admin_manual_payments_screen.dart';
 import 'admin_marketplace_screen.dart';
 import 'leaderboards_screen.dart';
 import 'admin_support_threads_screen.dart';
+import 'notifications_inbox_screen.dart';
 import 'not_available_yet_screen.dart';
 import 'admin_global_search_screen.dart';
 import 'admin_anomalies_screen.dart';
@@ -171,6 +172,12 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             title: const Text('Support Chat'),
             subtitle: const Text('View and reply to support threads'),
             onTap: () => _open(const AdminSupportThreadsScreen()),
+          ),
+          FTTile(
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Notification Center'),
+            subtitle: const Text('Read outbound alerts and internal notices'),
+            onTap: () => _open(const NotificationsInboxScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.auto_awesome_outlined),

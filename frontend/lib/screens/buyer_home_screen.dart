@@ -394,9 +394,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                                           direction.toLowerCase() == 'credit'
                                               ? Icons.south_west_outlined
                                               : Icons.north_east_outlined,
-                                      title: kind.isEmpty
-                                          ? 'Transaction'
-                                          : kind,
+                                      title:
+                                          kind.isEmpty ? 'Transaction' : kind,
                                       trailing: Text(
                                         formatNaira(amount),
                                         style: TextStyle(

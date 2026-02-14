@@ -6,10 +6,12 @@ class AdminCommissionRulesScreen extends StatefulWidget {
   const AdminCommissionRulesScreen({super.key});
 
   @override
-  State<AdminCommissionRulesScreen> createState() => _AdminCommissionRulesScreenState();
+  State<AdminCommissionRulesScreen> createState() =>
+      _AdminCommissionRulesScreenState();
 }
 
-class _AdminCommissionRulesScreenState extends State<AdminCommissionRulesScreen> {
+class _AdminCommissionRulesScreenState
+    extends State<AdminCommissionRulesScreen> {
   final _svc = CommissionService();
   final _kind = TextEditingController(text: "listing_sale");
   final _state = TextEditingController();
@@ -69,7 +71,9 @@ class _AdminCommissionRulesScreenState extends State<AdminCommissionRulesScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text("Admin: Commission Rules"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: Column(
         children: [
@@ -77,23 +81,49 @@ class _AdminCommissionRulesScreenState extends State<AdminCommissionRulesScreen>
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                TextField(controller: _kind, decoration: const InputDecoration(labelText: "Kind (listing_sale/delivery/withdrawal)", border: OutlineInputBorder())),
+                TextField(
+                    controller: _kind,
+                    decoration: const InputDecoration(
+                        labelText: "Kind (listing_sale/delivery/withdrawal)",
+                        border: OutlineInputBorder())),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(child: TextField(controller: _state, decoration: const InputDecoration(labelText: "State (optional)", border: OutlineInputBorder()))),
+                    Expanded(
+                        child: TextField(
+                            controller: _state,
+                            decoration: const InputDecoration(
+                                labelText: "State (optional)",
+                                border: OutlineInputBorder()))),
                     const SizedBox(width: 8),
-                    Expanded(child: TextField(controller: _category, decoration: const InputDecoration(labelText: "Category (optional)", border: OutlineInputBorder()))),
+                    Expanded(
+                        child: TextField(
+                            controller: _category,
+                            decoration: const InputDecoration(
+                                labelText: "Category (optional)",
+                                border: OutlineInputBorder()))),
                   ],
                 ),
                 const SizedBox(height: 8),
-                TextField(controller: _rate, decoration: const InputDecoration(labelText: "Rate (e.g. 0.05)", border: OutlineInputBorder())),
+                TextField(
+                    controller: _rate,
+                    decoration: const InputDecoration(
+                        labelText: "Rate (e.g. 0.05)",
+                        border: OutlineInputBorder())),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(child: ElevatedButton.icon(onPressed: _save, icon: const Icon(Icons.save), label: const Text("Save Rule"))),
+                    Expanded(
+                        child: ElevatedButton.icon(
+                            onPressed: _save,
+                            icon: const Icon(Icons.save),
+                            label: const Text("Save Rule"))),
                     const SizedBox(width: 10),
-                    Expanded(child: OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.search), label: const Text("Filter"))),
+                    Expanded(
+                        child: OutlinedButton.icon(
+                            onPressed: _load,
+                            icon: const Icon(Icons.search),
+                            label: const Text("Filter"))),
                   ],
                 ),
               ],
@@ -110,12 +140,15 @@ class _AdminCommissionRulesScreenState extends State<AdminCommissionRulesScreen>
                           final raw = _rows[i];
                           if (raw is! Map) return const SizedBox.shrink();
                           final m = Map<String, dynamic>.from(raw);
-                          final id = int.tryParse((m["id"] ?? "").toString()) ?? 0;
+                          final id =
+                              int.tryParse((m["id"] ?? "").toString()) ?? 0;
                           return Card(
                             margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                             child: ListTile(
-                              title: Text("${m['kind']}  •  ${(m['state'] ?? '').toString().isEmpty ? 'ALL' : m['state']}  •  ${(m['category'] ?? '').toString().isEmpty ? 'ALL' : m['category']}",
-                                  style: const TextStyle(fontWeight: FontWeight.w900)),
+                              title: Text(
+                                  "${m['kind']}  •  ${(m['state'] ?? '').toString().isEmpty ? 'ALL' : m['state']}  •  ${(m['category'] ?? '').toString().isEmpty ? 'ALL' : m['category']}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900)),
                               subtitle: Text("Rate: ${(m['rate'] ?? 0)}"),
                               trailing: IconButton(
                                 icon: const Icon(Icons.block),

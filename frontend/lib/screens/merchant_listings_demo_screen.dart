@@ -7,10 +7,12 @@ class MerchantListingsDemoScreen extends StatefulWidget {
   const MerchantListingsDemoScreen({super.key});
 
   @override
-  State<MerchantListingsDemoScreen> createState() => _MerchantListingsDemoScreenState();
+  State<MerchantListingsDemoScreen> createState() =>
+      _MerchantListingsDemoScreenState();
 }
 
-class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen> {
+class _MerchantListingsDemoScreenState
+    extends State<MerchantListingsDemoScreen> {
   final _svc = ListingService();
   late Future<List<dynamic>> _items;
 
@@ -29,7 +31,9 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Listings'),
-        actions: [IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: FutureBuilder<List<dynamic>>(
         future: _items,
@@ -40,7 +44,8 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
           final items = snap.data ?? const [];
           if (items.isEmpty) {
             return const Center(
-              child: Text('No listings found. If you are a merchant, create one from the Sell screen.'),
+              child: Text(
+                  'No listings found. If you are a merchant, create one from the Sell screen.'),
             );
           }
           return ListView.builder(
@@ -55,8 +60,10 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
               final createdAt = (m['created_at'] ?? '').toString();
               final id = m['id'];
 
-              final priceText = (price == null) ? '' : 'Price: ${price.toString()}';
-              final createdText = createdAt.isEmpty ? '' : 'Created: $createdAt';
+              final priceText =
+                  (price == null) ? '' : 'Price: ${price.toString()}';
+              final createdText =
+                  createdAt.isEmpty ? '' : 'Created: $createdAt';
               final meta = [
                 if (priceText.isNotEmpty) priceText,
                 if (createdText.isNotEmpty) createdText,
@@ -68,26 +75,33 @@ class _MerchantListingsDemoScreenState extends State<MerchantListingsDemoScreen>
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ListingDetailScreen(listing: Map<String, dynamic>.from(m)),
+                        builder: (_) => ListingDetailScreen(
+                            listing: Map<String, dynamic>.from(m)),
                       ),
                     );
                   },
-                  title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  title: Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w900)),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (description.isNotEmpty)
-                        Text(description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(description,
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
                       if (meta.isNotEmpty) const SizedBox(height: 6),
                       if (meta.isNotEmpty)
-                        Text(meta, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        Text(meta,
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54)),
                     ],
                   ),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Delete demo: endpoint will be added in next pass.')),
+                        const SnackBar(
+                            content: Text(
+                                'Delete demo: endpoint will be added in next pass.')),
                       );
                     },
                   ),

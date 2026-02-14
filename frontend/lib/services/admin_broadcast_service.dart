@@ -4,12 +4,14 @@ import 'api_config.dart';
 
 class AdminBroadcastService {
   ApiClient get client => _client;
-  AdminBroadcastService({ApiClient? client}) : _client = client ?? ApiClient.instance;
+  AdminBroadcastService({ApiClient? client})
+      : _client = client ?? ApiClient.instance;
   final ApiClient _client;
 
   Future<bool> processQueue() async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/admin/notifications/process'));
+      final res =
+          await _client.dio.post(ApiConfig.api('/admin/notifications/process'));
       final code = res.statusCode ?? 0;
       return code == 200;
     } catch (_) {

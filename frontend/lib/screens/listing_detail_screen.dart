@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/analytics_hooks.dart';
 import '../services/auth_service.dart';
 import '../services/cart_service.dart';
 import '../services/listing_service.dart';
@@ -273,6 +274,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
     if (!mounted) return;
     if (payload['ok'] == true) {
+      await AnalyticsHooks.instance.listingView(listingId: listingId);
       setState(() {
         _detail['views_count'] = int.tryParse(
                 '${payload['views_count'] ?? _detail['views_count'] ?? 0}') ??
@@ -409,6 +411,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           : Map<String, dynamic>.from(result);
       final orderId = _asInt(orderRaw['id']);
       if (orderId == null || !mounted) return;
+      await AnalyticsHooks.instance.orderCreated(orderId: orderId);
       final orderTotal = _asDouble(orderRaw['total_price']) > 0
           ? _asDouble(orderRaw['total_price'])
           : amount + deliveryFee;
@@ -420,6 +423,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       );
       if (!mounted) return;
       if (paymentInit['ok'] != true) {
+        await AnalyticsHooks.instance.paymentFail(
+          channel: 'order_checkout',
+          reason:
+              (paymentInit['error'] ?? paymentInit['message'] ?? '').toString(),
+        );
         final initMsg = (paymentInit['message'] ??
                 paymentInit['error'] ??
                 'Payment initialization failed')
@@ -433,6 +441,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       }
 
       final initMode = (paymentInit['mode'] ?? '').toString().toLowerCase();
+      await AnalyticsHooks.instance.paymentSuccess(
+        channel: initMode.isEmpty ? 'wallet' : initMode,
+        reference: (paymentInit['reference'] ?? '').toString(),
+      );
 
       _toast('Order created successfully.');
       if (initMode == 'manual_company_account') {
@@ -785,10 +797,18 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => const SupportChatScreen()),
-                  ),
+                  onPressed: () async {
+                    final listingId = _asInt(_detail['id']) ?? 0;
+                    if (listingId > 0) {
+                      await AnalyticsHooks.instance
+                          .listingContact(listingId: listingId);
+                    }
+                    if (!mounted) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const SupportChatScreen()),
+                    );
+                  },
                   icon: const Icon(Icons.support_agent_outlined),
                   label: const Text('Support'),
                 ),

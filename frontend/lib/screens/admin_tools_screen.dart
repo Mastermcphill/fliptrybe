@@ -16,15 +16,23 @@ class AdminToolsScreen extends StatelessWidget {
           Card(
             child: ListTile(
               leading: const Icon(Icons.payments_outlined),
-              title: const Text("Payout Console", style: TextStyle(fontWeight: FontWeight.w900)),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPayoutConsoleScreen())),
+              title: const Text("Payout Console",
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AdminPayoutConsoleScreen())),
             ),
           ),
           Card(
             child: ListTile(
               leading: const Icon(Icons.percent_outlined),
-              title: const Text("Commission Rules", style: TextStyle(fontWeight: FontWeight.w900)),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminCommissionRulesScreen())),
+              title: const Text("Commission Rules",
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AdminCommissionRulesScreen())),
             ),
           ),
         ],

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../components/ft_components.dart';
 import '../foundation/app_tokens.dart';

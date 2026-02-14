@@ -35,7 +35,9 @@ class _DriverActiveJobScreenState extends State<DriverActiveJobScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Active Job'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -50,12 +52,18 @@ class _DriverActiveJobScreenState extends State<DriverActiveJobScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text("Order #${_job!['id']}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                          Text("Order #${_job!['id']}",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w900, fontSize: 16)),
                           const SizedBox(height: 8),
-                          Text("Status: ${_job!['status'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Text("Status: ${_job!['status'] ?? ''}",
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
                           const SizedBox(height: 10),
-                          if ((_job!['pickup'] ?? '').toString().isNotEmpty) Text("Pickup: ${_job!['pickup']}"),
-                          if ((_job!['dropoff'] ?? '').toString().isNotEmpty) Text("Dropoff: ${_job!['dropoff']}"),
+                          if ((_job!['pickup'] ?? '').toString().isNotEmpty)
+                            Text("Pickup: ${_job!['pickup']}"),
+                          if ((_job!['dropoff'] ?? '').toString().isNotEmpty)
+                            Text("Dropoff: ${_job!['dropoff']}"),
                           const SizedBox(height: 12),
                           Row(
                             children: [
@@ -64,7 +72,10 @@ class _DriverActiveJobScreenState extends State<DriverActiveJobScreen> {
                                   onPressed: () {
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: int.parse(_job!['id'].toString()))),
+                                      MaterialPageRoute(
+                                          builder: (_) => OrderDetailScreen(
+                                              orderId: int.parse(
+                                                  _job!['id'].toString()))),
                                     );
                                   },
                                   icon: const Icon(Icons.open_in_new),

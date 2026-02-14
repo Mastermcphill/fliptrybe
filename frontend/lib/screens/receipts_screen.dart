@@ -27,14 +27,17 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
   Future<void> _createDemo() async {
     setState(() => _busy = true);
-    final ok = await _svc.createDemoReceipt(kind: 'listing_sale', amount: 10000, reference: 'demo-receipt');
+    final ok = await _svc.createDemoReceipt(
+        kind: 'listing_sale', amount: 10000, reference: 'demo-receipt');
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Receipt created (demo)')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Receipt created (demo)')));
       _reload();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Failed.')));
     }
   }
 
@@ -94,8 +97,10 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.receipt_outlined),
-                    title: Text(kind, style: const TextStyle(fontWeight: FontWeight.w900)),
-                    subtitle: Text('Ref: $ref\nAmount: NGN $amount | Fee: NGN $fee | Total: NGN $total\n$when'),
+                    title: Text(kind,
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
+                    subtitle: Text(
+                        'Ref: $ref\nAmount: NGN $amount | Fee: NGN $fee | Total: NGN $total\n$when'),
                     isThreeLine: true,
                     onTap: () async {
                       if (pdfUrl.isEmpty) return;
@@ -103,12 +108,13 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
                       final uri = Uri.tryParse(pdfUrl);
                       if (uri != null) {
                         try {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(uri,
+                              mode: LaunchMode.externalApplication);
                         } catch (_) {}
                       }
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(const SnackBar(content: Text('Receipt PDF opened and link copied')));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Receipt PDF opened and link copied')));
                     },
                   ),
                 );

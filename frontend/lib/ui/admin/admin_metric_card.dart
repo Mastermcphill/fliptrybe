@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../components/ft_card.dart';
 import '../foundation/app_tokens.dart';
@@ -43,7 +43,8 @@ class AdminMetricCard extends StatelessWidget {
           if ((subtitle ?? '').trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: AppTokens.s4),
-              child: Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+              child:
+                  Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
             ),
         ],
       ),

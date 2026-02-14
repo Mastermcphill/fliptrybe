@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/analytics_hooks.dart';
 import '../services/moneybox_service.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/ft_routes.dart';
@@ -60,6 +61,19 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
 
   Future<void> _open(int tier) async {
     if (_loading) return;
+    final confirmed = await showMoneyConfirmationSheet(
+      context,
+      FTMoneyConfirmationPayload(
+        title: 'Confirm tier upgrade',
+        amount: 0,
+        fee: 0,
+        total: 0,
+        destination: 'MoneyBox Tier $tier',
+        actionLabel: 'Upgrade tier',
+      ),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _loading = true);
     final res = await _svc.openTier(tier);
     if (!mounted) return;
@@ -100,7 +114,14 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
       );
       return;
     }
-    if (ok) Navigator.of(context).pop(true);
+    if (ok) {
+      await AnalyticsHooks.instance.track(
+        'moneybox_tier_upgraded',
+        properties: <String, Object?>{'tier': tier},
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    }
   }
 
   @override

@@ -19,9 +19,12 @@ class FeedService {
     double radiusKm = 10,
   }) async {
     final qp = <String>[];
-    if (state.trim().isNotEmpty) qp.add('state=${Uri.encodeComponent(state.trim())}');
-    if (city.trim().isNotEmpty) qp.add('city=${Uri.encodeComponent(city.trim())}');
-    if (locality.trim().isNotEmpty) qp.add('locality=${Uri.encodeComponent(locality.trim())}');
+    if (state.trim().isNotEmpty)
+      qp.add('state=${Uri.encodeComponent(state.trim())}');
+    if (city.trim().isNotEmpty)
+      qp.add('city=${Uri.encodeComponent(city.trim())}');
+    if (locality.trim().isNotEmpty)
+      qp.add('locality=${Uri.encodeComponent(locality.trim())}');
     if (lga.trim().isNotEmpty) qp.add('lga=${Uri.encodeComponent(lga.trim())}');
     if (lat != null) qp.add('lat=${lat.toString()}');
     if (lng != null) qp.add('lng=${lng.toString()}');

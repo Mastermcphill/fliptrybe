@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
+import '../services/analytics_hooks.dart';
 import '../constants/ng_states.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/ft_routes.dart';
@@ -176,6 +177,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         }
 
         if (_responseIndicatesPending(res)) {
+          await AnalyticsHooks.instance.signupSuccess(role: _role);
           if (!mounted) return;
           Navigator.pushReplacement(
             context,
@@ -187,6 +189,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         }
 
         if (hasToken) {
+          await AnalyticsHooks.instance.signupSuccess(role: _role);
           if (!mounted) return;
           _toast("Account created");
           Navigator.pop(context, true);

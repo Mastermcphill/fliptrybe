@@ -57,11 +57,14 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+            Text(label,
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
             const SizedBox(height: 6),
             Text(v, style: const TextStyle(fontWeight: FontWeight.w900)),
           ],
@@ -95,15 +98,24 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
               );
             }
 
-            final merchant = (data['merchant'] is Map) ? Map<String, dynamic>.from(data['merchant']) : <String, dynamic>{};
-            final reviews = (data['reviews'] is List) ? (data['reviews'] as List) : <dynamic>[];
+            final merchant = (data['merchant'] is Map)
+                ? Map<String, dynamic>.from(data['merchant'])
+                : <String, dynamic>{};
+            final reviews = (data['reviews'] is List)
+                ? (data['reviews'] as List)
+                : <dynamic>[];
 
-            final name = (merchant['shop_name'] ?? '').toString().trim().isEmpty ? "Merchant ${merchant['user_id']}" : (merchant['shop_name'] ?? '').toString();
+            final name = (merchant['shop_name'] ?? '').toString().trim().isEmpty
+                ? "Merchant ${merchant['user_id']}"
+                : (merchant['shop_name'] ?? '').toString();
             final badge = (merchant['badge'] ?? 'New').toString();
-            final loc = [merchant['city'], merchant['state']].where((x) => (x ?? '').toString().trim().isNotEmpty).join(", ");
+            final loc = [merchant['city'], merchant['state']]
+                .where((x) => (x ?? '').toString().trim().isNotEmpty)
+                .join(", ");
             final followers = (merchant['followers'] ?? 0).toString();
             final isFollowing = merchant['is_following'] == true;
-            final canFollow = _viewerRole.toLowerCase() == 'buyer' && (_viewerId ?? 0) != (merchant['user_id'] ?? -1);
+            final canFollow = _viewerRole.toLowerCase() == 'buyer' &&
+                (_viewerId ?? 0) != (merchant['user_id'] ?? -1);
 
             return ListView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -115,31 +127,39 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                        Text(name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w900, fontSize: 18)),
                         const SizedBox(height: 4),
-                        Text(loc, style: TextStyle(color: Colors.grey.shade700)),
+                        Text(loc,
+                            style: TextStyle(color: Colors.grey.shade700)),
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             _metric("Badge", badge),
                             const SizedBox(width: 10),
-                            _metric("Score", (merchant['score'] ?? 0).toString()),
+                            _metric(
+                                "Score", (merchant['score'] ?? 0).toString()),
                           ],
                         ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            _metric("Orders", (merchant['total_orders'] ?? 0).toString()),
+                            _metric("Orders",
+                                (merchant['total_orders'] ?? 0).toString()),
                             const SizedBox(width: 10),
-                            _metric("Sales", "₦${(merchant['total_sales'] ?? 0).toString()}"),
+                            _metric("Sales",
+                                "₦${(merchant['total_sales'] ?? 0).toString()}"),
                           ],
                         ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            _metric("Rating", (merchant['avg_rating'] ?? 0).toString()),
+                            _metric("Rating",
+                                (merchant['avg_rating'] ?? 0).toString()),
                             const SizedBox(width: 10),
-                            _metric("Ratings", (merchant['rating_count'] ?? 0).toString()),
+                            _metric("Ratings",
+                                (merchant['rating_count'] ?? 0).toString()),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -159,15 +179,19 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                                   : () async {
                                       setState(() => _followBusy = true);
                                       if (isFollowing) {
-                                        await _svc.unfollowMerchant(widget.userId);
+                                        await _svc
+                                            .unfollowMerchant(widget.userId);
                                       } else {
-                                        await _svc.followMerchant(widget.userId);
+                                        await _svc
+                                            .followMerchant(widget.userId);
                                       }
                                       if (!context.mounted) return;
                                       setState(() => _followBusy = false);
                                       _reload();
                                     },
-                              icon: Icon(isFollowing ? Icons.check_circle_outline : Icons.person_add_alt_1),
+                              icon: Icon(isFollowing
+                                  ? Icons.check_circle_outline
+                                  : Icons.person_add_alt_1),
                               label: Text(isFollowing ? "Following" : "Follow"),
                             ),
                           ),
@@ -183,11 +207,14 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Investor demo actions", style: TextStyle(fontWeight: FontWeight.w900)),
+                        const Text("Investor demo actions",
+                            style: TextStyle(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 10),
                         TextField(
                           controller: _amountCtrl,
-                          decoration: const InputDecoration(labelText: "Simulate sale amount (₦)", border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                              labelText: "Simulate sale amount (₦)",
+                              border: OutlineInputBorder()),
                           keyboardType: TextInputType.number,
                         ),
                         const SizedBox(height: 10),
@@ -199,19 +226,31 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                                 ? null
                                 : () async {
                                     double amt = 0;
-                                    try { amt = double.parse(_amountCtrl.text.trim()); } catch (_) { amt = 0; }
+                                    try {
+                                      amt =
+                                          double.parse(_amountCtrl.text.trim());
+                                    } catch (_) {
+                                      amt = 0;
+                                    }
                                     if (amt <= 0) return;
 
                                     setState(() => _busy = true);
-                                    final ok2 = await _svc.simulateSale(userId: widget.userId, amount: amt);
+                                    final ok2 = await _svc.simulateSale(
+                                        userId: widget.userId, amount: amt);
                                     if (!context.mounted) return;
                                     setState(() => _busy = false);
 
                                     if (ok2) {
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Sale simulated. Merchant wallet credited.")));
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(const SnackBar(
+                                              content: Text(
+                                                  "Sale simulated. Merchant wallet credited.")));
                                       _reload();
                                     } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Simulation failed.")));
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(const SnackBar(
+                                              content:
+                                                  Text("Simulation failed.")));
                                     }
                                   },
                             icon: const Icon(Icons.bolt),
@@ -229,19 +268,27 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Leave a review (demo)", style: TextStyle(fontWeight: FontWeight.w900)),
+                        const Text("Leave a review (demo)",
+                            style: TextStyle(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<int>(
                           initialValue: _rating,
-                          decoration: const InputDecoration(labelText: "Rating", border: OutlineInputBorder()),
-                          items: const [5,4,3,2,1].map((v) => DropdownMenuItem(value: v, child: Text("$v stars"))).toList(),
+                          decoration: const InputDecoration(
+                              labelText: "Rating",
+                              border: OutlineInputBorder()),
+                          items: const [5, 4, 3, 2, 1]
+                              .map((v) => DropdownMenuItem(
+                                  value: v, child: Text("$v stars")))
+                              .toList(),
                           onChanged: (v) => setState(() => _rating = v ?? 5),
                         ),
                         const SizedBox(height: 10),
                         TextField(
                           controller: _reviewCtrl,
                           maxLines: 2,
-                          decoration: const InputDecoration(labelText: "Comment", border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                              labelText: "Comment",
+                              border: OutlineInputBorder()),
                         ),
                         const SizedBox(height: 10),
                         SizedBox(
@@ -249,15 +296,22 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                           width: double.infinity,
                           child: OutlinedButton.icon(
                             onPressed: () async {
-                              final res = await _svc.addReview(userId: widget.userId, rating: _rating, comment: _reviewCtrl.text.trim());
+                              final res = await _svc.addReview(
+                                  userId: widget.userId,
+                                  rating: _rating,
+                                  comment: _reviewCtrl.text.trim());
                               final ok3 = res['ok'] == true;
                               if (!context.mounted) return;
                               if (ok3) {
                                 _reviewCtrl.clear();
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Review added.")));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text("Review added.")));
                                 _reload();
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Review failed.")));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text("Review failed.")));
                               }
                             },
                             icon: const Icon(Icons.rate_review_outlined),
@@ -269,10 +323,14 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text("Recent reviews", style: TextStyle(fontWeight: FontWeight.w900)),
+                const Text("Recent reviews",
+                    style: TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 8),
                 if (reviews.isEmpty)
-                  const Card(child: Padding(padding: EdgeInsets.all(16), child: Text("No reviews yet.")))
+                  const Card(
+                      child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text("No reviews yet.")))
                 else
                   ...reviews.whereType<Map>().map((raw) {
                     final m = Map<String, dynamic>.from(raw);
@@ -281,7 +339,9 @@ class _MerchantDetailScreenState extends State<MerchantDetailScreen> {
                     final comment = (m['comment'] ?? '').toString();
                     return Card(
                       child: ListTile(
-                        title: Text("$rater • $rating★", style: const TextStyle(fontWeight: FontWeight.w900)),
+                        title: Text("$rater • $rating★",
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                         subtitle: Text(comment),
                       ),
                     );

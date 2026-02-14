@@ -47,7 +47,9 @@ Future<bool> requireAuthForAction(
             const SizedBox(height: 8),
             Text(
               'You can browse freely. Sign in to $action.',
-              style: const TextStyle(color: Colors.black87),
+              style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  ),
             ),
             const SizedBox(height: 14),
             SizedBox(

@@ -47,10 +47,12 @@ class _AdminShellState extends State<AdminShell> {
       NavigationRailDestination(
           icon: Icon(Icons.settings_applications_outlined),
           label: Text('Operations')),
-      NavigationRailDestination(icon: Icon(Icons.queue_outlined), label: Text('Queue')),
+      NavigationRailDestination(
+          icon: Icon(Icons.queue_outlined), label: Text('Queue')),
       NavigationRailDestination(
           icon: Icon(Icons.support_agent_outlined), label: Text('Support')),
-      NavigationRailDestination(icon: Icon(Icons.tune_outlined), label: Text('Settings')),
+      NavigationRailDestination(
+          icon: Icon(Icons.tune_outlined), label: Text('Settings')),
     ];
     return PopScope(
       canPop: _currentIndex == 0,
@@ -93,7 +95,8 @@ class _AdminShellState extends State<AdminShell> {
                   BottomNavigationBarItem(
                       icon: Icon(Icons.queue_outlined), label: 'Queue'),
                   BottomNavigationBarItem(
-                      icon: Icon(Icons.support_agent_outlined), label: 'Support'),
+                      icon: Icon(Icons.support_agent_outlined),
+                      label: 'Support'),
                   BottomNavigationBarItem(
                       icon: Icon(Icons.tune_outlined), label: 'Settings'),
                 ],

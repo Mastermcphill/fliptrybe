@@ -13,7 +13,8 @@ class AdminSupportThreadsScreen extends StatefulWidget {
   const AdminSupportThreadsScreen({super.key});
 
   @override
-  State<AdminSupportThreadsScreen> createState() => _AdminSupportThreadsScreenState();
+  State<AdminSupportThreadsScreen> createState() =>
+      _AdminSupportThreadsScreenState();
 }
 
 class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
@@ -64,9 +65,12 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
       _error = null;
     });
     try {
-      final res = await ApiClient.instance.dio.get(ApiConfig.api('/admin/support/threads'));
+      final res = await ApiClient.instance.dio
+          .get(ApiConfig.api('/admin/support/threads'));
       final data = res.data;
-      final items = (data is Map && data['threads'] is List) ? (data['threads'] as List) : <dynamic>[];
+      final items = (data is Map && data['threads'] is List)
+          ? (data['threads'] as List)
+          : <dynamic>[];
       if (!mounted) return;
       setState(() => _threads = items);
     } catch (e) {
@@ -111,7 +115,8 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
         emptyState: FTEmptyState(
           icon: Icons.support_agent_outlined,
           title: 'No support threads',
-          subtitle: 'Support conversations will appear here when users send messages.',
+          subtitle:
+              'Support conversations will appear here when users send messages.',
           actionLabel: 'Refresh',
           onAction: _load,
         ),
@@ -147,7 +152,8 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
                 subtitle: 'Open thread and respond',
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  final userId = id is int ? id : int.tryParse(id?.toString() ?? '');
+                  final userId =
+                      id is int ? id : int.tryParse(id?.toString() ?? '');
                   if (userId == null) return;
                   Navigator.push(
                     context,

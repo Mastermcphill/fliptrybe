@@ -47,7 +47,9 @@ class _MetricsScreenState extends State<MetricsScreen> {
       appBar: AppBar(
         title: const Text("Investor Metrics"),
         actions: [
-          IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh)),
         ],
       ),
       body: _loading
@@ -61,20 +63,29 @@ class _MetricsScreenState extends State<MetricsScreen> {
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 12),
-                    ElevatedButton(onPressed: _load, child: const Text("Retry")),
+                    ElevatedButton(
+                        onPressed: _load, child: const Text("Retry")),
                   ],
                 )
               : ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Text("Mode: ${_data?['mode'] ?? 'mock'}", style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text("Mode: ${_data?['mode'] ?? 'mock'}",
+                        style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 10),
-                    Text("Users: ${_data?['users'] ?? 0}", style: const TextStyle(fontSize: 16)),
-                    Text("Listings: ${_data?['listings'] ?? 0}", style: const TextStyle(fontSize: 16)),
+                    Text("Users: ${_data?['users'] ?? 0}",
+                        style: const TextStyle(fontSize: 16)),
+                    Text("Listings: ${_data?['listings'] ?? 0}",
+                        style: const TextStyle(fontSize: 16)),
                     const Divider(height: 28),
-                    Text("GMV: ₦${_data?['gmv'] ?? 0}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text("GMV: ₦${_data?['gmv'] ?? 0}",
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 6),
-                    Text("Total Commission: ₦${_data?['commissions_total'] ?? 0}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    Text(
+                        "Total Commission: ₦${_data?['commissions_total'] ?? 0}",
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w800)),
                   ],
                 ),
     );

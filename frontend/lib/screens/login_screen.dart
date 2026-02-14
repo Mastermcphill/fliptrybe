@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/analytics_hooks.dart';
 import '../services/auth_service.dart';
 import '../services/token_storage.dart';
 import '../ui/components/ft_components.dart';
@@ -108,6 +109,7 @@ class _LoginScreenState extends State<LoginScreen> {
           widget.meAction != null ? await widget.meAction!() : await _auth.me();
       roleForNav = (profile?['role'] ?? 'buyer').toString();
       roleStatus = (profile?['role_status'] ?? 'approved').toString();
+      await AnalyticsHooks.instance.loginSuccess(role: roleForNav);
 
       if (!mounted) return;
       if (roleStatus.toLowerCase() == 'pending') {

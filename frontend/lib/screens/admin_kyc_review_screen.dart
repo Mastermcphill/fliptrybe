@@ -33,12 +33,17 @@ class _AdminKycReviewScreenState extends State<AdminKycReviewScreen> {
           title: Text(title),
           content: TextField(
             controller: ctrl,
-            decoration: const InputDecoration(labelText: 'Note (optional)', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Note (optional)', border: OutlineInputBorder()),
             maxLines: 2,
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Save')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('Save')),
           ],
         );
       },
@@ -48,14 +53,17 @@ class _AdminKycReviewScreenState extends State<AdminKycReviewScreen> {
 
   Future<void> _setStatus(Map<String, dynamic> item, String status) async {
     if (_busy) return;
-    final note = await _promptNote(status == 'verified' ? 'Approve KYC' : 'Reject KYC');
+    final note =
+        await _promptNote(status == 'verified' ? 'Approve KYC' : 'Reject KYC');
     if (!mounted) return;
     if (note == null) return;
     setState(() => _busy = true);
-    final ok = await _svc.adminSet(userId: item['user_id'] as int, status: status, note: note);
+    final ok = await _svc.adminSet(
+        userId: item['user_id'] as int, status: status, note: note);
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? 'Updated' : 'Update failed')));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? 'Updated' : 'Update failed')));
     if (ok) _reload();
   }
 
@@ -64,7 +72,11 @@ class _AdminKycReviewScreenState extends State<AdminKycReviewScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('KYC Review'),
-        actions: [IconButton(onPressed: _busy ? null : _reload, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(
+              onPressed: _busy ? null : _reload,
+              icon: const Icon(Icons.refresh))
+        ],
       ),
       body: FutureBuilder<List<dynamic>>(
         future: _items,
@@ -90,17 +102,21 @@ class _AdminKycReviewScreenState extends State<AdminKycReviewScreen> {
               return Card(
                 margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                 child: ListTile(
-                  title: Text(email.isEmpty ? 'User #${item['user_id']}' : email),
-                  subtitle: Text('${name.isEmpty ? 'Unknown' : name} • $idType • $idNum'),
+                  title:
+                      Text(email.isEmpty ? 'User #${item['user_id']}' : email),
+                  subtitle: Text(
+                      '${name.isEmpty ? 'Unknown' : name} • $idType • $idNum'),
                   trailing: Wrap(
                     spacing: 8,
                     children: [
                       OutlinedButton(
-                        onPressed: _busy ? null : () => _setStatus(item, 'rejected'),
+                        onPressed:
+                            _busy ? null : () => _setStatus(item, 'rejected'),
                         child: const Text('Reject'),
                       ),
                       ElevatedButton(
-                        onPressed: _busy ? null : () => _setStatus(item, 'verified'),
+                        onPressed:
+                            _busy ? null : () => _setStatus(item, 'verified'),
                         child: const Text('Approve'),
                       ),
                     ],

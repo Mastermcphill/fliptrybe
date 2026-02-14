@@ -38,7 +38,8 @@ class FeedItem extends StatelessWidget {
 
     final title = _s(listing['title']);
     final listingId = int.tryParse(_s(listing['id']));
-    final merchantId = int.tryParse(_s(listing['user_id'])) ?? int.tryParse(_s(listing['merchant_id']));
+    final merchantId = int.tryParse(_s(listing['user_id'])) ??
+        int.tryParse(_s(listing['merchant_id']));
 
     if (merchantId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,7 +99,8 @@ class FeedItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => ListingDetailScreen(listing: listing)),
+          MaterialPageRoute(
+              builder: (_) => ListingDetailScreen(listing: listing)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -115,7 +117,8 @@ class FeedItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(title,
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 4),
                     Text(
                       desc.isEmpty ? 'No description' : desc,
@@ -126,7 +129,9 @@ class FeedItem extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(priceText, style: const TextStyle(fontWeight: FontWeight.w900)),
+                        Text(priceText,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                         const Spacer(),
                         ElevatedButton(
                           onPressed: () => _buyNow(context),

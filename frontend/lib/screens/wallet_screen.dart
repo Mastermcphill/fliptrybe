@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'topup_screen.dart';
-
 import '../services/wallet_service.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
+import '../utils/ui_feedback.dart';
 import 'merchant_withdraw_screen.dart';
+import 'topup_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -13,36 +15,16 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen> {
-  final _svc = WalletService();
-  bool _loading = true;
+  final WalletService _svc = WalletService();
+  final TextEditingController _topupCtrl = TextEditingController(text: '5000');
 
+  bool _loading = true;
   Map<String, dynamic>? _wallet;
-  List<dynamic> _ledger = const [];
-  final _topupCtrl = TextEditingController(text: "5000");
+  List<dynamic> _ledger = const <dynamic>[];
 
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final w = await _svc.getWallet();
-    final l = await _svc.ledger();
-    setState(() {
-      _wallet = w;
-      _ledger = l;
-      _loading = false;
-    });
-  }
-
-  Future<void> _topup() async {
-    final amt = double.tryParse(_topupCtrl.text.trim()) ?? 0;
-    if (amt <= 0) return;
-    await _svc.demoTopup(amt);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Demo topup credited ✅")));
     _load();
   }
 
@@ -52,88 +34,146 @@ class _WalletScreenState extends State<WalletScreen> {
     super.dispose();
   }
 
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final wallet = await _svc.getWallet();
+    final ledger = await _svc.ledger();
+    if (!mounted) return;
+    setState(() {
+      _wallet = wallet;
+      _ledger = ledger;
+      _loading = false;
+    });
+  }
+
+  Future<void> _demoTopup() async {
+    final amount = double.tryParse(_topupCtrl.text.trim()) ?? 0;
+    if (amount <= 0) {
+      UIFeedback.showErrorSnack(context, 'Enter a valid top-up amount.');
+      return;
+    }
+    await _svc.demoTopup(amount);
+    if (!mounted) return;
+    UIFeedback.showSuccessSnack(context, 'Demo top-up credited.');
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final bal = _wallet?['balance'] ?? 0;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Wallet"),
-        actions: [
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh)),
-          IconButton(
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const MerchantWithdrawScreen()));
-              if (!mounted) return;
-              _load();
-            },
-            icon: const Icon(Icons.outbond_outlined),
-            tooltip: 'Withdraw',
-          ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("Balance", style: TextStyle(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 6),
-                        Text("₦$bal", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _topupCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: "Demo topup amount", border: OutlineInputBorder()),
+    final balance = double.tryParse('${_wallet?['balance'] ?? 0}') ?? 0;
+
+    return FTScaffold(
+      title: 'Wallet',
+      onRefresh: _load,
+      actions: [
+        IconButton(
+          onPressed: _loading ? null : _load,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      child: FTLoadStateLayout(
+        loading: _loading,
+        error: null,
+        onRetry: _load,
+        empty: false,
+        loadingState: FTSkeletonList(
+          itemCount: 4,
+          itemBuilder: (_, __) => const FTSkeletonCard(height: 94),
+        ),
+        emptyState: const SizedBox.shrink(),
+        child: ListView(
+          children: [
+            FTSection(
+              title: 'Available balance',
+              subtitle: 'Use this wallet for orders and withdrawals.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    formatNaira(balance),
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 12),
+                  FTPrimaryCtaRow(
+                    primaryLabel: 'Top up wallet',
+                    onPrimary: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const TopupScreen()),
+                      );
+                      if (!mounted) return;
+                      _load();
+                    },
+                    secondaryLabel: 'Withdraw',
+                    onSecondary: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MerchantWithdrawScreen(),
                         ),
-                        const SizedBox(height: 10),
-                        ElevatedButton.icon(
-              onPressed: () async {
-                final ok = await Navigator.push(context, MaterialPageRoute(builder: (_) => const TopupScreen()));
-                if (ok == true) {
-                  // ignore: use_build_context_synchronously
-                  Navigator.pop(context);
-                }
-              },
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('Top Up Wallet'),
+                      );
+                      if (!mounted) return;
+                      _load();
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  FTTextField(
+                    controller: _topupCtrl,
+                    keyboardType: TextInputType.number,
+                    labelText: 'Demo top-up amount',
+                    prefixIcon: Icons.science_outlined,
+                  ),
+                  const SizedBox(height: 8),
+                  FTButton(
+                    label: 'Apply demo top-up',
+                    variant: FTButtonVariant.ghost,
+                    expand: true,
+                    onPressed: _demoTopup,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
-            ElevatedButton.icon(
-                          onPressed: _topup,
-                          icon: const Icon(Icons.add),
-                          label: const Text("Demo Topup"),
-                        ),
-                      ],
+            FTSection(
+              title: 'Ledger',
+              subtitle: 'Recent wallet movements and references.',
+              child: _ledger.isEmpty
+                  ? FTEmptyState(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'No transactions yet',
+                      subtitle:
+                          'Wallet entries will appear after your first activity.',
+                      primaryCtaText: 'Refresh',
+                      onPrimaryCta: _load,
+                    )
+                  : Column(
+                      children: _ledger
+                          .whereType<Map>()
+                          .map((raw) => Map<String, dynamic>.from(raw))
+                          .map((row) {
+                        final direction = (row['direction'] ?? '').toString();
+                        final amount =
+                            double.tryParse('${row['amount'] ?? 0}') ?? 0;
+                        final kind = (row['kind'] ?? '').toString();
+                        final note = (row['note'] ?? '').toString();
+                        return FTListTile(
+                          leading: Icon(
+                            direction.toLowerCase() == 'credit'
+                                ? Icons.arrow_downward_outlined
+                                : Icons.arrow_upward_outlined,
+                          ),
+                          title: '$direction ${formatNaira(amount)}',
+                          subtitle:
+                              '$kind${note.trim().isEmpty ? '' : ' - $note'}',
+                          onTap: null,
+                        );
+                      }).toList(growable: false),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text("Ledger", style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 8),
-                if (_ledger.isEmpty)
-                  const Text("No transactions yet.")
-                else
-                  ..._ledger.whereType<Map>().map((raw) {
-                    final m = Map<String, dynamic>.from(raw);
-                    final dir = (m['direction'] ?? '').toString();
-                    final amt = (m['amount'] ?? 0).toString();
-                    final kind = (m['kind'] ?? '').toString();
-                    final note = (m['note'] ?? '').toString();
-                    return Card(
-                      child: ListTile(
-                        title: Text("$dir ₦$amt", style: const TextStyle(fontWeight: FontWeight.w900)),
-                        subtitle: Text("$kind\n$note"),
-                      ),
-                    );
-                  }),
-              ],
             ),
+          ],
+        ),
+      ),
     );
   }
 }

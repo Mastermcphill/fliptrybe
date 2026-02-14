@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -50,7 +50,8 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Future<void> _loadTicker() async {
     try {
-      final res = await ApiClient.instance.getJson(ApiConfig.api('/public/sales_ticker?limit=8'));
+      final res = await ApiClient.instance
+          .getJson(ApiConfig.api('/public/sales_ticker?limit=8'));
       if (res is Map && res['items'] is List) {
         final list = (res['items'] as List)
             .map((e) => (e is Map ? (e['text'] ?? '') : '').toString())
@@ -129,7 +130,8 @@ class _LandingScreenState extends State<LandingScreen> {
                                   Align(
                                     alignment: Alignment.topLeft,
                                     child: Padding(
-                                      padding: const EdgeInsets.all(AppTokens.s12),
+                                      padding:
+                                          const EdgeInsets.all(AppTokens.s12),
                                       child: Container(
                                         width: double.infinity,
                                         padding: const EdgeInsets.symmetric(
@@ -137,9 +139,12 @@ class _LandingScreenState extends State<LandingScreen> {
                                           vertical: AppTokens.s8,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: scheme.surface.withValues(alpha: 0.35),
-                                          borderRadius: BorderRadius.circular(AppTokens.r12),
-                                          border: Border.all(color: scheme.outlineVariant),
+                                          color: scheme.surface
+                                              .withValues(alpha: 0.35),
+                                          borderRadius: BorderRadius.circular(
+                                              AppTokens.r12),
+                                          border: Border.all(
+                                              color: scheme.outlineVariant),
                                         ),
                                         child: AnimatedSwitcher(
                                           duration: AppTokens.d200,
@@ -183,7 +188,10 @@ class _LandingScreenState extends State<LandingScreen> {
                         const SizedBox(height: AppTokens.s12),
                         Text(
                           'Declutter Marketplace +\nShortlet Stays.',
-                          style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .displaySmall
+                              ?.copyWith(
                                 color: scheme.onSurface,
                                 fontWeight: FontWeight.w700,
                                 height: 1.05,
@@ -192,10 +200,11 @@ class _LandingScreenState extends State<LandingScreen> {
                         const SizedBox(height: AppTokens.s8),
                         Text(
                           'Browse immediately, then sign in only when you are ready to transact.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                                height: 1.4,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                    height: 1.4,
+                                  ),
                         ),
                       ],
                     ),
@@ -203,7 +212,8 @@ class _LandingScreenState extends State<LandingScreen> {
                   const SizedBox(height: AppTokens.s16),
                   FTSectionContainer(
                     title: 'Start Browsing',
-                    subtitle: 'Guest mode is enabled for marketplace and shortlets.',
+                    subtitle:
+                        'Guest mode is enabled for marketplace and shortlets.',
                     child: Column(
                       children: [
                         if (widget.onBrowseMarketplace != null)
@@ -212,7 +222,8 @@ class _LandingScreenState extends State<LandingScreen> {
                             icon: Icons.storefront_outlined,
                             label: 'Browse Marketplace',
                           ),
-                        if (widget.onBrowseMarketplace != null && widget.onBrowseShortlets != null)
+                        if (widget.onBrowseMarketplace != null &&
+                            widget.onBrowseShortlets != null)
                           const SizedBox(height: AppTokens.s8),
                         if (widget.onBrowseShortlets != null)
                           FTSecondaryButton(

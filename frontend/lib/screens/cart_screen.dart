@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../services/analytics_hooks.dart';
 import '../services/cart_service.dart';
 import '../services/payment_service.dart';
 import '../utils/formatters.dart';
@@ -109,6 +110,7 @@ class _CartScreenState extends State<CartScreen> {
         });
       }
     }
+
     addOption('wallet', 'Wallet', 'Instant if wallet balance is enough');
     addOption('paystack_card', 'Paystack Card', 'Automated checkout via card');
     addOption(
@@ -117,7 +119,8 @@ class _CartScreenState extends State<CartScreen> {
     if (options.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No payment methods available right now.')),
+        const SnackBar(
+            content: Text('No payment methods available right now.')),
       );
       return;
     }
@@ -151,6 +154,18 @@ class _CartScreenState extends State<CartScreen> {
       ),
     );
     if (method == null || method.trim().isEmpty) return;
+    final confirmed = await showMoneyConfirmationSheet(
+      context,
+      FTMoneyConfirmationPayload(
+        title: 'Confirm checkout',
+        amount: _totalMinor / 100.0,
+        fee: 0,
+        total: _totalMinor / 100.0,
+        destination: method.replaceAll('_', ' '),
+        actionLabel: 'Continue',
+      ),
+    );
+    if (!confirmed || !mounted) return;
     setState(() => _checkoutBusy = true);
     final listingIds = _items
         .map((row) => int.tryParse('${row['listing_id'] ?? 0}') ?? 0)
@@ -166,6 +181,11 @@ class _CartScreenState extends State<CartScreen> {
     if (!mounted) return;
     setState(() => _checkoutBusy = false);
     if (res['ok'] != true) {
+      await AnalyticsHooks.instance.paymentFail(
+        channel: method,
+        reason:
+            (res['message'] ?? res['error'] ?? 'Checkout failed').toString(),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text((res['message'] ?? res['error'] ?? 'Checkout failed')
@@ -200,6 +220,10 @@ class _CartScreenState extends State<CartScreen> {
       );
       return;
     }
+    await AnalyticsHooks.instance.paymentSuccess(
+      channel: method,
+      reference: (res['reference'] ?? '').toString(),
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
           content:
@@ -224,7 +248,10 @@ class _CartScreenState extends State<CartScreen> {
         ),
       ],
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? FTSkeletonList(
+              itemCount: 4,
+              itemBuilder: (_, __) => const FTSkeletonCard(height: 106),
+            )
           : _error != null
               ? FTErrorState(message: _error!, onRetry: _load)
               : _items.isEmpty
@@ -303,27 +330,34 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                         Container(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             border: Border(
-                                top: BorderSide(color: Color(0xFFE2E8F0))),
+                              top: BorderSide(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant,
+                              ),
+                            ),
                           ),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Text(
                                   'Total: ${formatNaira(_totalMinor / 100.0, decimals: 0)}',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w900),
                                 ),
                               ),
-                              ElevatedButton.icon(
-                                onPressed: _checkoutBusy ? null : _checkout,
-                                icon: const Icon(Icons.lock_outline),
-                                label: Text(_checkoutBusy
-                                    ? 'Processing...'
-                                    : 'Checkout'),
+                              SizedBox(
+                                width: 168,
+                                child: FTAsyncButton(
+                                  label: 'Checkout',
+                                  icon: Icons.lock_outline,
+                                  externalLoading: _checkoutBusy,
+                                  onPressed: _checkoutBusy ? null : _checkout,
+                                ),
                               ),
                             ],
                           ),

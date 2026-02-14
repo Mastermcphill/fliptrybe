@@ -31,9 +31,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
       _error = null;
     });
     try {
-      final res = await ApiClient.instance.dio.get(ApiConfig.api('/support/messages'));
+      final res =
+          await ApiClient.instance.dio.get(ApiConfig.api('/support/messages'));
       final data = res.data;
-      final items = (data is Map && data['items'] is List) ? (data['items'] as List) : <dynamic>[];
+      final items = (data is Map && data['items'] is List)
+          ? (data['items'] as List)
+          : <dynamic>[];
       if (!mounted) return;
       setState(() => _items = items);
     } on DioException catch (e) {
@@ -44,7 +47,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           context,
           onChatWithAdmin: _load,
         );
-        setState(() => _error = 'Direct messaging between users is not allowed.');
+        setState(
+            () => _error = 'Direct messaging between users is not allowed.');
         return;
       }
       setState(() => _error = e.toString());
@@ -66,11 +70,14 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         data: {'body': body},
       );
       if (!mounted) return;
-      if (res.statusCode != null && res.statusCode! >= 200 && res.statusCode! < 300) {
+      if (res.statusCode != null &&
+          res.statusCode! >= 200 &&
+          res.statusCode! < 300) {
         _msgCtrl.clear();
         await _load();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message failed.')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Message failed.')));
       }
     } on DioException catch (e) {
       if (!mounted) return;
@@ -82,10 +89,12 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
         );
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Message failed: $e')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Message failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Message failed: $e')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -108,7 +117,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
             color: bg,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(body, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+          child: Text(body,
+              style: TextStyle(color: color, fontWeight: FontWeight.w600)),
         ),
       ],
     );
@@ -116,11 +126,16 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final items = _items.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    final items = _items
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat with Admin'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: Column(
         children: [
@@ -128,7 +143,8 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
           if (_error != null)
             Padding(
               padding: const EdgeInsets.all(8),
-              child: Text('Load failed: $_error', style: const TextStyle(color: Colors.redAccent)),
+              child: Text('Load failed: $_error',
+                  style: const TextStyle(color: Colors.redAccent)),
             ),
           Expanded(
             child: ListView(

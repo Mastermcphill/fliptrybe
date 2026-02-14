@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/analytics_hooks.dart';
 import '../services/wallet_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
+import '../utils/role_gates.dart';
 import '../utils/ui_feedback.dart';
 import '../widgets/email_verification_dialog.dart';
+import 'money_action_receipt_screen.dart';
 
 class MerchantWithdrawScreen extends StatefulWidget {
   const MerchantWithdrawScreen({super.key});
@@ -14,26 +18,21 @@ class MerchantWithdrawScreen extends StatefulWidget {
 }
 
 class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
-  final _svc = WalletService();
+  final WalletService _svc = WalletService();
 
-  final _amount = TextEditingController();
-  final _bankName = TextEditingController(text: 'GTBank');
-  final _acctNo = TextEditingController();
-  final _acctName = TextEditingController();
+  final TextEditingController _amount = TextEditingController();
+  final TextEditingController _bankName = TextEditingController(text: 'GTBank');
+  final TextEditingController _acctNo = TextEditingController();
+  final TextEditingController _acctName = TextEditingController();
 
-  final _amountFocus = FocusNode();
-  final _bankFocus = FocusNode();
-  final _acctNoFocus = FocusNode();
-  final _acctNameFocus = FocusNode();
+  final FocusNode _amountFocus = FocusNode();
+  final FocusNode _bankFocus = FocusNode();
+  final FocusNode _acctNoFocus = FocusNode();
+  final FocusNode _acctNameFocus = FocusNode();
 
   bool _loading = false;
   String? _amountError;
   String? _acctNoError;
-
-  void _toast(String msg) {
-    if (!mounted) return;
-    UIFeedback.showErrorSnack(context, msg);
-  }
 
   bool _validate() {
     final amt = double.tryParse(_amount.text.trim()) ?? 0.0;
@@ -48,40 +47,84 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
   Future<void> _submit() async {
     if (_loading) return;
     FocusManager.instance.primaryFocus?.unfocus();
+
+    final profile = await ApiService.getProfile();
+    final gate = RoleGates.forWithdraw(profile);
+    final gateAllowed = await guardRestrictedAction(
+      context,
+      block: gate,
+      authAction: 'withdraw earnings',
+      onAllowed: () async {},
+    );
+    if (!gateAllowed) return;
+
     if (!_validate()) return;
 
-    final amt = double.parse(_amount.text.trim());
+    final amount = double.parse(_amount.text.trim());
+    final confirmed = await showMoneyConfirmationSheet(
+      context,
+      FTMoneyConfirmationPayload(
+        title: 'Confirm withdrawal',
+        amount: amount,
+        fee: 0,
+        total: amount,
+        destination: '${_bankName.text.trim()} - ${_acctNo.text.trim()}',
+        actionLabel: 'Submit request',
+      ),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _loading = true);
     final res = await _svc.requestPayout(
-      amount: amt,
+      amount: amount,
       bankName: _bankName.text.trim(),
       accountNumber: _acctNo.text.trim(),
       accountName: _acctName.text.trim(),
     );
     if (!mounted) return;
     setState(() => _loading = false);
+
     final ok = res['ok'] == true;
-    final msg = (res['message'] ??
+    final message = (res['message'] ??
             res['error'] ??
             (ok ? 'Payout request sent' : 'Failed'))
         .toString();
+
     if (!ok &&
         (ApiService.isEmailNotVerified(res) ||
-            ApiService.isEmailNotVerified(msg))) {
+            ApiService.isEmailNotVerified(message))) {
       await showEmailVerificationRequiredDialog(
         context,
-        message: msg,
+        message: message,
         onRetry: _submit,
       );
       return;
     }
+
     if (!mounted) return;
     if (ok) {
-      UIFeedback.showSuccessSnack(context, msg);
-      Navigator.pop(context);
+      await AnalyticsHooks.instance.withdrawalInitiated(
+        source: 'wallet',
+        amount: amount,
+      );
+      UIFeedback.showSuccessSnack(context, message);
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MoneyActionReceiptScreen(
+            title: 'Withdrawal receipt',
+            statusLabel: 'Pending review',
+            amount: amount,
+            reference: (res['reference'] ?? res['request_id'] ?? '').toString(),
+            destination: '${_bankName.text.trim()} - ${_acctNo.text.trim()}',
+          ),
+        ),
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
       return;
     }
-    _toast(msg);
+
+    UIFeedback.showErrorSnack(context, message);
   }
 
   @override
@@ -99,6 +142,8 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final amount = double.tryParse(_amount.text.trim()) ?? 0;
+
     return FTScaffold(
       title: 'Withdraw / Payout Request',
       child: ListView(
@@ -116,7 +161,7 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
             focusNode: _amountFocus,
             nextFocusNode: _bankFocus,
             keyboardType: TextInputType.number,
-            labelText: 'Amount (₦)',
+            labelText: 'Amount (NGN)',
             prefixIcon: Icons.payments_outlined,
             errorText: _amountError,
             enabled: !_loading,
@@ -161,7 +206,13 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
             enabled: !_loading,
             onSubmitted: (_) => _submit(),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          Text(
+            'Amount to send: ${formatNaira(amount)}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
           FTAsyncButton(
             label: 'Submit Request',
             icon: Icons.send,

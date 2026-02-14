@@ -1,17 +1,23 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, kIsWeb, kReleaseMode, debugPrint;
 
 class ApiConfig {
-  static const String appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0+1');
+  static const String appVersion =
+      String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0+1');
+
   /// Override at build/run time:
   /// flutter run --dart-define=BASE_URL=http://127.0.0.1:5000
-  static const String _baseUrlEnv = String.fromEnvironment('BASE_URL', defaultValue: '');
+  static const String _baseUrlEnv =
+      String.fromEnvironment('BASE_URL', defaultValue: '');
 
   /// Android-specific override (for device/LAN testing):
   /// flutter run --dart-define=ANDROID_BASE_URL=http://192.168.1.50:5000
-  static const String _androidBaseUrlEnv = String.fromEnvironment('ANDROID_BASE_URL', defaultValue: '');
-  static const String _clientFingerprintEnv = String.fromEnvironment('CLIENT_FINGERPRINT', defaultValue: '');
+  static const String _androidBaseUrlEnv =
+      String.fromEnvironment('ANDROID_BASE_URL', defaultValue: '');
+  static const String _clientFingerprintEnv =
+      String.fromEnvironment('CLIENT_FINGERPRINT', defaultValue: '');
 
   static String get baseUrl {
     String candidate;
@@ -29,9 +35,12 @@ class ApiConfig {
     // Release hard-gate: never ship an APK pointing to localhost/emulator loopback.
     if (kReleaseMode) {
       final lower = candidate.toLowerCase();
-      final banned = lower.contains('10.0.2.2') || lower.contains('127.0.0.1') || lower.contains('localhost');
+      final banned = lower.contains('10.0.2.2') ||
+          lower.contains('127.0.0.1') ||
+          lower.contains('localhost');
       if (banned) {
-        throw StateError('Release build misconfigured: BASE_URL must point to production (Render), not $candidate');
+        throw StateError(
+            'Release build misconfigured: BASE_URL must point to production (Render), not $candidate');
       }
     }
 

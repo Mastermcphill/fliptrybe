@@ -30,7 +30,8 @@ class _FakeSettingsService extends SettingsService {
     if (notifWhatsapp != null) _settings['notif_whatsapp'] = notifWhatsapp;
     if (darkMode != null) _settings['dark_mode'] = darkMode;
     if (themeMode != null) _settings['theme_mode'] = themeMode;
-    if (backgroundPalette != null) _settings['background_palette'] = backgroundPalette;
+    if (backgroundPalette != null)
+      _settings['background_palette'] = backgroundPalette;
     return true;
   }
 }

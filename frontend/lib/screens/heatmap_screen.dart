@@ -27,7 +27,8 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     });
     try {
       final data = await ApiClient.instance.getJson(ApiConfig.api('/heat'));
-      final buckets = (data['buckets'] is List) ? data['buckets'] as List : const [];
+      final buckets =
+          (data['buckets'] is List) ? data['buckets'] as List : const [];
       setState(() {
         _buckets = buckets;
         _loading = false;
@@ -45,7 +46,9 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Market Heat'),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'dart:async';
 import 'dart:ui';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -15,7 +17,10 @@ import 'shells/public_browse_shell.dart';
 import 'services/api_client.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
+import 'utils/app_crash_state.dart';
 import 'utils/auth_navigation.dart';
+import 'utils/ft_logger.dart';
+import 'widgets/app_crash_overlay.dart';
 import 'widgets/app_exit_guard.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
@@ -31,7 +36,18 @@ Future<void> main() async {
   const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: 'dev');
   if (sentryDsn.trim().isEmpty) {
     _installGlobalErrorHandlers(sentryEnabled: false);
-    runApp(const FlipTrybeApp());
+    runZonedGuarded(
+      () => runApp(const FlipTrybeApp()),
+      (error, stackTrace) {
+        AppCrashState.instance.capture(error, stackTrace);
+        FTLogger.logError(
+          'zone',
+          'Unhandled zone error',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      },
+    );
     return;
   }
   await SentryFlutter.init(
@@ -49,7 +65,19 @@ Future<void> main() async {
     },
     appRunner: () {
       _installGlobalErrorHandlers(sentryEnabled: true);
-      runApp(const FlipTrybeApp());
+      runZonedGuarded(
+        () => runApp(const FlipTrybeApp()),
+        (error, stackTrace) {
+          AppCrashState.instance.capture(error, stackTrace);
+          FTLogger.logError(
+            'zone',
+            'Unhandled zone error',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          Sentry.captureException(error, stackTrace: stackTrace);
+        },
+      );
     },
   );
 }
@@ -57,6 +85,13 @@ Future<void> main() async {
 void _installGlobalErrorHandlers({required bool sentryEnabled}) {
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
+    AppCrashState.instance.capture(details.exception, details.stack);
+    FTLogger.logError(
+      'flutter_error',
+      details.exceptionAsString(),
+      error: details.exception,
+      stackTrace: details.stack,
+    );
     if (sentryEnabled) {
       Sentry.captureException(
         details.exception,
@@ -65,6 +100,13 @@ void _installGlobalErrorHandlers({required bool sentryEnabled}) {
     }
   };
   PlatformDispatcher.instance.onError = (error, stack) {
+    AppCrashState.instance.capture(error, stack);
+    FTLogger.logError(
+      'platform_error',
+      'Unhandled platform error',
+      error: error,
+      stackTrace: stack,
+    );
     if (sentryEnabled) {
       Sentry.captureException(error, stackTrace: stack);
       return true;
@@ -135,6 +177,49 @@ class _FlipTrybeAppState extends State<FlipTrybeApp>
           theme: AppTheme.light(_themeController.backgroundPalette),
           darkTheme: AppTheme.dark(_themeController.backgroundPalette),
           themeMode: _themeController.themeMode,
+          builder: (context, child) {
+            final wrapped = AppCrashOverlay(
+              child: child ?? const SizedBox.shrink(),
+            );
+            if (kReleaseMode) return wrapped;
+            final envTag = const String.fromEnvironment(
+              'APP_ENV',
+              defaultValue: 'dev',
+            ).toUpperCase();
+            return Stack(
+              children: [
+                wrapped,
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .secondaryContainer
+                            .withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          envTag,
+                          style:
+                              Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
           home: const AppExitGuard(child: StartupScreen()),
         ),
       ),

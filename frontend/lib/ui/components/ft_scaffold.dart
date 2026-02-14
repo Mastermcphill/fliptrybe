@@ -17,6 +17,7 @@ class FTScaffold extends StatelessWidget {
     this.padding,
     this.footer,
     this.resizeToAvoidBottomInset,
+    this.onRefresh,
     this.showNetworkBanner = true,
   });
 
@@ -30,17 +31,24 @@ class FTScaffold extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final Widget? footer;
   final bool? resizeToAvoidBottomInset;
+  final Future<void> Function()? onRefresh;
   final bool showNetworkBanner;
 
   @override
   Widget build(BuildContext context) {
+    final bodyChild = onRefresh == null
+        ? child
+        : RefreshIndicator(
+            onRefresh: onRefresh!,
+            child: child,
+          );
     final content = SafeArea(
       child: Padding(
         padding: padding ?? const EdgeInsets.all(AppTokens.s16),
         child: Column(
           children: [
             if (showNetworkBanner) const FTNetworkBanner(),
-            Expanded(child: child),
+            Expanded(child: bodyChild),
             if (footer != null) ...[
               const SizedBox(height: AppTokens.s12),
               footer!,

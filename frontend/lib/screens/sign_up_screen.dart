@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/ng_states.dart';
+import '../services/analytics_hooks.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
@@ -172,6 +173,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       await ApiService.persistAuthPayload(res.map((k, v) => MapEntry('$k', v)));
+      await AnalyticsHooks.instance.signupSuccess(role: backendRole);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(

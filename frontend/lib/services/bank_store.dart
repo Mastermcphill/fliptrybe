@@ -14,7 +14,10 @@ class BankStore {
     };
   }
 
-  Future<void> save({required String bankName, required String accountNumber, required String accountName}) async {
+  Future<void> save(
+      {required String bankName,
+      required String accountNumber,
+      required String accountName}) async {
     final sp = await SharedPreferences.getInstance();
     await sp.setString(_kBank, bankName);
     await sp.setString(_kAcctNo, accountNumber);

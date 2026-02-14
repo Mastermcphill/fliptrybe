@@ -10,7 +10,8 @@ class MoneyBoxDashboardScreen extends StatefulWidget {
   const MoneyBoxDashboardScreen({super.key});
 
   @override
-  State<MoneyBoxDashboardScreen> createState() => _MoneyBoxDashboardScreenState();
+  State<MoneyBoxDashboardScreen> createState() =>
+      _MoneyBoxDashboardScreenState();
 }
 
 class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
@@ -42,7 +43,9 @@ class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('MoneyBox'),
-        actions: [IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _status,
@@ -54,10 +57,14 @@ class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
           final status = (data['status'] ?? 'none').toString().toLowerCase();
 
           if (status == 'pending_approval') {
-            return const Center(child: Text('Pending approval. MoneyBox unlocks after approval.'));
+            return const Center(
+                child:
+                    Text('Pending approval. MoneyBox unlocks after approval.'));
           }
           if (status == 'not_eligible') {
-            return const Center(child: Text('MoneyBox is available to Merchants, Drivers, and Inspectors.'));
+            return const Center(
+                child: Text(
+                    'MoneyBox is available to Merchants, Drivers, and Inspectors.'));
           }
 
           final principal = (data['principal_balance'] ?? 0).toString();
@@ -100,7 +107,8 @@ class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const MoneyBoxTierScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const MoneyBoxTierScreen()),
                     );
                     _reload();
                   },
@@ -110,7 +118,8 @@ class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const MoneyBoxAutosaveScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const MoneyBoxAutosaveScreen()),
                     );
                     _reload();
                   },
@@ -120,7 +129,8 @@ class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => MoneyBoxWithdrawScreen(status: data)),
+                      MaterialPageRoute(
+                          builder: (_) => MoneyBoxWithdrawScreen(status: data)),
                     );
                     _reload();
                   },
@@ -130,7 +140,8 @@ class _MoneyBoxDashboardScreenState extends State<MoneyBoxDashboardScreen> {
                 OutlinedButton(
                   onPressed: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const MoneyBoxLedgerScreen()),
+                      MaterialPageRoute(
+                          builder: (_) => const MoneyBoxLedgerScreen()),
                     );
                   },
                   child: const Text('View History'),

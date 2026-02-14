@@ -1,53 +1,93 @@
 import 'package:flutter/material.dart';
 
 import '../services/api_service.dart';
+import '../services/analytics_hooks.dart';
 import '../services/moneybox_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 import '../utils/ft_routes.dart';
+import '../utils/role_gates.dart';
 import '../utils/ui_feedback.dart';
 import '../widgets/email_verification_dialog.dart';
 import 'kyc_demo_screen.dart';
+import 'money_action_receipt_screen.dart';
 
 class MoneyBoxWithdrawScreen extends StatefulWidget {
-  final Map<String, dynamic> status;
-
   const MoneyBoxWithdrawScreen({super.key, required this.status});
+
+  final Map<String, dynamic> status;
 
   @override
   State<MoneyBoxWithdrawScreen> createState() => _MoneyBoxWithdrawScreenState();
 }
 
 class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
-  final _svc = MoneyBoxService();
+  final MoneyBoxService _svc = MoneyBoxService();
   bool _loading = false;
 
   double _penaltyRate() {
     final lockStart = widget.status['lock_start_at']?.toString();
     final autoOpen = widget.status['auto_open_at']?.toString();
-    if (lockStart == null || autoOpen == null) return 0.0;
+    if (lockStart == null || autoOpen == null) return 0;
     try {
       final start = DateTime.parse(lockStart);
       final end = DateTime.parse(autoOpen);
       final now = DateTime.now();
-      if (now.isAfter(end)) return 0.0;
+      if (now.isAfter(end)) return 0;
       final total = end.difference(start).inSeconds;
-      if (total <= 0) return 0.0;
+      if (total <= 0) return 0;
       final elapsed = now.difference(start).inSeconds;
       final ratio = (elapsed / total).clamp(0.0, 1.0);
       if (ratio <= (1 / 3)) return 0.07;
       if (ratio <= (2 / 3)) return 0.05;
       return 0.02;
     } catch (_) {
-      return 0.0;
+      return 0;
     }
   }
 
   Future<void> _withdrawAll() async {
     if (_loading) return;
+
+    final profile = await ApiService.getProfile();
+    final gate = RoleGates.forWithdraw(profile);
+    final gateAllowed = await guardRestrictedAction(
+      context,
+      block: gate,
+      authAction: 'withdraw earnings',
+      onAllowed: () async {},
+    );
+    if (!gateAllowed || !mounted) return;
+
+    final principal = double.tryParse(
+            widget.status['principal_balance']?.toString() ?? '0') ??
+        0;
+    final bonus =
+        double.tryParse(widget.status['projected_bonus']?.toString() ?? '0') ??
+            0;
+    final penaltyRate = _penaltyRate();
+    final penalty = principal * penaltyRate;
+    final payout =
+        (principal - penalty + bonus).clamp(0.0, double.infinity).toDouble();
+
+    final confirmed = await showMoneyConfirmationSheet(
+      context,
+      FTMoneyConfirmationPayload(
+        title: 'Confirm MoneyBox withdrawal',
+        amount: principal + bonus,
+        fee: penalty,
+        total: payout,
+        destination: 'Wallet balance',
+        actionLabel: 'Withdraw now',
+      ),
+    );
+    if (!confirmed || !mounted) return;
+
     setState(() => _loading = true);
     final res = await _svc.withdraw();
     if (!mounted) return;
     setState(() => _loading = false);
+
     final ok = res['ok'] == true;
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
@@ -63,7 +103,6 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
       }
       if (ApiService.isTierOrKycRestriction(res) ||
           ApiService.isTierOrKycRestriction(showMsg)) {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(showMsg),
@@ -83,8 +122,26 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
       UIFeedback.showErrorSnack(context, showMsg);
       return;
     }
-    if (!mounted) return;
+
     UIFeedback.showSuccessSnack(context, 'Withdrawal moved to wallet');
+    await AnalyticsHooks.instance.withdrawalInitiated(
+      source: 'moneybox',
+      amount: payout,
+    );
+
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MoneyActionReceiptScreen(
+          title: 'MoneyBox withdrawal',
+          statusLabel: 'Completed',
+          amount: payout,
+          reference: (res['reference'] ?? res['request_id'] ?? '').toString(),
+          destination: 'Wallet balance',
+        ),
+      ),
+    );
+    if (!mounted) return;
     Navigator.of(context).pop(true);
   }
 
@@ -97,22 +154,23 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
         double.tryParse(widget.status['projected_bonus']?.toString() ?? '0') ??
             0;
     final penaltyRate = _penaltyRate();
-    final penalty = (principal * penaltyRate);
-    final payout = (principal - penalty + bonus).clamp(0, double.infinity);
+    final penalty = principal * penaltyRate;
+    final payout =
+        (principal - penalty + bonus).clamp(0.0, double.infinity).toDouble();
 
     return FTScaffold(
       title: 'Withdraw',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Principal: ₦${principal.toStringAsFixed(2)}'),
-          Text('Projected bonus: ₦${bonus.toStringAsFixed(2)}'),
+          Text('Principal: ${formatNaira(principal)}'),
+          Text('Projected bonus: ${formatNaira(bonus)}'),
           const SizedBox(height: 8),
           Text('Penalty rate: ${(penaltyRate * 100).toStringAsFixed(0)}%'),
-          Text('Penalty estimate: ₦${penalty.toStringAsFixed(2)}'),
+          Text('Penalty estimate: ${formatNaira(penalty)}'),
           const SizedBox(height: 8),
           Text(
-            'Estimated payout: ₦${payout.toStringAsFixed(2)}',
+            'Estimated payout: ${formatNaira(payout)}',
             style: Theme.of(context)
                 .textTheme
                 .titleMedium

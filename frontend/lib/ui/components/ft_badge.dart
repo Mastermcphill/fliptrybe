@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../foundation/app_tokens.dart';
 
@@ -22,7 +22,8 @@ class FTBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppTokens.s8, vertical: AppTokens.s4),
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTokens.s8, vertical: AppTokens.s4),
       decoration: BoxDecoration(
         color: bgColor ?? backgroundColor ?? scheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
@@ -31,7 +32,8 @@ class FTBadge extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: textColor ?? foregroundColor ?? scheme.onSecondaryContainer,
+              color:
+                  textColor ?? foregroundColor ?? scheme.onSecondaryContainer,
               fontWeight: FontWeight.w600,
             ),
       ),

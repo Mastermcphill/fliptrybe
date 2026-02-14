@@ -58,7 +58,8 @@ class AdminAutopilotService {
   }
 
   Future<Map<String, dynamic>> getPaymentsMode() async {
-    final data = await ApiClient.instance.getJson(ApiConfig.api('/admin/payments/mode'));
+    final data =
+        await ApiClient.instance.getJson(ApiConfig.api('/admin/payments/mode'));
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
@@ -71,11 +72,16 @@ class AdminAutopilotService {
     int? manualPaymentSlaMinutes,
   }) async {
     final body = <String, dynamic>{'mode': mode};
-    if (manualPaymentBankName != null) body['manual_payment_bank_name'] = manualPaymentBankName;
-    if (manualPaymentAccountNumber != null) body['manual_payment_account_number'] = manualPaymentAccountNumber;
-    if (manualPaymentAccountName != null) body['manual_payment_account_name'] = manualPaymentAccountName;
-    if (manualPaymentNote != null) body['manual_payment_note'] = manualPaymentNote;
-    if (manualPaymentSlaMinutes != null) body['manual_payment_sla_minutes'] = manualPaymentSlaMinutes;
+    if (manualPaymentBankName != null)
+      body['manual_payment_bank_name'] = manualPaymentBankName;
+    if (manualPaymentAccountNumber != null)
+      body['manual_payment_account_number'] = manualPaymentAccountNumber;
+    if (manualPaymentAccountName != null)
+      body['manual_payment_account_name'] = manualPaymentAccountName;
+    if (manualPaymentNote != null)
+      body['manual_payment_note'] = manualPaymentNote;
+    if (manualPaymentSlaMinutes != null)
+      body['manual_payment_sla_minutes'] = manualPaymentSlaMinutes;
     final data = await ApiClient.instance.postJson(
       ApiConfig.api('/admin/payments/mode'),
       body,
@@ -106,7 +112,10 @@ class AdminAutopilotService {
   }
 
   Future<List<dynamic>> listManualPayments(
-      {String q = '', String status = 'manual_pending', int limit = 50, int offset = 0}) async {
+      {String q = '',
+      String status = 'manual_pending',
+      int limit = 50,
+      int offset = 0}) async {
     final query = StringBuffer(
         '/admin/payments/manual/queue?limit=$limit&offset=$offset&status=${Uri.encodeQueryComponent(status)}');
     if (q.trim().isNotEmpty) {

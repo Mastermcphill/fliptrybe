@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../services/admin_autopilot_service.dart';
 import '../utils/formatters.dart';
@@ -159,10 +159,12 @@ class _AdminManualPaymentsScreenState extends State<AdminManualPaymentsScreen> {
                                 const Divider(height: 1),
                             itemBuilder: (_, idx) {
                               final item = _items[idx];
-                              final intentId =
-                                  int.tryParse((item['payment_intent_id'] ?? '').toString()) ??
-                                      int.tryParse((item['intent_id'] ?? '').toString()) ??
-                                      0;
+                              final intentId = int.tryParse(
+                                      (item['payment_intent_id'] ?? '')
+                                          .toString()) ??
+                                  int.tryParse(
+                                      (item['intent_id'] ?? '').toString()) ??
+                                  0;
                               final orderId =
                                   (item['order_id'] ?? '-').toString();
                               final reference =
@@ -171,7 +173,8 @@ class _AdminManualPaymentsScreenState extends State<AdminManualPaymentsScreen> {
                                   (item['buyer_email'] ?? '').toString();
                               final status = (item['status'] ?? '').toString();
                               final amount = item['amount'];
-                              final proofSubmitted = item['proof_submitted'] == true;
+                              final proofSubmitted =
+                                  item['proof_submitted'] == true;
 
                               return ListTile(
                                 onTap: intentId > 0
@@ -228,4 +231,3 @@ class _AdminManualPaymentsScreenState extends State<AdminManualPaymentsScreen> {
     );
   }
 }
-

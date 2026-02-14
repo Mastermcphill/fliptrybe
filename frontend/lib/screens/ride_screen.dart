@@ -39,7 +39,8 @@ class _RideScreenState extends State<RideScreen> {
       ),
     );
 
-    final success = await ApiService.requestRide(pickup, dropoff, _selectedVehicle);
+    final success =
+        await ApiService.requestRide(pickup, dropoff, _selectedVehicle);
 
     if (!mounted) return;
 
@@ -63,10 +64,14 @@ class _RideScreenState extends State<RideScreen> {
               SizedBox(height: 20),
               Text(
                 "Ride Requested!",
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold),
               ),
               SizedBox(height: 10),
-              Text("Searching for nearby drivers...", style: TextStyle(color: Colors.grey)),
+              Text("Searching for nearby drivers...",
+                  style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -98,13 +103,18 @@ class _RideScreenState extends State<RideScreen> {
 
           // 2. THE FLOATING CONTROLS
           Positioned(
-            bottom: 0, left: 0, right: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
             child: Container(
               padding: const EdgeInsets.all(25),
               decoration: const BoxDecoration(
                 color: Colors.black,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-                boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, spreadRadius: 5)],
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black54, blurRadius: 20, spreadRadius: 5)
+                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -112,16 +122,18 @@ class _RideScreenState extends State<RideScreen> {
                 children: [
                   const Text(
                     "Where to?",
-                    style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 20),
-
-                  _buildLocationInput(Icons.my_location, "Current Location", _pickupController),
+                  _buildLocationInput(
+                      Icons.my_location, "Current Location", _pickupController),
                   const SizedBox(height: 15),
-                  _buildLocationInput(Icons.location_on, "Enter Destination", _dropoffController),
-
+                  _buildLocationInput(Icons.location_on, "Enter Destination",
+                      _dropoffController),
                   const SizedBox(height: 25),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -130,9 +142,7 @@ class _RideScreenState extends State<RideScreen> {
                       _buildVehicleOption("van", Icons.local_shipping),
                     ],
                   ),
-
                   const SizedBox(height: 25),
-
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -141,11 +151,13 @@ class _RideScreenState extends State<RideScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00C853),
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15)),
                       ),
                       child: Text(
                         _submitting ? "Requesting..." : "Confirm FlipRide",
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -156,7 +168,8 @@ class _RideScreenState extends State<RideScreen> {
 
           // 3. BACK BUTTON (Top Left)
           Positioned(
-            top: 50, left: 20,
+            top: 50,
+            left: 20,
             child: CircleAvatar(
               backgroundColor: Colors.black,
               child: IconButton(
@@ -170,7 +183,8 @@ class _RideScreenState extends State<RideScreen> {
     );
   }
 
-  Widget _buildLocationInput(IconData icon, String hint, TextEditingController controller) {
+  Widget _buildLocationInput(
+      IconData icon, String hint, TextEditingController controller) {
     return TextField(
       controller: controller,
       style: const TextStyle(color: Colors.white),
@@ -180,7 +194,9 @@ class _RideScreenState extends State<RideScreen> {
         hintStyle: const TextStyle(color: Colors.grey),
         filled: true,
         fillColor: const Color(0xFF1E1E1E),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none),
       ),
     );
   }
@@ -192,13 +208,18 @@ class _RideScreenState extends State<RideScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00C853).withOpacity(0.2) : const Color(0xFF1E1E1E),
+          color: isSelected
+              ? const Color(0xFF00C853).withOpacity(0.2)
+              : const Color(0xFF1E1E1E),
           borderRadius: BorderRadius.circular(12),
-          border: isSelected ? Border.all(color: const Color(0xFF00C853)) : null,
+          border:
+              isSelected ? Border.all(color: const Color(0xFF00C853)) : null,
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? const Color(0xFF00C853) : Colors.grey, size: 30),
+            Icon(icon,
+                color: isSelected ? const Color(0xFF00C853) : Colors.grey,
+                size: 30),
             const SizedBox(height: 5),
             Text(
               type.toUpperCase(),

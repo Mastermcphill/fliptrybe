@@ -27,7 +27,8 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
       _error = null;
     });
     try {
-      final data = await ApiClient.instance.getJson(ApiConfig.api('/merchant/analytics'));
+      final data = await ApiClient.instance
+          .getJson(ApiConfig.api('/merchant/analytics'));
       if (!mounted) return;
       setState(() {
         _data = (data is Map) ? Map<String, dynamic>.from(data) : const {};
@@ -65,13 +66,17 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
   Widget build(BuildContext context) {
     final paid7 = _asInt(_data['paid_last_7']);
     final paid30 = _asInt(_data['paid_last_30']);
-    final recent = (_data['recent_paid'] is List) ? (_data['recent_paid'] as List) : const [];
+    final recent = (_data['recent_paid'] is List)
+        ? (_data['recent_paid'] as List)
+        : const [];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sales Analytics'),
         actions: [
-          IconButton(onPressed: _loading ? null : _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.refresh)),
         ],
       ),
       body: _loading
@@ -93,7 +98,8 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
                       ],
                     ),
                     const SizedBox(height: 20),
-                    const Text('Recent Paid Events', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text('Recent Paid Events',
+                        style: TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 10),
                     if (recent.isEmpty)
                       const Text('No recent paid events yet.')
@@ -108,7 +114,9 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
                         return Card(
                           margin: const EdgeInsets.only(bottom: 10),
                           child: ListTile(
-                            title: Text('Order #$orderId', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            title: Text('Order #$orderId',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700)),
                             subtitle: Text(status.isEmpty ? 'paid' : status),
                             trailing: Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -116,7 +124,9 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
                               children: [
                                 Text('NGN ${amount.toStringAsFixed(0)}'),
                                 if (createdAt.isNotEmpty)
-                                  Text(createdAt, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                  Text(createdAt,
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.black54)),
                               ],
                             ),
                           ),
@@ -139,7 +149,11 @@ class _SalesAnalyticsScreenState extends State<SalesAnalyticsScreen> {
         children: [
           Text(label, style: const TextStyle(color: Colors.white70)),
           const SizedBox(height: 6),
-          Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18)),
         ],
       ),
     );

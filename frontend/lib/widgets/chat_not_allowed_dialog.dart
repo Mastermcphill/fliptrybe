@@ -9,7 +9,8 @@ Future<void> showChatNotAllowedDialog(
     builder: (ctx) {
       return AlertDialog(
         title: const Text('Chat limited to Admin'),
-        content: const Text('To keep FlipTrybe safe, you can only chat with Admin.'),
+        content:
+            const Text('To keep FlipTrybe safe, you can only chat with Admin.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),

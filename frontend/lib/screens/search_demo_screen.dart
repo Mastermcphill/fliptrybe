@@ -39,7 +39,9 @@ class _SearchDemoScreenState extends State<SearchDemoScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search'),
-        actions: [IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _reload, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: Column(
         children: [
@@ -64,13 +66,20 @@ class _SearchDemoScreenState extends State<SearchDemoScreen> {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                final items = (snap.data ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+                final items = (snap.data ?? const [])
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
 
                 final q = _q.text.trim();
-                final filtered = q.isEmpty ? items : items.where((m) => _match(m, q)).toList();
+                final filtered = q.isEmpty
+                    ? items
+                    : items.where((m) => _match(m, q)).toList();
 
                 if (filtered.isEmpty) {
-                  return const Center(child: Text('No matches yet. Create listings and search again.'));
+                  return const Center(
+                      child: Text(
+                          'No matches yet. Create listings and search again.'));
                 }
 
                 return ListView.builder(
@@ -80,8 +89,11 @@ class _SearchDemoScreenState extends State<SearchDemoScreen> {
                     return Card(
                       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                       child: ListTile(
-                        title: Text((m['title'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.w900)),
-                        subtitle: Text((m['description'] ?? '').toString(), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        title: Text((m['title'] ?? '').toString(),
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
+                        subtitle: Text((m['description'] ?? '').toString(),
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
                       ),
                     );
                   },

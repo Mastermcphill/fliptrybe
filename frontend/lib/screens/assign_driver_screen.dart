@@ -31,7 +31,8 @@ class _AssignDriverScreenState extends State<AssignDriverScreen> {
     final ok = await _orders.assignDriver(widget.orderId, _selectedId!);
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? "Driver assigned ✅" : "Assign failed")));
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? "Driver assigned ✅" : "Assign failed")));
     if (ok) Navigator.pop(context);
   }
 
@@ -47,7 +48,9 @@ class _AssignDriverScreenState extends State<AssignDriverScreen> {
           }
           final items = snap.data ?? const [];
           if (items.isEmpty) {
-            return const Center(child: Text("No drivers found.\nCreate a Driver account to enable assignments."));
+            return const Center(
+                child: Text(
+                    "No drivers found.\nCreate a Driver account to enable assignments."));
           }
 
           return Column(
@@ -65,7 +68,9 @@ class _AssignDriverScreenState extends State<AssignDriverScreen> {
                       value: id,
                       groupValue: _selectedId,
                       onChanged: (v) => setState(() => _selectedId = v),
-                      title: Text((m['name'] ?? '').toString().isEmpty ? "Driver #$id" : (m['name'] ?? '').toString()),
+                      title: Text((m['name'] ?? '').toString().isEmpty
+                          ? "Driver #$id"
+                          : (m['name'] ?? '').toString()),
                       subtitle: Text((m['email'] ?? '').toString()),
                     );
                   },

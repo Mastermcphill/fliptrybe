@@ -45,7 +45,9 @@ class _DriverOffersScreenState extends State<DriverOffersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Driver Offers"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -53,7 +55,9 @@ class _DriverOffersScreenState extends State<DriverOffersScreen> {
               itemCount: _rows.length,
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (_, i) {
-                final r = _rows[i] is Map ? Map<String, dynamic>.from(_rows[i]) : <String, dynamic>{};
+                final r = _rows[i] is Map
+                    ? Map<String, dynamic>.from(_rows[i])
+                    : <String, dynamic>{};
                 final status = (r['status'] ?? '').toString();
                 final id = int.tryParse((r['id'] ?? '0').toString()) ?? 0;
                 return ListTile(
@@ -63,8 +67,12 @@ class _DriverOffersScreenState extends State<DriverOffersScreen> {
                       ? Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(onPressed: () => _accept(id), icon: const Icon(Icons.check_circle_outline)),
-                            IconButton(onPressed: () => _reject(id), icon: const Icon(Icons.cancel_outlined)),
+                            IconButton(
+                                onPressed: () => _accept(id),
+                                icon: const Icon(Icons.check_circle_outline)),
+                            IconButton(
+                                onPressed: () => _reject(id),
+                                icon: const Icon(Icons.cancel_outlined)),
                           ],
                         )
                       : null,

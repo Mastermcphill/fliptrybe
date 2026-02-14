@@ -9,14 +9,18 @@ class KycService {
     try {
       final res = await _client.dio.get(ApiConfig.api('/kyc/status'));
       final data = res.data;
-      if (data is Map && data['kyc'] is Map) return Map<String, dynamic>.from(data['kyc'] as Map);
+      if (data is Map && data['kyc'] is Map)
+        return Map<String, dynamic>.from(data['kyc'] as Map);
       return <String, dynamic>{};
     } catch (_) {
       return <String, dynamic>{};
     }
   }
 
-  Future<Map<String, dynamic>?> submit({required String fullName, required String idType, required String idNumber}) async {
+  Future<Map<String, dynamic>?> submit(
+      {required String fullName,
+      required String idType,
+      required String idNumber}) async {
     try {
       final res = await _client.dio.post(ApiConfig.api('/kyc/submit'), data: {
         'full_name': fullName,
@@ -24,16 +28,19 @@ class KycService {
         'id_number': idNumber,
       });
       final data = res.data;
-      if (data is Map && data['kyc'] is Map) return Map<String, dynamic>.from(data['kyc'] as Map);
+      if (data is Map && data['kyc'] is Map)
+        return Map<String, dynamic>.from(data['kyc'] as Map);
       return null;
     } catch (_) {
       return null;
     }
   }
 
-  Future<bool> adminSet({required int userId, required String status, String note = ''}) async {
+  Future<bool> adminSet(
+      {required int userId, required String status, String note = ''}) async {
     try {
-      final res = await _client.dio.post(ApiConfig.api('/kyc/admin/set'), data: {'user_id': userId, 'status': status, 'note': note});
+      final res = await _client.dio.post(ApiConfig.api('/kyc/admin/set'),
+          data: {'user_id': userId, 'status': status, 'note': note});
       final code = res.statusCode ?? 0;
       return code >= 200 && code < 300;
     } catch (_) {

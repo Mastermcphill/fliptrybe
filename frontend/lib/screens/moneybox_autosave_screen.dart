@@ -27,7 +27,8 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
-      if (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(showMsg)) {
+      if (ApiService.isEmailNotVerified(res) ||
+          ApiService.isEmailNotVerified(showMsg)) {
         await showEmailVerificationRequiredDialog(
           context,
           message: showMsg,
@@ -35,14 +36,16 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
         );
         return;
       }
-      if (ApiService.isTierOrKycRestriction(res) || ApiService.isTierOrKycRestriction(showMsg)) {
+      if (ApiService.isTierOrKycRestriction(res) ||
+          ApiService.isTierOrKycRestriction(showMsg)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(showMsg),
             action: SnackBarAction(
               label: 'Verify ID',
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const KycDemoScreen()));
               },
             ),
           ),
@@ -78,7 +81,8 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
               max: 30,
               divisions: 29,
               label: '$_percent%',
-              onChanged: _loading ? null : (v) => setState(() => _percent = v.round()),
+              onChanged:
+                  _loading ? null : (v) => setState(() => _percent = v.round()),
             ),
             const SizedBox(height: 12),
             SizedBox(

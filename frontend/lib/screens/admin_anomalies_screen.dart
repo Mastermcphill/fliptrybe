@@ -29,9 +29,12 @@ class _AdminAnomaliesScreenState extends State<AdminAnomaliesScreen> {
       _error = null;
     });
     try {
-      final data = await ApiClient.instance.getJson(ApiConfig.api('/admin/anomalies'));
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api('/admin/anomalies'));
       if (!mounted) return;
-      final rows = (data is Map && data['items'] is List) ? data['items'] as List : <dynamic>[];
+      final rows = (data is Map && data['items'] is List)
+          ? data['items'] as List
+          : <dynamic>[];
       setState(() {
         _items = rows
             .whereType<Map>()
@@ -75,15 +78,19 @@ class _AdminAnomaliesScreenState extends State<AdminAnomaliesScreen> {
             return FTCard(
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(type, style: const TextStyle(fontWeight: FontWeight.w700)),
+                title: Text(type,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
                 subtitle: Text(row.toString()),
-                trailing: orderId != null ? const Icon(Icons.open_in_new_outlined) : null,
+                trailing: orderId != null
+                    ? const Icon(Icons.open_in_new_outlined)
+                    : null,
                 onTap: orderId == null
                     ? null
                     : () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => AdminOrderTimelineScreen(orderId: orderId),
+                            builder: (_) =>
+                                AdminOrderTimelineScreen(orderId: orderId),
                           ),
                         );
                       },

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../services/admin_broadcast_service.dart';
 
 class AdminBroadcastScreen extends StatefulWidget {
@@ -11,7 +11,8 @@ class AdminBroadcastScreen extends StatefulWidget {
 class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
   final _svc = AdminBroadcastService();
   final _titleCtrl = TextEditingController(text: "FlipTrybe Update");
-  final _msgCtrl = TextEditingController(text: "Welcome to FlipTrybe. New merchants are live.");
+  final _msgCtrl = TextEditingController(
+      text: "Welcome to FlipTrybe. New merchants are live.");
   final _stateCtrl = TextEditingController(text: "");
   final _cityCtrl = TextEditingController(text: "");
 
@@ -34,38 +35,47 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text("Send a broadcast notification (demo). Admin = user id 1 or email containing 'admin'."),
+          const Text(
+              "Send a broadcast notification (demo). Admin = user id 1 or email containing 'admin'."),
           const SizedBox(height: 12),
           TextField(
             controller: _titleCtrl,
-            decoration: const InputDecoration(labelText: "Title", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Title", border: OutlineInputBorder()),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _msgCtrl,
             maxLines: 3,
-            decoration: const InputDecoration(labelText: "Message", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Message", border: OutlineInputBorder()),
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
             initialValue: _channel,
-            decoration: const InputDecoration(labelText: "Channel", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Channel", border: OutlineInputBorder()),
             items: const [
               DropdownMenuItem(value: "in_app", child: Text("In-app")),
               DropdownMenuItem(value: "sms", child: Text("SMS (stub)")),
-              DropdownMenuItem(value: "whatsapp", child: Text("WhatsApp (stub)")),
+              DropdownMenuItem(
+                  value: "whatsapp", child: Text("WhatsApp (stub)")),
             ],
             onChanged: (v) => setState(() => _channel = v ?? "in_app"),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _stateCtrl,
-            decoration: const InputDecoration(labelText: "Target state (optional)", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Target state (optional)",
+                border: OutlineInputBorder()),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _cityCtrl,
-            decoration: const InputDecoration(labelText: "Target city (optional)", border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: "Target city (optional)",
+                border: OutlineInputBorder()),
           ),
           const SizedBox(height: 14),
           SizedBox(
@@ -91,9 +101,12 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                       setState(() => _busy = false);
 
                       if (ok) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Broadcast sent (demo).")));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("Broadcast sent (demo).")));
                       } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Broadcast failed.")));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Broadcast failed.")));
                       }
                     },
               icon: const Icon(Icons.campaign_outlined),
@@ -113,10 +126,13 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                         // process queued notifications (admin)
                         await _svc.processQueue();
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Queue processed (stub).")));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("Queue processed (stub).")));
                       } catch (_) {
                         if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Process failed.")));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Process failed.")));
                       } finally {
                         if (mounted) setState(() => _busy = false);
                       }

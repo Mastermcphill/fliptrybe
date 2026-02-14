@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../services/admin_autopilot_service.dart';
 import '../utils/formatters.dart';
@@ -61,8 +61,9 @@ class _AdminManualPaymentDetailScreenState
       } else {
         setState(() {
           _loading = false;
-          _error = (resp['message'] ?? resp['error'] ?? 'Failed to load details')
-              .toString();
+          _error =
+              (resp['message'] ?? resp['error'] ?? 'Failed to load details')
+                  .toString();
         });
       }
     } catch (e) {
@@ -84,7 +85,8 @@ class _AdminManualPaymentDetailScreenState
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Confirm mark paid'),
-            content: Text('Mark payment intent #${widget.paymentIntentId} as paid?'),
+            content:
+                Text('Mark payment intent #${widget.paymentIntentId} as paid?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -122,14 +124,17 @@ class _AdminManualPaymentDetailScreenState
         if (resolvedOrderId > 0 && mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => AdminOrderTimelineScreen(orderId: resolvedOrderId),
+              builder: (_) =>
+                  AdminOrderTimelineScreen(orderId: resolvedOrderId),
             ),
           );
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text((resp['message'] ?? resp['error'] ?? 'Mark paid failed').toString()),
+            content: Text(
+                (resp['message'] ?? resp['error'] ?? 'Mark paid failed')
+                    .toString()),
           ),
         );
       }
@@ -165,7 +170,10 @@ class _AdminManualPaymentDetailScreenState
         await _load();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text((resp['message'] ?? resp['error'] ?? 'Reject failed').toString())),
+          SnackBar(
+              content: Text(
+                  (resp['message'] ?? resp['error'] ?? 'Reject failed')
+                      .toString())),
         );
       }
     } catch (e) {
@@ -185,7 +193,8 @@ class _AdminManualPaymentDetailScreenState
         children: [
           SizedBox(
             width: 140,
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
           Expanded(child: Text(value.isEmpty ? '-' : value)),
         ],
@@ -232,14 +241,19 @@ class _AdminManualPaymentDetailScreenState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Intent', style: TextStyle(fontWeight: FontWeight.w800)),
+                            const Text('Intent',
+                                style: TextStyle(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 8),
                             _kv('Status', (intent['status'] ?? '').toString()),
-                            _kv('Reference', (intent['reference'] ?? '').toString()),
-                            _kv('Order ID', (intent['order_id'] ?? '').toString()),
+                            _kv('Reference',
+                                (intent['reference'] ?? '').toString()),
+                            _kv('Order ID',
+                                (intent['order_id'] ?? '').toString()),
                             _kv('Amount', formatNaira(intent['amount'])),
-                            _kv('Proof submitted', (proof['submitted'] == true).toString()),
-                            _kv('Bank txn ref', (proof['bank_txn_reference'] ?? '').toString()),
+                            _kv('Proof submitted',
+                                (proof['submitted'] == true).toString()),
+                            _kv('Bank txn ref',
+                                (proof['bank_txn_reference'] ?? '').toString()),
                             _kv('Proof note', (proof['note'] ?? '').toString()),
                           ],
                         ),
@@ -252,7 +266,8 @@ class _AdminManualPaymentDetailScreenState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Actions', style: TextStyle(fontWeight: FontWeight.w800)),
+                            const Text('Actions',
+                                style: TextStyle(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 8),
                             TextField(
                               controller: _bankTxnCtrl,
@@ -304,7 +319,8 @@ class _AdminManualPaymentDetailScreenState
                           if (orderId <= 0) return;
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => AdminOrderTimelineScreen(orderId: orderId),
+                              builder: (_) =>
+                                  AdminOrderTimelineScreen(orderId: orderId),
                             ),
                           );
                         },
@@ -335,4 +351,3 @@ class _AdminManualPaymentDetailScreenState
     );
   }
 }
-

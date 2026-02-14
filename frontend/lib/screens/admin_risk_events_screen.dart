@@ -41,7 +41,9 @@ class _AdminRiskEventsScreenState extends State<AdminRiskEventsScreen> {
           '/admin/risk-events?limit=100&min_score=${_minScore.toStringAsFixed(0)}${q.isEmpty ? '' : '&q=${Uri.encodeQueryComponent(q)}'}';
       final data = await ApiClient.instance.getJson(ApiConfig.api(path));
       if (!mounted) return;
-      final rows = (data is Map && data['items'] is List) ? data['items'] as List : <dynamic>[];
+      final rows = (data is Map && data['items'] is List)
+          ? data['items'] as List
+          : <dynamic>[];
       setState(() {
         _items = rows
             .whereType<Map>()
@@ -103,7 +105,8 @@ class _AdminRiskEventsScreenState extends State<AdminRiskEventsScreen> {
                           max: 100,
                           divisions: 20,
                           label: _minScore.toStringAsFixed(0),
-                          onChanged: (value) => setState(() => _minScore = value),
+                          onChanged: (value) =>
+                              setState(() => _minScore = value),
                           onChangeEnd: (_) => _load(),
                         ),
                       ),
@@ -129,12 +132,15 @@ class _AdminRiskEventsScreenState extends State<AdminRiskEventsScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text('Decision: ${(row['decision'] ?? '').toString()}'),
-                        Text('Reason: ${(row['reason_code'] ?? '').toString()}'),
-                        Text('Request: ${(row['request_id'] ?? '').toString()}'),
+                        Text(
+                            'Reason: ${(row['reason_code'] ?? '').toString()}'),
+                        Text(
+                            'Request: ${(row['request_id'] ?? '').toString()}'),
                         const SizedBox(height: 4),
                         Text(
                           (row['created_at'] ?? '').toString(),
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 12),
                         ),
                       ],
                     ),

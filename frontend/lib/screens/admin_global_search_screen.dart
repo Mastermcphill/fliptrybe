@@ -9,7 +9,8 @@ class AdminGlobalSearchScreen extends StatefulWidget {
   const AdminGlobalSearchScreen({super.key});
 
   @override
-  State<AdminGlobalSearchScreen> createState() => _AdminGlobalSearchScreenState();
+  State<AdminGlobalSearchScreen> createState() =>
+      _AdminGlobalSearchScreenState();
 }
 
 class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
@@ -38,8 +39,8 @@ class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
       _error = null;
     });
     try {
-      final data = await ApiClient.instance
-          .getJson(ApiConfig.api('/admin/search?q=${Uri.encodeQueryComponent(q)}'));
+      final data = await ApiClient.instance.getJson(
+          ApiConfig.api('/admin/search?q=${Uri.encodeQueryComponent(q)}'));
       if (!mounted) return;
       final groups = (data is Map && data['groups'] is Map)
           ? Map<String, dynamic>.from(data['groups'] as Map)
@@ -57,7 +58,8 @@ class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
     }
   }
 
-  Widget _section(String title, List<dynamic> rows, Widget Function(Map<String, dynamic>) tileBuilder) {
+  Widget _section(String title, List<dynamic> rows,
+      Widget Function(Map<String, dynamic>) tileBuilder) {
     return FTSectionContainer(
       title: title,
       child: rows.isEmpty
@@ -73,10 +75,16 @@ class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final users = (_groups['users'] is List) ? _groups['users'] as List : <dynamic>[];
-    final orders = (_groups['orders'] is List) ? _groups['orders'] as List : <dynamic>[];
-    final listings = (_groups['listings'] is List) ? _groups['listings'] as List : <dynamic>[];
-    final intents = (_groups['payment_intents'] is List) ? _groups['payment_intents'] as List : <dynamic>[];
+    final users =
+        (_groups['users'] is List) ? _groups['users'] as List : <dynamic>[];
+    final orders =
+        (_groups['orders'] is List) ? _groups['orders'] as List : <dynamic>[];
+    final listings = (_groups['listings'] is List)
+        ? _groups['listings'] as List
+        : <dynamic>[];
+    final intents = (_groups['payment_intents'] is List)
+        ? _groups['payment_intents'] as List
+        : <dynamic>[];
 
     return FTScaffold(
       title: 'Admin Global Search',
@@ -109,7 +117,8 @@ class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
               (row) => ListTile(
                 dense: true,
                 title: Text((row['email'] ?? '').toString()),
-                subtitle: Text('ID ${row['id']} • ${(row['role'] ?? '').toString()}'),
+                subtitle:
+                    Text('ID ${row['id']} • ${(row['role'] ?? '').toString()}'),
               ),
             ),
             const SizedBox(height: 10),
@@ -149,7 +158,8 @@ class _AdminGlobalSearchScreenState extends State<AdminGlobalSearchScreen> {
               (row) => ListTile(
                 dense: true,
                 title: Text((row['reference'] ?? '').toString()),
-                subtitle: Text('Intent #${row['id']} • ${(row['status'] ?? '').toString()}'),
+                subtitle: Text(
+                    'Intent #${row['id']} • ${(row['status'] ?? '').toString()}'),
               ),
             ),
           ],

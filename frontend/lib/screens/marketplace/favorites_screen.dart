@@ -95,35 +95,38 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             )
           : _error != null
               ? FTErrorState(message: _error!, onRetry: _load)
-          : _items.isEmpty
-              ? const FTEmptyState(
-                  icon: Icons.favorite_border,
-                  title: 'No favorites yet',
-                  subtitle: 'Tap the heart icon on any listing card to build your watchlist.',
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _items.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 0.64,
-                  ),
-                  itemBuilder: (_, index) {
-                    final item = _items[index];
-                    return ListingCard(
-                      item: item,
-                      isFavorite: _favorites.contains(item['id']),
-                      onToggleFavorite: () => _toggle(item),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ListingDetailScreen(listing: item),
-                        ),
+              : _items.isEmpty
+                  ? const FTEmptyState(
+                      icon: Icons.favorite_border,
+                      title: 'No favorites yet',
+                      subtitle:
+                          'Tap the heart icon on any listing card to build your watchlist.',
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _items.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 0.64,
                       ),
-                    );
-                  },
-                ),
+                      itemBuilder: (_, index) {
+                        final item = _items[index];
+                        return ListingCard(
+                          item: item,
+                          isFavorite: _favorites.contains(item['id']),
+                          onToggleFavorite: () => _toggle(item),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ListingDetailScreen(listing: item),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
     );
   }
 }

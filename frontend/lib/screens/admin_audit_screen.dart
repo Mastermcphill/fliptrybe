@@ -42,7 +42,9 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Admin: Audit Logs"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: Column(
         children: [
@@ -71,7 +73,9 @@ class _AdminAuditScreenState extends State<AdminAuditScreen> {
                     itemCount: _rows.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
-                      final r = _rows[i] is Map ? Map<String, dynamic>.from(_rows[i]) : <String, dynamic>{};
+                      final r = _rows[i] is Map
+                          ? Map<String, dynamic>.from(_rows[i])
+                          : <String, dynamic>{};
                       return ListTile(
                         title: Text(r["action"]?.toString() ?? "-"),
                         subtitle: Text(

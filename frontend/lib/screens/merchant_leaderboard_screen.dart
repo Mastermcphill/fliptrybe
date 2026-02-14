@@ -6,7 +6,8 @@ class MerchantLeaderboardScreen extends StatefulWidget {
   const MerchantLeaderboardScreen({super.key});
 
   @override
-  State<MerchantLeaderboardScreen> createState() => _MerchantLeaderboardScreenState();
+  State<MerchantLeaderboardScreen> createState() =>
+      _MerchantLeaderboardScreenState();
 }
 
 class _MerchantLeaderboardScreenState extends State<MerchantLeaderboardScreen> {
@@ -35,7 +36,9 @@ class _MerchantLeaderboardScreenState extends State<MerchantLeaderboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Top Merchants"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -52,9 +55,14 @@ class _MerchantLeaderboardScreenState extends State<MerchantLeaderboardScreen> {
                       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                       child: ListTile(
                         leading: CircleAvatar(child: Text("$rank")),
-                        title: Text(m["name"]?.toString() ?? "Merchant", style: const TextStyle(fontWeight: FontWeight.w900)),
-                        subtitle: Text("Score: ${m['score']}  • Orders: ${m['orders']}  • Listings: ${m['listings']}"),
-                        trailing: Text("₦${m['revenue_gross']}", style: const TextStyle(fontWeight: FontWeight.w900)),
+                        title: Text(m["name"]?.toString() ?? "Merchant",
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
+                        subtitle: Text(
+                            "Score: ${m['score']}  • Orders: ${m['orders']}  • Listings: ${m['listings']}"),
+                        trailing: Text("₦${m['revenue_gross']}",
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                       ),
                     );
                   },

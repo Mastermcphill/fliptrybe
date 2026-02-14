@@ -123,7 +123,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _paymentIntentId = paymentIntentRaw is int
           ? paymentIntentRaw
           : int.tryParse((paymentIntentRaw ?? '').toString());
-      _paymentReference = (payment['payment_reference'] ?? _paymentReference).toString();
+      _paymentReference =
+          (payment['payment_reference'] ?? _paymentReference).toString();
     });
   }
 
@@ -305,7 +306,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final delivery = _delivery ?? const <String, dynamic>{};
     final status = (delivery['status'] ?? _order?['status'] ?? '').toString();
-    final paymentStatus = _paymentStatus.trim().isEmpty ? 'unknown' : _paymentStatus;
+    final paymentStatus =
+        _paymentStatus.trim().isEmpty ? 'unknown' : _paymentStatus;
     final role = _role.toLowerCase();
     final isAdmin = role == 'admin';
     final isMerchant = role == 'merchant';
@@ -342,7 +344,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final canConfirmDelivery =
         (isDriver || isAdmin) && statusLower == 'picked_up';
     final canOpenManualInstructions =
-        paymentStatus.toLowerCase() == 'manual_pending' && _paymentIntentId != null;
+        paymentStatus.toLowerCase() == 'manual_pending' &&
+            _paymentIntentId != null;
     final orderAmount = (_order?['amount'] ?? 0);
     final deliveryAmount = (_order?['delivery_fee'] ?? 0);
 
@@ -410,7 +413,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                               : double.tryParse(orderAmount.toString()) ?? 0.0;
                           final deliveryValue = (deliveryAmount is num)
                               ? deliveryAmount.toDouble()
-                              : double.tryParse(deliveryAmount.toString()) ?? 0.0;
+                              : double.tryParse(deliveryAmount.toString()) ??
+                                  0.0;
                           Navigator.push(
                             context,
                             MaterialPageRoute(

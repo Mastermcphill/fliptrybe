@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../services/admin_role_service.dart';
 import '../ui/admin/admin_scaffold.dart';
@@ -9,7 +9,8 @@ class AdminRoleApprovalsScreen extends StatefulWidget {
   const AdminRoleApprovalsScreen({super.key});
 
   @override
-  State<AdminRoleApprovalsScreen> createState() => _AdminRoleApprovalsScreenState();
+  State<AdminRoleApprovalsScreen> createState() =>
+      _AdminRoleApprovalsScreenState();
 }
 
 class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
@@ -30,28 +31,34 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
 
   Future<void> _approve(Map<String, dynamic> item) async {
     if (_busy) return;
-    final reqId = item['id'] is int ? item['id'] as int : int.tryParse((item['id'] ?? '').toString());
+    final reqId = item['id'] is int
+        ? item['id'] as int
+        : int.tryParse((item['id'] ?? '').toString());
     if (reqId == null) return;
     setState(() => _busy = true);
     final res = await _svc.approve(requestId: reqId);
     if (!mounted) return;
     setState(() => _busy = false);
     final ok = res['ok'] == true;
-    final msg = (res['message'] ?? (ok ? 'Approved' : 'Approve failed')).toString();
+    final msg =
+        (res['message'] ?? (ok ? 'Approved' : 'Approve failed')).toString();
     FTToast.show(context, msg);
     if (ok) _reload();
   }
 
   Future<void> _reject(Map<String, dynamic> item) async {
     if (_busy) return;
-    final reqId = item['id'] is int ? item['id'] as int : int.tryParse((item['id'] ?? '').toString());
+    final reqId = item['id'] is int
+        ? item['id'] as int
+        : int.tryParse((item['id'] ?? '').toString());
     if (reqId == null) return;
     setState(() => _busy = true);
     final res = await _svc.reject(requestId: reqId);
     if (!mounted) return;
     setState(() => _busy = false);
     final ok = res['ok'] == true;
-    final msg = (res['message'] ?? (ok ? 'Rejected' : 'Reject failed')).toString();
+    final msg =
+        (res['message'] ?? (ok ? 'Rejected' : 'Reject failed')).toString();
     FTToast.show(context, msg);
     if (ok) _reload();
   }
@@ -109,19 +116,22 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
                   return FTEmptyState(
                     icon: Icons.verified_user_outlined,
                     title: 'No ${_status.toLowerCase()} approvals',
-                    subtitle: 'Role requests will appear here as they are submitted.',
+                    subtitle:
+                        'Role requests will appear here as they are submitted.',
                     actionLabel: 'Refresh',
                     onAction: _reload,
                   );
                 }
                 return ListView.separated(
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppTokens.s8),
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: AppTokens.s8),
                   itemBuilder: (_, i) {
                     final raw = items[i];
                     if (raw is! Map) return const SizedBox.shrink();
                     final item = Map<String, dynamic>.from(raw);
-                    final requestedRole = (item['requested_role'] ?? '').toString();
+                    final requestedRole =
+                        (item['requested_role'] ?? '').toString();
                     final currentRole = (item['current_role'] ?? '').toString();
                     final status = (item['status'] ?? '').toString();
                     final reason = (item['reason'] ?? '').toString();
@@ -146,7 +156,8 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
                                   child: FTButton(
                                     label: 'Reject',
                                     variant: FTButtonVariant.destructive,
-                                    onPressed: _busy ? null : () => _reject(item),
+                                    onPressed:
+                                        _busy ? null : () => _reject(item),
                                   ),
                                 ),
                                 const SizedBox(width: AppTokens.s8),
@@ -154,7 +165,8 @@ class _AdminRoleApprovalsScreenState extends State<AdminRoleApprovalsScreen> {
                                   child: FTButton(
                                     label: 'Approve',
                                     variant: FTButtonVariant.primary,
-                                    onPressed: _busy ? null : () => _approve(item),
+                                    onPressed:
+                                        _busy ? null : () => _approve(item),
                                   ),
                                 ),
                               ],

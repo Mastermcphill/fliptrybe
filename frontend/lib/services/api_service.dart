@@ -73,7 +73,8 @@ class ApiService {
   }
 
   static Future<void> resetAuthSession() async {
-    final refreshToken = ((await TokenStorage().readRefreshToken()) ?? '').trim();
+    final refreshToken =
+        ((await TokenStorage().readRefreshToken()) ?? '').trim();
     final hasAccess = (_token ?? '').trim().isNotEmpty;
     if (hasAccess || refreshToken.isNotEmpty) {
       try {
@@ -263,8 +264,8 @@ class ApiService {
   }
 
   static Future<bool> refreshSession({String? refreshToken}) async {
-    final rt = (refreshToken ?? await TokenStorage().readRefreshToken() ?? '')
-        .trim();
+    final rt =
+        (refreshToken ?? await TokenStorage().readRefreshToken() ?? '').trim();
     if (rt.isEmpty) return false;
     final url = ApiConfig.api('/auth/refresh');
     try {

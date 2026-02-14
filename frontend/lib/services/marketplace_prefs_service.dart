@@ -48,8 +48,9 @@ class MarketplacePrefsService {
 
   Future<void> saveSavedSearchesRecords(List<SavedSearchRecord> records) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw =
-        records.map((record) => jsonEncode(record.toMap())).toList(growable: false);
+    final raw = records
+        .map((record) => jsonEncode(record.toMap()))
+        .toList(growable: false);
     await prefs.setStringList(_savedSearchesKey, raw);
   }
 

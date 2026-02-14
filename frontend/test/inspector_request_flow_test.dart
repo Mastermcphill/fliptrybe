@@ -1,4 +1,4 @@
-﻿import 'package:fliptrybe/screens/inspector_request_received_screen.dart';
+import 'package:fliptrybe/screens/inspector_request_received_screen.dart';
 import 'package:fliptrybe/services/api_client.dart';
 import 'package:fliptrybe/services/api_config.dart';
 import 'package:flutter/material.dart';
@@ -16,7 +16,8 @@ void main() {
     expect(find.text('Log in to track status'), findsOneWidget);
   });
 
-  test('ApiClient blocks protected role request endpoint without token', () async {
+  test('ApiClient blocks protected role request endpoint without token',
+      () async {
     ApiClient.instance.clearAuthToken();
     final response = await ApiClient.instance.getJson(
       ApiConfig.api('/role-requests/me'),

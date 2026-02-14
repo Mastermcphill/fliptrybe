@@ -10,7 +10,8 @@ class AdminOrderTimelineScreen extends StatefulWidget {
   final int orderId;
 
   @override
-  State<AdminOrderTimelineScreen> createState() => _AdminOrderTimelineScreenState();
+  State<AdminOrderTimelineScreen> createState() =>
+      _AdminOrderTimelineScreenState();
 }
 
 class _AdminOrderTimelineScreenState extends State<AdminOrderTimelineScreen> {
@@ -33,7 +34,9 @@ class _AdminOrderTimelineScreenState extends State<AdminOrderTimelineScreen> {
       final data = await ApiClient.instance
           .getJson(ApiConfig.api('/admin/orders/${widget.orderId}/timeline'));
       if (!mounted) return;
-      final rows = (data is Map && data['items'] is List) ? data['items'] as List : <dynamic>[];
+      final rows = (data is Map && data['items'] is List)
+          ? data['items'] as List
+          : <dynamic>[];
       setState(() {
         _items = rows
             .whereType<Map>()
@@ -101,21 +104,28 @@ class _AdminOrderTimelineScreenState extends State<AdminOrderTimelineScreen> {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: _chipColor(kind),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text(kind, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                        child: Text(kind,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 12)),
                       ),
                       const Spacer(),
-                      Text(timestamp, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(timestamp,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
-                  Text(metadata.toString(), style: const TextStyle(fontSize: 12)),
+                  Text(metadata.toString(),
+                      style: const TextStyle(fontSize: 12)),
                 ],
               ),
             );

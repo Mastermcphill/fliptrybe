@@ -3,7 +3,8 @@ import 'api_config.dart';
 
 class DriverService {
   Future<List<dynamic>> getJobs() async {
-    final data = await ApiClient.instance.getJson(ApiConfig.api("/driver/jobs"));
+    final data =
+        await ApiClient.instance.getJson(ApiConfig.api("/driver/jobs"));
     return data is List ? data : <dynamic>[];
   }
 
@@ -14,7 +15,8 @@ class DriverService {
     );
   }
 
-  Future<Map<String, dynamic>> updateStatus({required int jobId, required String status}) async {
+  Future<Map<String, dynamic>> updateStatus(
+      {required int jobId, required String status}) async {
     return await ApiClient.instance.postJson(
       ApiConfig.api("/driver/jobs/$jobId/status"),
       {"status": status},

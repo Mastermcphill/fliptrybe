@@ -11,7 +11,8 @@ class WalletService {
   Future<Map<String, dynamic>?> getWallet() async {
     try {
       final data = await ApiClient.instance.getJson(ApiConfig.api('/wallet'));
-      if (data is Map && data['wallet'] is Map) return Map<String, dynamic>.from(data['wallet'] as Map);
+      if (data is Map && data['wallet'] is Map)
+        return Map<String, dynamic>.from(data['wallet'] as Map);
       return null;
     } catch (_) {
       return null;
@@ -20,7 +21,8 @@ class WalletService {
 
   Future<List<dynamic>> ledger() async {
     try {
-      final data = await ApiClient.instance.getJson(ApiConfig.api('/wallet/ledger'));
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api('/wallet/ledger'));
       return data is List ? data : <dynamic>[];
     } catch (_) {
       return <dynamic>[];
@@ -33,7 +35,8 @@ class WalletService {
 
   Future<bool> demoTopup(double amount) async {
     try {
-      final data = await ApiClient.instance.postJson(ApiConfig.api('/wallet/topup-demo'), {'amount': amount});
+      final data = await ApiClient.instance
+          .postJson(ApiConfig.api('/wallet/topup-demo'), {'amount': amount});
       return data is Map && data['ok'] == true;
     } catch (_) {
       return false;
@@ -42,7 +45,8 @@ class WalletService {
 
   Future<List<dynamic>> payouts() async {
     try {
-      final data = await ApiClient.instance.getJson(ApiConfig.api('/wallet/payouts'));
+      final data =
+          await ApiClient.instance.getJson(ApiConfig.api('/wallet/payouts'));
       return data is List ? data : <dynamic>[];
     } catch (_) {
       return <dynamic>[];
@@ -56,7 +60,8 @@ class WalletService {
     required String accountName,
   }) async {
     try {
-      final res = await ApiClient.instance.dio.post(ApiConfig.api('/wallet/payouts'), data: {
+      final res = await ApiClient.instance.dio
+          .post(ApiConfig.api('/wallet/payouts'), data: {
         'amount': amount,
         'bank_name': bankName,
         'account_number': accountNumber,

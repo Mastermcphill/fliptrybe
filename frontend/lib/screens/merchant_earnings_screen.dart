@@ -48,7 +48,9 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Merchant Earnings"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -58,25 +60,33 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen> {
                   padding: const EdgeInsets.all(12),
                   child: Card(
                     child: ListTile(
-                      title: const Text("Total Sales Earnings", style: TextStyle(fontWeight: FontWeight.w900)),
-                      trailing: Text("₦${_total.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                      title: const Text("Total Sales Earnings",
+                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      trailing: Text("₦${_total.toStringAsFixed(2)}",
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 16)),
                     ),
                   ),
                 ),
                 Expanded(
                   child: _txns.isEmpty
-                      ? const Center(child: Text("No earnings yet. Complete an order to see wallet credits."))
+                      ? const Center(
+                          child: Text(
+                              "No earnings yet. Complete an order to see wallet credits."))
                       : ListView.builder(
                           itemCount: _txns.length,
                           itemBuilder: (_, i) {
-                            final m = Map<String, dynamic>.from(_txns[i] as Map);
+                            final m =
+                                Map<String, dynamic>.from(_txns[i] as Map);
                             final ref = (m["reference"] ?? "").toString();
                             final amt = (m["amount"] ?? 0).toString();
                             final note = (m["note"] ?? "").toString();
                             return Card(
                               margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                               child: ListTile(
-                                title: Text("₦$amt", style: const TextStyle(fontWeight: FontWeight.w900)),
+                                title: Text("₦$amt",
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w900)),
                                 subtitle: Text("$ref\n$note"),
                               ),
                             );

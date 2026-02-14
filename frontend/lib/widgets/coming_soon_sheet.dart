@@ -4,7 +4,8 @@ class ComingSoonSheet {
   static void show(
     BuildContext context, {
     String title = "Coming Soon",
-    String message = "This feature is wired and planned. Next build will enable it fully.",
+    String message =
+        "This feature is wired and planned. Next build will enable it fully.",
   }) {
     showModalBottomSheet(
       context: context,
@@ -15,7 +16,9 @@ class ComingSoonSheet {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+              Text(title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w900, fontSize: 16)),
               const SizedBox(height: 10),
               Text(message),
               const SizedBox(height: 14),

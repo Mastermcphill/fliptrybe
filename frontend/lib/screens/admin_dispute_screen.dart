@@ -15,7 +15,8 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
       "id": 101,
       "order_id": 505,
       "reason": "Item is a fake replica",
-      "evidence": "[https://via.placeholder.com/300](https://via.placeholder.com/300)",
+      "evidence":
+          "[https://via.placeholder.com/300](https://via.placeholder.com/300)",
       "inspector": "Agent 007",
       "status": "FRAUD"
     }
@@ -55,12 +56,16 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
                     children: [
                       ElevatedButton(
                         onPressed: () {},
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white),
                         child: const Text("UPHOLD (Refund Buyer)"),
                       ),
                       ElevatedButton(
                         onPressed: () {},
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white),
                         child: const Text("OVERTURN (Pay Seller)"),
                       ),
                     ],

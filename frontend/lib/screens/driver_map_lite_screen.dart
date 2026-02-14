@@ -26,7 +26,8 @@ class _DriverMapLiteScreenState extends State<DriverMapLiteScreen> {
     final jobs = await _svc.getJobs();
     Map<String, dynamic>? found;
     for (final j in jobs) {
-      if (j is Map && int.tryParse((j["id"] ?? "").toString()) == widget.jobId) {
+      if (j is Map &&
+          int.tryParse((j["id"] ?? "").toString()) == widget.jobId) {
         found = Map<String, dynamic>.from(j);
       }
     }
@@ -52,7 +53,9 @@ class _DriverMapLiteScreenState extends State<DriverMapLiteScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Driver Route (Job #${widget.jobId})"),
-        actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+        actions: [
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh))
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -69,26 +72,37 @@ class _DriverMapLiteScreenState extends State<DriverMapLiteScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text("Route Preview", style: TextStyle(fontWeight: FontWeight.w900)),
+                              const Text("Route Preview",
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w900)),
                               const SizedBox(height: 8),
                               Text("Pickup: ${_job!['pickup'] ?? ''}"),
                               Text("Dropoff: ${_job!['dropoff'] ?? ''}"),
                               const SizedBox(height: 8),
-                              Text("Status: ${_job!['status'] ?? ''}", style: const TextStyle(fontWeight: FontWeight.w800)),
+                              Text("Status: ${_job!['status'] ?? ''}",
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text("Driver Actions", style: TextStyle(fontWeight: FontWeight.w900)),
+                      const Text("Driver Actions",
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
                         children: [
-                          ElevatedButton(onPressed: () => _set("picked_up"), child: const Text("Picked Up")),
-                          ElevatedButton(onPressed: () => _set("delivered"), child: const Text("Delivered")),
-                          ElevatedButton(onPressed: () => _set("completed"), child: const Text("Completed")),
+                          ElevatedButton(
+                              onPressed: () => _set("picked_up"),
+                              child: const Text("Picked Up")),
+                          ElevatedButton(
+                              onPressed: () => _set("delivered"),
+                              child: const Text("Delivered")),
+                          ElevatedButton(
+                              onPressed: () => _set("completed"),
+                              child: const Text("Completed")),
                         ],
                       )
                     ],

@@ -28,8 +28,11 @@ class _MerchantsScreenState extends State<MerchantsScreen> {
     if (b == "Suspended") c = Colors.red;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(999)),
-      child: Text(b, style: TextStyle(color: c, fontWeight: FontWeight.w900, fontSize: 12)),
+      decoration: BoxDecoration(
+          color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(999)),
+      child: Text(b,
+          style:
+              TextStyle(color: c, fontWeight: FontWeight.w900, fontSize: 12)),
     );
   }
 
@@ -68,7 +71,9 @@ class _MerchantsScreenState extends State<MerchantsScreen> {
                 final raw = items[i];
                 if (raw is! Map) return const SizedBox.shrink();
                 final m = Map<String, dynamic>.from(raw);
-                final name = (m['shop_name'] ?? '').toString().trim().isEmpty ? "Merchant ${m['user_id']}" : (m['shop_name'] ?? '').toString();
+                final name = (m['shop_name'] ?? '').toString().trim().isEmpty
+                    ? "Merchant ${m['user_id']}"
+                    : (m['shop_name'] ?? '').toString();
                 final city = (m['city'] ?? '').toString();
                 final state = (m['state'] ?? '').toString();
                 final badge = (m['badge'] ?? 'New').toString();
@@ -77,9 +82,14 @@ class _MerchantsScreenState extends State<MerchantsScreen> {
 
                 return InkWell(
                   onTap: () {
-                    final uid = int.tryParse((m['user_id'] ?? '').toString()) ?? 0;
+                    final uid =
+                        int.tryParse((m['user_id'] ?? '').toString()) ?? 0;
                     if (uid > 0) {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => MerchantDetailScreen(userId: uid)));
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  MerchantDetailScreen(userId: uid)));
                     }
                   },
                   child: Card(
@@ -89,7 +99,8 @@ class _MerchantsScreenState extends State<MerchantsScreen> {
                         children: [
                           CircleAvatar(
                             radius: 22,
-                            child: Text(name.isNotEmpty ? name[0].toUpperCase() : "M"),
+                            child: Text(
+                                name.isNotEmpty ? name[0].toUpperCase() : "M"),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -99,20 +110,27 @@ class _MerchantsScreenState extends State<MerchantsScreen> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: Text(name, style: const TextStyle(fontWeight: FontWeight.w900)),
+                                      child: Text(name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w900)),
                                     ),
                                     if (featured)
                                       const Icon(Icons.star, size: 18),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
-                                Text("$city, $state", style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+                                Text("$city, $state",
+                                    style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontSize: 12)),
                                 const SizedBox(height: 8),
                                 Row(
                                   children: [
                                     _badge(badge),
                                     const SizedBox(width: 10),
-                                    Text("Score: $score", style: const TextStyle(fontWeight: FontWeight.w800)),
+                                    Text("Score: $score",
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w800)),
                                   ],
                                 ),
                               ],

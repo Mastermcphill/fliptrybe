@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../foundation/app_tokens.dart';
 import 'ft_badge.dart';
@@ -44,8 +44,8 @@ class _FTTileState extends State<FTTile> {
                 (widget.title ?? '').toString(),
                 style: Theme.of(context).textTheme.titleMedium,
               ));
-    final bool hasSubtitle =
-        widget.subtitleWidget != null || ((widget.subtitle ?? '').toString().trim().isNotEmpty);
+    final bool hasSubtitle = widget.subtitleWidget != null ||
+        ((widget.subtitle ?? '').toString().trim().isNotEmpty);
     final Widget effectiveSubtitle = widget.subtitleWidget ??
         (widget.subtitle is Widget
             ? widget.subtitle as Widget
@@ -59,7 +59,9 @@ class _FTTileState extends State<FTTile> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTokens.r12),
         border: Border.all(
-          color: _highlighted ? scheme.primary.withValues(alpha: 0.35) : Colors.transparent,
+          color: _highlighted
+              ? scheme.primary.withValues(alpha: 0.35)
+              : Colors.transparent,
         ),
       ),
       child: InkWell(
@@ -99,11 +101,13 @@ class _FTTileState extends State<FTTile> {
                   ],
                 ),
               ),
-              if (widget.badgeText != null && widget.badgeText!.trim().isNotEmpty) ...[
+              if (widget.badgeText != null &&
+                  widget.badgeText!.trim().isNotEmpty) ...[
                 FTBadge(text: widget.badgeText!),
                 const SizedBox(width: AppTokens.s8),
               ],
-              widget.trailing ?? Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+              widget.trailing ??
+                  Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
         ),

@@ -36,7 +36,8 @@ class PaymentService {
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
 
-  Future<Map<String, dynamic>> availableMethods({String scope = 'order'}) async {
+  Future<Map<String, dynamic>> availableMethods(
+      {String scope = 'order'}) async {
     final safeScope = (scope == 'shortlet') ? 'shortlet' : 'order';
     final data = await ApiClient.instance.getJson(
       ApiConfig.api('/payments/methods?scope=$safeScope'),

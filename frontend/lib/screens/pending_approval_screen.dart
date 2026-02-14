@@ -70,7 +70,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
         }
       }
 
-      final res = await ApiClient.instance.dio.get(ApiConfig.api('/role-requests/me'));
+      final res =
+          await ApiClient.instance.dio.get(ApiConfig.api('/role-requests/me'));
       final data = res.data;
       if (data is Map && data['request'] is Map) {
         final req = Map<String, dynamic>.from(data['request'] as Map);
@@ -78,7 +79,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
         if (!mounted) return;
         setState(() {
           _status = status.isEmpty ? 'pending' : status;
-          _reason = (req['admin_note'] ?? req['reason'] ?? '').toString().trim();
+          _reason =
+              (req['admin_note'] ?? req['reason'] ?? '').toString().trim();
           _loading = false;
         });
         return;
@@ -156,7 +158,8 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                 children: [
                   Text(
                     _titleText(),
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -183,7 +186,9 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _goLogin,
-                      child: Text(_status == 'approved' ? 'Continue to Login' : 'Go to Login'),
+                      child: Text(_status == 'approved'
+                          ? 'Continue to Login'
+                          : 'Go to Login'),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -200,4 +205,3 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
     );
   }
 }
-
