@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, request
 from app.extensions import db
 from sqlalchemy.exc import IntegrityError
 from app.models import User, MoneyBoxAccount, MoneyBoxLedger, RoleChangeRequest
+from app.services.fraud import should_block_withdrawal
 from app.utils.jwt_utils import decode_token
 from app.utils.autopilot import get_settings
 from app.utils.feature_flags import is_enabled
@@ -411,6 +412,16 @@ def withdraw():
         return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
     if not _is_email_verified(u):
         return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    fraud_guard = should_block_withdrawal(int(u.id))
+    if bool(fraud_guard.get("blocked")):
+        return jsonify(
+            {
+                "ok": False,
+                "code": "FRAUD_WITHDRAWAL_BLOCKED",
+                "message": "Withdrawal blocked for review due to elevated fraud risk.",
+                "fraud_score": int(fraud_guard.get("score") or 0),
+            }
+        ), 403
 
     acct = get_or_create_account(int(u.id))
 

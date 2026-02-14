@@ -24,6 +24,7 @@ import 'admin_growth_analytics_screen.dart';
 import 'investor_metrics_screen.dart';
 import 'admin_commission_engine_screen.dart';
 import 'admin_liquidity_lab_screen.dart';
+import 'admin_omega_intelligence_screen.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/ft_routes.dart';
 import '../ui/admin/admin_scaffold.dart';
@@ -245,6 +246,13 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             title: const Text('Liquidity Lab'),
             subtitle: const Text('Stress test platform liquidity and runway'),
             onTap: () => _open(const AdminLiquidityLabScreen()),
+          ),
+          FTTile(
+            leading: const Icon(Icons.hub_outlined),
+            title: const Text('Omega Intelligence'),
+            subtitle: const Text(
+                'Elasticity, fraud, liquidity stress and expansion signals'),
+            onTap: () => _open(const AdminOmegaIntelligenceScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.stacked_line_chart_outlined),

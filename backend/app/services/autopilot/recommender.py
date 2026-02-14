@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta
 
+from app.services.elasticity import segment_elasticity_coefficient
+
 
 def _env_int(name: str, default: int) -> int:
     raw = (os.getenv(name) or "").strip()
@@ -34,7 +36,7 @@ def autopilot_constants() -> dict:
         "abuse_chargeback_threshold": max(0.01, _env_float("AUTOPILOT_ABUSE_CHARGEBACK_THRESHOLD", 0.03)),
         "abuse_dispute_threshold": max(3, _env_int("AUTOPILOT_ABUSE_DISPUTE_THRESHOLD", 5)),
         "demand_drop_pct": min(-5.0, _env_float("AUTOPILOT_DEMAND_DROP_PCT", -12.0)),
-        "elasticity": max(0.0, min(1.0, _env_float("AUTOPILOT_ELASTICITY", 0.12))),
+        "elasticity_fallback_abs": max(0.05, min(2.5, _env_float("AUTOPILOT_ELASTICITY", 0.12))),
     }
 
 
@@ -58,16 +60,17 @@ def _bounded_delta(value: int, limit: int) -> int:
     return int(value)
 
 
-def _estimate_impact(gmv_minor: int, delta_bps: int, elasticity: float) -> dict:
+def _estimate_impact(gmv_minor: int, delta_bps: int, elasticity_coefficient: float) -> dict:
     base = int(round((int(gmv_minor) * int(delta_bps)) / 10000.0))
-    gmv_shift = int(round(float(gmv_minor) * float(elasticity) * (-float(delta_bps) / 10000.0)))
+    elasticity_abs = max(0.02, min(2.5, abs(float(elasticity_coefficient or 0.0))))
+    gmv_shift = int(round(float(gmv_minor) * float(elasticity_abs) * (-float(delta_bps) / 10000.0)))
     return {
         "revenue_delta_minor": int(base),
         "gmv_delta_minor": int(gmv_shift),
     }
 
 
-def _recommendation_payload(*, segment: dict, reason_code: str, title: str, action: dict, explanation: list[str], risk_flags: list[str], expected_impact: dict) -> dict:
+def _recommendation_payload(*, segment: dict, reason_code: str, title: str, action: dict, explanation: list[str], risk_flags: list[str], expected_impact: dict, elasticity: dict | None = None) -> dict:
     return {
         "reason_code": reason_code,
         "title": title,
@@ -85,6 +88,7 @@ def _recommendation_payload(*, segment: dict, reason_code: str, title: str, acti
             "active_listings_count": int(segment.get("active_listings_count") or 0),
             "active_listings_delta_pct": float(segment.get("active_listings_delta_pct") or 0.0),
         },
+        "elasticity": elasticity or {},
         "expected_impact": expected_impact,
         "risk_flags": risk_flags,
         "confidence": _confidence(int(segment.get("order_count") or 0)),
@@ -126,10 +130,38 @@ def generate_recommendations(metrics: dict) -> list[dict]:
     )
 
     recommendations: list[dict] = []
+    elasticity_cache: dict[tuple[str, str, str], dict] = {}
     for segment in segments_sorted:
         sample_orders = int(segment.get("order_count") or 0)
         if sample_orders < constants["min_sample_orders"]:
             continue
+
+        seg_applies_to = (segment.get("applies_to") or "declutter").strip().lower()
+        seg_seller_type = (segment.get("seller_type") or "all").strip().lower()
+        seg_city = (segment.get("city") or "all").strip()
+        elasticity_key = (seg_applies_to, seg_city.lower(), seg_seller_type)
+        elasticity_payload = elasticity_cache.get(elasticity_key)
+        if elasticity_payload is None:
+            try:
+                elasticity_payload = segment_elasticity_coefficient(
+                    category=seg_applies_to,
+                    city=seg_city,
+                    seller_type=seg_seller_type,
+                )
+            except Exception:
+                elasticity_payload = {
+                    "coefficient": -float(constants["elasticity_fallback_abs"]),
+                    "confidence": "low",
+                    "sensitivity": "low",
+                    "recommended_shift_pct": 0.0,
+                }
+            elasticity_cache[elasticity_key] = elasticity_payload
+        elasticity_coef = float(elasticity_payload.get("coefficient") or -float(constants["elasticity_fallback_abs"]))
+        if elasticity_coef > 0:
+            # Conservative guard: treat positive/noisy coefficients as low negative elasticity.
+            elasticity_coef = -abs(elasticity_coef)
+        if elasticity_coef == 0:
+            elasticity_coef = -float(constants["elasticity_fallback_abs"])
 
         current_bps = int(((segment.get("current_policy") or {}).get("effective_rate_bps") or 500))
         gmv_minor = int(segment.get("gmv_minor") or 0)
@@ -143,13 +175,37 @@ def generate_recommendations(metrics: dict) -> list[dict]:
         abuse_guard = chargeback_rate >= constants["abuse_chargeback_threshold"] or dispute_count >= constants["abuse_dispute_threshold"]
 
         if liquidity_risk:
+            if abs(elasticity_coef) >= 1.1:
+                recommendations.append(
+                    _recommendation_payload(
+                        segment=segment,
+                        reason_code="LIQUIDITY_STRESS_ELASTICITY_GUARD",
+                        title=(
+                            f"Hold commission increase for {segment.get('applies_to')} / "
+                            f"{segment.get('seller_type')} / {segment.get('city')}"
+                        ),
+                        action={"type": "no_change", "base_rate_bps": current_bps},
+                        explanation=[
+                            f"Liquidity pressure is elevated ({payout_pressure:.2f}x daily commission).",
+                            f"Elasticity coefficient {elasticity_coef:.3f} indicates a highly sensitive segment.",
+                            "Commission increase is blocked to avoid disproportionate GMV decline.",
+                        ],
+                        risk_flags=["LIQUIDITY_RISK_ELEVATED", "HIGH_ELASTICITY"],
+                        expected_impact={"revenue_delta_minor": 0, "gmv_delta_minor": 0},
+                        elasticity=elasticity_payload,
+                    )
+                )
+                continue
             delta = _bounded_delta(max(25, int(round(current_bps * 0.1))), constants["max_bps_change"])
             new_bps = int(max(0, current_bps + delta))
-            impact = _estimate_impact(gmv_minor, delta, constants["elasticity"])
+            impact = _estimate_impact(gmv_minor, delta, elasticity_coef)
             title = (
                 f"Increase commission by {delta / 100:.2f}% for "
                 f"{segment.get('applies_to')} / {segment.get('seller_type')} / {segment.get('city')}"
             )
+            risk_flags = ["LIQUIDITY_RISK_ELEVATED"]
+            if abs(elasticity_coef) >= 0.9:
+                risk_flags.append("HIGH_ELASTICITY")
             recommendations.append(
                 _recommendation_payload(
                     segment=segment,
@@ -160,9 +216,11 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                         f"Payout pressure is {payout_pressure:.2f}x daily commission.",
                         f"Projected days to negative cash: {days_to_negative}.",
                         f"Applying +{delta} bps on current {current_bps} bps to stabilize platform float.",
+                        f"Elasticity coefficient: {elasticity_coef:.3f}.",
                     ],
-                    risk_flags=["LIQUIDITY_RISK_ELEVATED"],
+                    risk_flags=risk_flags,
                     expected_impact=impact,
+                    elasticity=elasticity_payload,
                 )
             )
             continue
@@ -173,7 +231,7 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                 delta = 0
             if delta != 0:
                 new_bps = int(max(0, current_bps + delta))
-                impact = _estimate_impact(gmv_minor, delta, constants["elasticity"])
+                impact = _estimate_impact(gmv_minor, delta, elasticity_coef)
                 title = (
                     f"Reduce commission by {abs(delta) / 100:.2f}% to ease supply pressure for "
                     f"{segment.get('applies_to')} / {segment.get('city')}"
@@ -188,9 +246,11 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                             f"Conversion proxy is high at {conversion:.3f} orders per active listing.",
                             "Lower commission can attract new listings in constrained segments.",
                             f"Current rate {current_bps} bps, proposed {new_bps} bps.",
+                            f"Elasticity coefficient: {elasticity_coef:.3f}.",
                         ],
                         risk_flags=["SUPPLY_CONSTRAINT"],
                         expected_impact=impact,
+                        elasticity=elasticity_payload,
                     )
                 )
             elif abuse_guard:
@@ -206,6 +266,7 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                         ],
                         risk_flags=["QUALITY_RISK", "REDUCTION_BLOCKED"],
                         expected_impact={"revenue_delta_minor": 0, "gmv_delta_minor": 0},
+                        elasticity=elasticity_payload,
                     )
                 )
 
@@ -215,7 +276,7 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                 continue
             starts_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
             ends_at = (datetime.utcnow() + timedelta(days=21)).replace(microsecond=0).isoformat() + "Z"
-            impact = _estimate_impact(gmv_minor, -promo, constants["elasticity"])
+            impact = _estimate_impact(gmv_minor, -promo, elasticity_coef)
             title = (
                 f"Apply temporary {promo / 100:.2f}% promo discount for "
                 f"{segment.get('applies_to')} / {segment.get('city')}"
@@ -236,9 +297,11 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                         f"Orders are down {orders_delta:.2f}% while supply is comparatively stable ({active_delta:.2f}%).",
                         "Time-boxed discount can stimulate demand without permanent fee changes.",
                         f"Promo period: {starts_at} to {ends_at}.",
+                        f"Elasticity coefficient: {elasticity_coef:.3f}.",
                     ],
                     risk_flags=["DEMAND_SOFTNESS"],
                     expected_impact=impact,
+                    elasticity=elasticity_payload,
                 )
             )
 
@@ -248,7 +311,7 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                 continue
             starts_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
             ends_at = (datetime.utcnow() + timedelta(days=14)).replace(microsecond=0).isoformat() + "Z"
-            impact = _estimate_impact(gmv_minor, -promo, constants["elasticity"])
+            impact = _estimate_impact(gmv_minor, -promo, elasticity_coef)
             title = f"Merchant activation promo: {promo / 100:.2f}% discount for {segment.get('applies_to')} / {segment.get('city')}"
             recommendations.append(
                 _recommendation_payload(
@@ -268,6 +331,7 @@ def generate_recommendations(metrics: dict) -> list[dict]:
                     ],
                     risk_flags=["TIME_BOXED_PROMO"],
                     expected_impact=impact,
+                    elasticity=elasticity_payload,
                 )
             )
 
@@ -308,12 +372,15 @@ def preview_policy_impact(*, draft_policy: dict, rules: list[dict], signals: dic
     constants = autopilot_constants()
     total_revenue_delta = 0
     total_gmv_delta = 0
+    total_elasticity_adjusted_gmv_delta = 0
     baseline_fee_minor = 0
     proposed_fee_minor = 0
     weighted_bps_num = 0
     weighted_bps_den = 0
     risk_flags: list[str] = []
     breakdown: list[dict] = []
+    elasticity_breakdown: list[dict] = []
+    elasticity_cache: dict[tuple[str, str, str], dict] = {}
 
     for segment in segments:
         gmv_minor = int(segment.get("gmv_minor") or 0)
@@ -345,12 +412,30 @@ def preview_policy_impact(*, draft_policy: dict, rules: list[dict], signals: dic
         baseline_fee = int(round((gmv_minor * current_bps) / 10000.0))
         proposed_fee = int(round((gmv_minor * proposed_bps) / 10000.0))
         revenue_delta = proposed_fee - baseline_fee
-        gmv_delta = int(round(float(gmv_minor) * constants["elasticity"] * (-float(proposed_bps - current_bps) / 10000.0)))
+        fallback_coef = -float(constants["elasticity_fallback_abs"])
+        elasticity_key = (applies_to, city.lower(), seller_type)
+        elasticity_payload = elasticity_cache.get(elasticity_key)
+        if elasticity_payload is None:
+            try:
+                elasticity_payload = segment_elasticity_coefficient(
+                    category=applies_to,
+                    city=city or "all",
+                    seller_type=seller_type,
+                )
+            except Exception:
+                elasticity_payload = {"coefficient": fallback_coef, "confidence": "low", "sensitivity": "low"}
+            elasticity_cache[elasticity_key] = elasticity_payload
+        elasticity_coef = float(elasticity_payload.get("coefficient") or fallback_coef)
+        if elasticity_coef > 0:
+            elasticity_coef = -abs(elasticity_coef)
+        elasticity_abs = max(0.02, min(2.5, abs(elasticity_coef)))
+        gmv_delta = int(round(float(gmv_minor) * elasticity_abs * (-float(proposed_bps - current_bps) / 10000.0)))
 
         baseline_fee_minor += baseline_fee
         proposed_fee_minor += proposed_fee
         total_revenue_delta += revenue_delta
         total_gmv_delta += gmv_delta
+        total_elasticity_adjusted_gmv_delta += gmv_delta
         weighted_bps_num += proposed_bps * gmv_minor
         weighted_bps_den += gmv_minor
         breakdown.append(
@@ -365,6 +450,18 @@ def preview_policy_impact(*, draft_policy: dict, rules: list[dict], signals: dic
                 "gmv_delta_minor": gmv_delta,
             }
         )
+        elasticity_breakdown.append(
+            {
+                "applies_to": applies_to,
+                "seller_type": seller_type,
+                "city": city or "all",
+                "elasticity_coefficient": float(round(elasticity_coef, 4)),
+                "confidence": (elasticity_payload.get("confidence") or "low"),
+                "gmv_delta_minor": int(gmv_delta),
+            }
+        )
+        if proposed_bps > current_bps and abs(elasticity_coef) >= 0.9:
+            risk_flags.append("HIGH_ELASTICITY_COMMISSION_INCREASE")
 
     avg_proposed_bps = int(round(weighted_bps_num / weighted_bps_den)) if weighted_bps_den > 0 else 500
     if total_revenue_delta < 0:
@@ -381,6 +478,10 @@ def preview_policy_impact(*, draft_policy: dict, rules: list[dict], signals: dic
         "projected_revenue_delta_minor": int(total_revenue_delta),
         "projected_gmv_delta_minor": int(total_gmv_delta),
         "weighted_proposed_bps": int(avg_proposed_bps),
-        "risk_flags": risk_flags,
+        "risk_flags": sorted(set(risk_flags)),
         "segments": breakdown,
+        "elasticity_adjusted_gmv_projection": {
+            "total_projected_gmv_delta_minor": int(total_elasticity_adjusted_gmv_delta),
+            "segments": elasticity_breakdown,
+        },
     }

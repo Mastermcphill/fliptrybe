@@ -163,6 +163,7 @@ class AutopilotDraftEndpointsTestCase(unittest.TestCase):
         self.assertTrue(payload.get("ok"))
         self.assertIn("projected_revenue_delta_minor", payload)
         self.assertIn("liquidity_effect", payload)
+        self.assertIn("elasticity_adjusted_gmv_projection", payload)
         with self.app.app_context():
             after = WalletTxn.query.count()
         self.assertEqual(before, after)

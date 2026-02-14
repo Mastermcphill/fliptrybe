@@ -8,6 +8,7 @@ from sqlalchemy import func
 
 from app.extensions import db
 from app.models import Order, Referral, ShortletBooking, User
+from app.services.fraud import compute_user_fraud_score, upsert_fraud_flag
 from app.utils.events import log_event
 from app.utils.wallets import post_txn
 
@@ -104,6 +105,22 @@ def apply_referral_code(*, user: User | None, code: str | None) -> dict:
             "ok": False,
             "error": "REFERRAL_LOCKED",
             "message": "Referral can only be applied before your first successful transaction.",
+        }
+    fraud_snapshot = compute_user_fraud_score(int(user.id))
+    reasons = fraud_snapshot.get("reasons") if isinstance(fraud_snapshot, dict) else []
+    has_self_referral_risk = any(
+        isinstance(reason, dict) and (reason.get("code") or "").strip().upper() == "SELF_REFERRAL_PATTERN"
+        for reason in (reasons or [])
+    )
+    if has_self_referral_risk:
+        try:
+            upsert_fraud_flag(user_id=int(user.id), persist_clear=False)
+        except Exception:
+            db.session.rollback()
+        return {
+            "ok": False,
+            "error": "FRAUD_SELF_REFERRAL_BLOCKED",
+            "message": "Referral request blocked for review due to self-referral risk.",
         }
 
     referrer = User.query.filter(func.upper(User.referral_code) == normalized).first()

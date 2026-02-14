@@ -55,6 +55,7 @@ from app.segments.segment_feature_flags import flags_bp
 from app.segments.segment_referral import referral_bp
 from app.segments.segment_user_analytics import user_analytics_bp
 from app.segments.segment_pricing import pricing_bp
+from app.segments.segment_omega_intelligence import omega_bp
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.observability import init_sentry, init_otel, install_request_observers
@@ -199,6 +200,7 @@ def create_app():
     app.register_blueprint(referral_bp)
     app.register_blueprint(user_analytics_bp)
     app.register_blueprint(pricing_bp)
+    app.register_blueprint(omega_bp)
 
     # Health check
     @app.get("/api/health")

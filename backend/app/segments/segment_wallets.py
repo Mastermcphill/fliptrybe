@@ -13,6 +13,7 @@ from app.models import AuditLog, PayoutRecipient
 from app.utils.commission import resolve_rate
 from app.utils.account_flags import record_account_flag, flag_duplicate_bank
 from app.models import Receipt
+from app.services.fraud import should_block_withdrawal
 from app.utils.events import log_event
 from app.utils.observability import get_request_id
 import os
@@ -151,6 +152,16 @@ def request_payout():
         return jsonify({"message": "Unauthorized"}), 401
     if not _is_email_verified(u):
         return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    fraud_guard = should_block_withdrawal(int(u.id))
+    if bool(fraud_guard.get("blocked")):
+        return jsonify(
+            {
+                "ok": False,
+                "code": "FRAUD_WITHDRAWAL_BLOCKED",
+                "message": "Withdrawal blocked for review due to elevated fraud risk.",
+                "fraud_score": int(fraud_guard.get("score") or 0),
+            }
+        ), 403
     payload = request.get_json(silent=True) or {}
     try:
         amount = float(payload.get("amount") or 0.0)
