@@ -596,17 +596,13 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
   Future<void> _clearToken() async {
     if (_checking) return;
     setState(() => _checking = true);
-    await ApiService.resetAuthSession();
+    await logoutToLanding(context);
     if (!mounted) return;
     setState(() {
       _tokenPresent = false;
       _tokenPreview = '***';
       _checking = false;
     });
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
   }
 
   Future<void> _recheckSession() async {
@@ -626,16 +622,7 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     try {
       final res = await ApiService.getProfileResponse();
       if (res.statusCode == 401) {
-        await ApiService.resetAuthSession();
-        if (!mounted) return;
-        setState(() {
-          _tokenPresent = false;
-          _tokenPreview = '***';
-        });
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
+        await logoutToLanding(context);
         return;
       }
     } finally {

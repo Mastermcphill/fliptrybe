@@ -12,6 +12,7 @@ import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
 import '../shells/merchant_shell.dart';
 import '../shells/inspector_shell.dart';
+import '../utils/auth_navigation.dart';
 import '../widgets/app_exit_guard.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -128,9 +129,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (profile == null) {
-        await ApiService.resetAuthSession();
-        if (!mounted) return;
         _toast('Token invalid or expired.');
+        await logoutToLanding(context);
+        if (!mounted) return;
         return;
       }
 

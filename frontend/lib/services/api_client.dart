@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:dio/dio.dart';
@@ -12,6 +13,9 @@ class ApiClient {
   final Set<CancelToken> _activeCancelTokens = <CancelToken>{};
   final Random _rand = Random.secure();
   String? _lastFailedRequestId;
+  Future<void> Function()? _onUnauthorized;
+  void Function(String message)? _onGlobalErrorMessage;
+  bool _forcingReauth = false;
   static const Map<String, dynamic> _notAuthenticatedResponse =
       <String, dynamic>{
     'ok': false,
@@ -40,6 +44,14 @@ class ApiClient {
 
   String? get lastFailedRequestId => _lastFailedRequestId;
 
+  void configureGlobalHandlers({
+    Future<void> Function()? onUnauthorized,
+    void Function(String message)? onErrorMessage,
+  }) {
+    _onUnauthorized = onUnauthorized;
+    _onGlobalErrorMessage = onErrorMessage;
+  }
+
   void clearLastFailedRequestId() {
     _lastFailedRequestId = null;
   }
@@ -67,6 +79,32 @@ class ApiClient {
   bool _hasAuthToken() {
     final token = _authToken?.trim() ?? '';
     return token.isNotEmpty;
+  }
+
+  void _emitGlobalErrorMessage(String message, {String? requestId}) {
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) return;
+    final rid = (requestId ?? '').trim();
+    if (_onGlobalErrorMessage == null) return;
+    if (rid.isNotEmpty) {
+      _onGlobalErrorMessage!("$trimmed (Support code: $rid)");
+      return;
+    }
+    _onGlobalErrorMessage!(trimmed);
+  }
+
+  void _scheduleUnauthorized(RequestOptions requestOptions) {
+    final authHeader =
+        (requestOptions.headers['Authorization'] ?? '').toString().trim();
+    if (authHeader.isEmpty) return;
+    final handler = _onUnauthorized;
+    if (handler == null || _forcingReauth) return;
+    _forcingReauth = true;
+    unawaited(
+      handler().catchError((_) {}).whenComplete(() {
+        _forcingReauth = false;
+      }),
+    );
   }
 
   bool _requiresAuth(Uri uri) {
@@ -177,6 +215,20 @@ class ApiClient {
             _lastFailedRequestId =
                 _requestIdForFailure(response, response.requestOptions);
           }
+          if (response.statusCode == 401) {
+            _scheduleUnauthorized(response.requestOptions);
+            _emitGlobalErrorMessage(
+              'Session expired, please log in again',
+              requestId:
+                  _requestIdForFailure(response, response.requestOptions),
+            );
+          } else if ((response.statusCode ?? 0) >= 500) {
+            _emitGlobalErrorMessage(
+              'Server hiccup, try again',
+              requestId:
+                  _requestIdForFailure(response, response.requestOptions),
+            );
+          }
 
           return handler.next(response);
         },
@@ -191,6 +243,26 @@ class ApiClient {
           }
           final rid = _requestIdForFailure(e.response, e.requestOptions);
           _lastFailedRequestId = rid.isNotEmpty ? rid : _lastFailedRequestId;
+          if (e.response?.statusCode == 401) {
+            _scheduleUnauthorized(e.requestOptions);
+            _emitGlobalErrorMessage(
+              'Session expired, please log in again',
+              requestId: rid,
+            );
+          } else if (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.sendTimeout ||
+              e.type == DioExceptionType.receiveTimeout ||
+              e.type == DioExceptionType.connectionError) {
+            _emitGlobalErrorMessage(
+              'Network timeout, try again',
+              requestId: rid,
+            );
+          } else if ((e.response?.statusCode ?? 0) >= 500) {
+            _emitGlobalErrorMessage(
+              'Server hiccup, try again',
+              requestId: rid,
+            );
+          }
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.error',
             type: 'http',

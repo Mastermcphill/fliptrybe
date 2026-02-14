@@ -12,11 +12,17 @@ import 'shells/merchant_shell.dart';
 import 'shells/driver_shell.dart';
 import 'shells/inspector_shell.dart';
 import 'shells/public_browse_shell.dart';
+import 'services/api_client.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
+import 'utils/auth_navigation.dart';
 import 'widgets/app_exit_guard.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/theme/theme_controller.dart';
+
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -84,6 +90,20 @@ class _FlipTrybeAppState extends State<FlipTrybeApp>
     WidgetsBinding.instance.addObserver(this);
     _themeController = ThemeController();
     _themeController.load();
+    ApiClient.instance.configureGlobalHandlers(
+      onUnauthorized: () async {
+        final context = appNavigatorKey.currentContext;
+        if (context == null) return;
+        await logoutToLanding(context);
+      },
+      onErrorMessage: (message) {
+        final messenger = appScaffoldMessengerKey.currentState;
+        if (messenger == null) return;
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(content: Text(message)));
+      },
+    );
   }
 
   @override
@@ -109,6 +129,8 @@ class _FlipTrybeAppState extends State<FlipTrybeApp>
         builder: (context, _) => MaterialApp(
           title: 'FlipTrybe',
           debugShowCheckedModeBanner: false,
+          navigatorKey: appNavigatorKey,
+          scaffoldMessengerKey: appScaffoldMessengerKey,
           navigatorObservers: [SentryNavigatorObserver()],
           theme: AppTheme.light(_themeController.backgroundPalette),
           darkTheme: AppTheme.dark(_themeController.backgroundPalette),
