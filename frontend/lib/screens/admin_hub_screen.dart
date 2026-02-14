@@ -102,15 +102,28 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
   @override
   Widget build(BuildContext context) {
     if (_checking) {
-      return const AdminScaffold(
+      return AdminScaffold(
         title: 'Admin Hub',
-        child: Center(child: CircularProgressIndicator()),
+        child: FTSkeletonList(
+          itemCount: 8,
+          itemBuilder: (context, _) => const FTSkeletonCard(height: 76),
+        ),
       );
     }
     if (_guardError != null) {
       return AdminScaffold(
         title: 'Admin Hub',
-        child: FTErrorState(message: _guardError!),
+        child: FTEmptyState(
+          icon: Icons.admin_panel_settings_outlined,
+          title: 'Admin access required',
+          subtitle: _guardError!,
+          primaryCtaText: 'Retry',
+          onPrimaryCta: _ensureAdmin,
+          secondaryCtaText: 'Go to Settings',
+          onSecondaryCta: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AdminAutopilotScreen()),
+          ),
+        ),
       );
     }
     return AdminScaffold(

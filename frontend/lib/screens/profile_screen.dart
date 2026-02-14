@@ -31,7 +31,9 @@ import 'email_verify_screen.dart';
 import 'following_merchants_screen.dart';
 import 'marketplace/favorites_screen.dart';
 import 'marketplace/saved_searches_screen.dart';
+import '../ui/components/ft_components.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/ui_feedback.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -87,12 +89,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = null;
       });
     } catch (e) {
+      final message = UIFeedback.mapDioErrorToMessage(e);
       if (!mounted) return;
       setState(() {
         _profile = null;
         _isLoading = false;
-        _error = e.toString();
+        _error = message;
       });
+      UIFeedback.showErrorSnack(context, message);
     }
   }
 
@@ -159,47 +163,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF00C853)),
+          ? FTSkeletonList(
+              itemCount: 4,
+              itemBuilder: (context, index) =>
+                  const FTSkeletonCard(height: 112),
             )
           : (_error != null)
-              ? ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    const SizedBox(height: 60),
-                    const Icon(Icons.lock_outline, size: 44),
-                    const SizedBox(height: 12),
-                    const Center(
-                      child: Text(
-                        "Session not available",
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Center(
-                      child: Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey.shade700),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Center(
-                      child: ElevatedButton.icon(
-                        onPressed: _loadProfile,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text("Try again"),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Center(
-                      child: TextButton(
-                        onPressed: _handleLogout,
-                        child: const Text("Go to Login"),
-                      ),
-                    ),
-                  ],
+              ? FTEmptyState(
+                  icon: Icons.lock_outline,
+                  title: 'Session not available',
+                  subtitle: _error!,
+                  primaryCtaText: 'Try again',
+                  onPrimaryCta: _loadProfile,
+                  secondaryCtaText: 'Go to Login',
+                  onSecondaryCta: _handleLogout,
                 )
               : SingleChildScrollView(
                   padding: const EdgeInsets.all(20),
@@ -622,13 +599,15 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     try {
       final res = await ApiService.getProfileResponse();
       if (res.statusCode == 401) {
+        if (!mounted) return;
         await logoutToLanding(context);
         return;
       }
     } finally {
-      if (!mounted) return;
-      await _loadTokenInfo();
-      setState(() => _checking = false);
+      if (mounted) {
+        await _loadTokenInfo();
+        setState(() => _checking = false);
+      }
     }
   }
 

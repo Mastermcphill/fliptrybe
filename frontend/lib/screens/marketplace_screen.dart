@@ -6,7 +6,10 @@ import '../services/city_preference_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/auth_gate_service.dart';
 import '../ui/components/ft_components.dart';
+import '../ui/design/ft_tokens.dart';
+import '../utils/auth_navigation.dart';
 import '../widgets/listing/listing_card.dart';
+import '../utils/ui_feedback.dart';
 import 'cart_screen.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
@@ -89,12 +92,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         _newDropsRemote = remoteDrops;
         _loading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      final errorMessage = UIFeedback.mapDioErrorToMessage(e);
+      if (!mounted) return;
+      if (UIFeedback.shouldForceLogoutOn401(e)) {
+        UIFeedback.showErrorSnack(
+            context, 'Session expired, please sign in again.');
+        await logoutToLanding(context);
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Unable to load marketplace. Pull to retry.';
+        _error = errorMessage;
       });
+      UIFeedback.showErrorSnack(context, errorMessage);
     }
   }
 
@@ -222,25 +234,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         FTSectionHeader(
           title: title,
           subtitle: subtitle,
-          trailing: TextButton(
+          trailing: FTSectionTextAction(
+            label: 'See all',
             onPressed: () => _openResults(
               query: _searchCtrl.text.trim(),
               sort: seeAllSort,
             ),
-            child: const Text('See all'),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: FTDesignTokens.xs),
         SizedBox(
           height: 280,
           child: items.isEmpty
-              ? const FTCard(
-                  child: Center(child: Text('No items in this section yet.')),
+              ? FTCard(
+                  child: FTEmptyState(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'Nothing here yet',
+                    subtitle: 'Try refreshing or explore all listings.',
+                    primaryCtaText: 'Refresh',
+                    onPrimaryCta: _load,
+                    secondaryCtaText: 'Browse categories',
+                    onSecondaryCta: () => _openResults(sort: seeAllSort),
+                  ),
                 )
               : ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(width: FTDesignTokens.sm),
                   itemBuilder: (_, index) {
                     final item = items[index];
                     final id = item['id'] as int;
@@ -374,7 +395,12 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       SliverToBoxAdapter(
                         child: Container(
                           color: scheme.surface,
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                          padding: const EdgeInsets.fromLTRB(
+                            FTDesignTokens.md,
+                            FTDesignTokens.xs,
+                            FTDesignTokens.md,
+                            FTDesignTokens.lg,
+                          ),
                           child: Column(
                             children: [
                               FTCard(
@@ -390,7 +416,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 18),
+                              const SizedBox(height: FTDesignTokens.md),
                               _section(
                                 context,
                                 title: 'Recommended for you',
@@ -399,7 +425,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 items: recommendedItems,
                                 seeAllSort: 'relevance',
                               ),
-                              const SizedBox(height: 18),
+                              const SizedBox(height: FTDesignTokens.md),
                               _section(
                                 context,
                                 title: 'Trending near you',
@@ -408,7 +434,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 items: trending,
                                 seeAllSort: 'distance',
                               ),
-                              const SizedBox(height: 18),
+                              const SizedBox(height: FTDesignTokens.md),
                               _section(
                                 context,
                                 title: 'New Drops',
@@ -416,7 +442,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 items: newDropsItems,
                                 seeAllSort: 'newest',
                               ),
-                              const SizedBox(height: 18),
+                              const SizedBox(height: FTDesignTokens.md),
                               _section(
                                 context,
                                 title: 'Hot Deals',
@@ -441,52 +467,49 @@ class _MarketplaceSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const FTSkeleton(height: 48),
-        const SizedBox(height: 14),
-        ...List.generate(
-          3,
-          (section) => Padding(
-            padding: const EdgeInsets.only(bottom: 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const FTSkeleton(height: 18, width: 180),
-                const SizedBox(height: 8),
-                const FTSkeleton(height: 12, width: 240),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 240,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 3,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (_, __) => const SizedBox(
-                      width: 210,
-                      child: FTCard(
-                        padding: EdgeInsets.all(10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                                child: FTSkeleton(height: double.infinity)),
-                            SizedBox(height: 8),
-                            FTSkeleton(height: 16, width: 100),
-                            SizedBox(height: 6),
-                            FTSkeleton(height: 14),
-                          ],
-                        ),
-                      ),
+    return FTSkeletonList(
+      itemCount: 4,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: FTDesignTokens.md,
+          vertical: FTDesignTokens.xs,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const FTSkeletonLine(height: 16, widthFactor: 0.5),
+            const SizedBox(height: FTDesignTokens.xs),
+            const FTSkeletonLine(height: 12, widthFactor: 0.8),
+            const SizedBox(height: FTDesignTokens.sm),
+            SizedBox(
+              height: 230,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: 3,
+                separatorBuilder: (_, __) =>
+                    const SizedBox(width: FTDesignTokens.sm),
+                itemBuilder: (_, __) => const SizedBox(
+                  width: 210,
+                  child: FTCard(
+                    padding: EdgeInsets.all(FTDesignTokens.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: FTSkeletonLine(height: double.infinity)),
+                        SizedBox(height: FTDesignTokens.sm),
+                        FTSkeletonLine(height: 14, widthFactor: 0.5),
+                        SizedBox(height: FTDesignTokens.xs),
+                        FTSkeletonLine(height: 12, widthFactor: 0.8),
+                      ],
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

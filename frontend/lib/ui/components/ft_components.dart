@@ -6,11 +6,13 @@ export 'ft_empty_state.dart';
 export 'ft_input.dart';
 export 'ft_scaffold.dart';
 export 'ft_skeleton.dart';
+export 'ft_skeletons.dart';
 export 'ft_tile.dart';
 export 'ft_toast.dart';
 
 import 'package:flutter/material.dart';
 
+import '../design/ft_tokens.dart';
 import '../foundation/app_tokens.dart';
 import '../foundation/app_typography.dart';
 import 'ft_button.dart';
@@ -42,23 +44,27 @@ class FTSectionHeader extends StatelessWidget {
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.sectionTitle(context),
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               if ((subtitle ?? '').trim().isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: AppTokens.s4),
+                  padding: const EdgeInsets.only(top: FTDesignTokens.xs / 2),
                   child: Text(
                     subtitle!,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.meta(context),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ),
             ],
           ),
         ),
         if (trailing != null) ...[
-          const SizedBox(width: AppTokens.s8),
+          const SizedBox(width: FTDesignTokens.xs),
           Flexible(
             fit: FlexFit.loose,
             child: Align(
@@ -96,15 +102,19 @@ class FTResponsiveTitleAction extends StatelessWidget {
           title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: AppTypography.cardTitle(context),
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w600),
         ),
         if ((subtitle ?? '').trim().isNotEmpty) ...[
-          const SizedBox(height: AppTokens.s4),
+          const SizedBox(height: FTDesignTokens.xs / 2),
           Text(
             subtitle!,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.meta(context),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
       ],
@@ -122,7 +132,7 @@ class FTResponsiveTitleAction extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               textContent,
-              const SizedBox(height: AppTokens.s8),
+              const SizedBox(height: FTDesignTokens.xs),
               action!,
             ],
           );
@@ -131,7 +141,7 @@ class FTResponsiveTitleAction extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: textContent),
-            const SizedBox(width: AppTokens.s12),
+            const SizedBox(width: FTDesignTokens.sm),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 220),
               child: action!,
@@ -194,12 +204,12 @@ class FTSectionContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FTCard(
-      padding: padding ?? const EdgeInsets.all(AppTokens.s16),
+      padding: padding ?? const EdgeInsets.all(FTDesignTokens.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FTSectionHeader(title: title, subtitle: subtitle, trailing: trailing),
-          const SizedBox(height: AppTokens.s12),
+          const SizedBox(height: FTDesignTokens.sm),
           child,
         ],
       ),
@@ -241,11 +251,11 @@ class FTMetricTile extends StatelessWidget {
                 Icon(icon, size: 16, color: color ?? scheme.primary),
             ],
           ),
-          const SizedBox(height: AppTokens.s8),
+          const SizedBox(height: FTDesignTokens.xs),
           Text(value, style: AppTypography.price(context)),
           if ((subtitle ?? '').trim().isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: AppTokens.s4),
+              padding: const EdgeInsets.only(top: FTDesignTokens.xs / 2),
               child: Text(subtitle!, style: AppTypography.meta(context)),
             ),
         ],
@@ -322,13 +332,46 @@ class FTPrimaryCtaRow extends StatelessWidget {
           child: FTPrimaryButton(label: primaryLabel, onPressed: onPrimary),
         ),
         if (secondaryLabel != null && onSecondary != null) ...[
-          const SizedBox(width: AppTokens.s12),
+          const SizedBox(width: FTDesignTokens.sm),
           Expanded(
             child: FTSecondaryButton(
                 label: secondaryLabel!, onPressed: onSecondary),
           ),
         ],
       ],
+    );
+  }
+}
+
+class FTSectionTextAction extends StatelessWidget {
+  const FTSectionTextAction({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 40),
+        padding: const EdgeInsets.symmetric(
+          horizontal: FTDesignTokens.xs,
+          vertical: FTDesignTokens.xs / 2,
+        ),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
+            ?.copyWith(fontWeight: FontWeight.w700),
+      ),
     );
   }
 }

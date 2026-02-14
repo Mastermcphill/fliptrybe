@@ -4,7 +4,10 @@ import '../constants/ng_states.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/auth_navigation.dart';
 import '../utils/formatters.dart';
+import '../utils/ui_feedback.dart';
+import 'admin_autopilot_screen.dart';
 
 class AdminMarketplaceScreen extends StatefulWidget {
   const AdminMarketplaceScreen({super.key});
@@ -65,11 +68,21 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
         _loading = false;
       });
     } catch (e) {
+      if (UIFeedback.shouldForceLogoutOn401(e)) {
+        if (mounted) {
+          UIFeedback.showErrorSnack(
+              context, 'Session expired, please sign in again.');
+        }
+        await logoutToLanding(context);
+        return;
+      }
+      final errorMessage = UIFeedback.mapDioErrorToMessage(e);
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Failed to load admin marketplace: $e';
+        _error = errorMessage;
       });
+      UIFeedback.showErrorSnack(context, errorMessage);
     }
   }
 
@@ -215,17 +228,23 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
               loadingState: ListView(
                 padding: const EdgeInsets.all(16),
                 children: const [
-                  FTListCardSkeleton(),
-                  SizedBox(height: 10),
-                  FTListCardSkeleton(),
-                  SizedBox(height: 10),
-                  FTListCardSkeleton(),
+                  FTSkeletonCard(height: 92),
+                  FTSkeletonCard(height: 92),
+                  FTSkeletonCard(height: 92)
                 ],
               ),
-              emptyState: const FTEmptyState(
+              emptyState: FTEmptyState(
                 icon: Icons.storefront_outlined,
                 title: 'No listings found',
                 subtitle: 'Adjust search text or filters and try again.',
+                primaryCtaText: 'Refresh',
+                onPrimaryCta: _load,
+                secondaryCtaText: 'Go to Settings',
+                onSecondaryCta: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AdminAutopilotScreen(),
+                  ),
+                ),
               ),
               child: ListView.separated(
                 itemCount: _items.length,
