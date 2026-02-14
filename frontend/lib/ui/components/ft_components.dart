@@ -1,4 +1,4 @@
-﻿export 'ft_app_bar.dart';
+export 'ft_app_bar.dart';
 export 'ft_badge.dart';
 export 'ft_button.dart';
 export 'ft_card.dart';
@@ -38,16 +38,35 @@ class FTSectionHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: AppTypography.sectionTitle(context)),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.sectionTitle(context),
+              ),
               if ((subtitle ?? '').trim().isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.s4),
-                  child: Text(subtitle!, style: AppTypography.meta(context)),
+                  child: Text(
+                    subtitle!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.meta(context),
+                  ),
                 ),
             ],
           ),
         ),
-        if (trailing != null) trailing!,
+        if (trailing != null) ...[
+          const SizedBox(width: AppTokens.s8),
+          Flexible(
+            fit: FlexFit.loose,
+            child: Align(
+              alignment: Alignment.topRight,
+              child: trailing!,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -73,10 +92,20 @@ class FTResponsiveTitleAction extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(title, style: AppTypography.cardTitle(context)),
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.cardTitle(context),
+        ),
         if ((subtitle ?? '').trim().isNotEmpty) ...[
           const SizedBox(height: AppTokens.s4),
-          Text(subtitle!, style: AppTypography.meta(context)),
+          Text(
+            subtitle!,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.meta(context),
+          ),
         ],
       ],
     );
@@ -204,7 +233,9 @@ class FTMetricTile extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(label, style: AppTypography.meta(context).copyWith(fontWeight: FontWeight.w600)),
+                child: Text(label,
+                    style: AppTypography.meta(context)
+                        .copyWith(fontWeight: FontWeight.w600)),
               ),
               if (icon != null)
                 Icon(icon, size: 16, color: color ?? scheme.primary),
@@ -293,7 +324,8 @@ class FTPrimaryCtaRow extends StatelessWidget {
         if (secondaryLabel != null && onSecondary != null) ...[
           const SizedBox(width: AppTokens.s12),
           Expanded(
-            child: FTSecondaryButton(label: secondaryLabel!, onPressed: onSecondary),
+            child: FTSecondaryButton(
+                label: secondaryLabel!, onPressed: onSecondary),
           ),
         ],
       ],

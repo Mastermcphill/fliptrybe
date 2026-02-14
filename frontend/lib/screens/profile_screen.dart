@@ -448,6 +448,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 builder: (_) =>
                                     EmailVerifyScreen(initialEmail: email)));
                       }),
+                      _buildMenuItem(Icons.palette_outlined, "Appearance",
+                          onTap: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const SettingsDemoScreen()));
+                      }),
 
                       const SizedBox(height: 20),
 

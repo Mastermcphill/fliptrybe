@@ -54,7 +54,9 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     final status = (res['status'] ?? '').toString().trim().toLowerCase();
     if (status == 'pending' || status == 'pending_approval') return true;
     final message = (res['message'] ?? '').toString().toLowerCase();
-    if (message.contains('pending') || message.contains('admin-mediated') || message.contains('admin approval')) {
+    if (message.contains('pending') ||
+        message.contains('admin-mediated') ||
+        message.contains('admin approval')) {
       return true;
     }
     return false;
@@ -149,11 +151,13 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
       }
 
       if (kDebugMode) {
-        final keys = payload.keys.where((k) => k.toLowerCase() != "password").toList();
+        final keys =
+            payload.keys.where((k) => k.toLowerCase() != "password").toList();
         debugPrint("Signup payload keys: $keys role=$_role path=$path");
       }
 
-      final res = await ApiClient.instance.postJson(ApiConfig.api(path), payload);
+      final res =
+          await ApiClient.instance.postJson(ApiConfig.api(path), payload);
 
       if (res is Map) {
         final token = (res["token"] ?? "").toString();
@@ -167,7 +171,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           if (!mounted) return;
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => PendingApprovalScreen(role: _role)),
+            MaterialPageRoute(
+                builder: (_) => PendingApprovalScreen(role: _role)),
           );
           return;
         }
@@ -202,18 +207,19 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     bool primary = false,
     String? badge,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     final selected = _role == value;
     final double cardPadding = _compact ? 14 : 16;
     final borderColor = selected
-        ? Colors.black
+        ? scheme.primary
         : primary
-            ? const Color(0xFF0F172A)
-            : const Color(0xFFE5E7EB);
+            ? scheme.outline
+            : scheme.outlineVariant;
     final bg = selected
-        ? const Color(0xFF0B1220)
+        ? scheme.primaryContainer
         : primary
-            ? const Color(0xFFF8FAFC)
-            : Colors.white;
+            ? scheme.surfaceContainerLow
+            : scheme.surface;
     return InkWell(
       onTap: _loading ? null : () => setState(() => _role = value),
       borderRadius: BorderRadius.circular(primary ? 18 : 16),
@@ -226,7 +232,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
+                    color: scheme.shadow.withValues(alpha: 0.12),
                     blurRadius: 18,
                     offset: const Offset(0, 10),
                   )
@@ -239,10 +245,17 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               width: primary ? (_compact ? 42 : 48) : (_compact ? 40 : 44),
               height: primary ? (_compact ? 42 : 48) : (_compact ? 40 : 44),
               decoration: BoxDecoration(
-                color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFF3F4F6),
+                color: selected
+                    ? scheme.primary.withValues(alpha: 0.18)
+                    : scheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: selected ? Colors.white : const Color(0xFF0F172A)),
+              child: Icon(
+                icon,
+                color: selected
+                    ? scheme.onPrimaryContainer
+                    : scheme.onSecondaryContainer,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -253,7 +266,9 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                     title,
                     style: TextStyle(
                       fontWeight: FontWeight.w900,
-                      color: selected ? Colors.white : const Color(0xFF0F172A),
+                      color: selected
+                          ? scheme.onPrimaryContainer
+                          : scheme.onSurface,
                       fontSize: _compact ? 14.5 : 16,
                     ),
                   ),
@@ -262,7 +277,9 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                     subtitle,
                     style: TextStyle(
                       height: 1.25,
-                      color: selected ? Colors.white.withOpacity(0.9) : const Color(0xFF475569),
+                      color: selected
+                          ? scheme.onPrimaryContainer.withValues(alpha: 0.92)
+                          : scheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
                       fontSize: _compact ? 11.5 : 12.5,
                     ),
@@ -272,15 +289,20 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                     children: [
                       if (badge != null && badge.trim().isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFE2E8F0),
+                            color: selected
+                                ? scheme.primary.withValues(alpha: 0.18)
+                                : scheme.tertiaryContainer,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
                             badge,
                             style: TextStyle(
-                              color: selected ? Colors.white : const Color(0xFF0F172A),
+                              color: selected
+                                  ? scheme.onPrimaryContainer
+                                  : scheme.onTertiaryContainer,
                               fontSize: _compact ? 10 : 11,
                               fontWeight: FontWeight.w700,
                             ),
@@ -290,7 +312,10 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                       Text(
                         "Tap to continue",
                         style: TextStyle(
-                          color: selected ? Colors.white.withOpacity(0.9) : const Color(0xFF1D4ED8),
+                          color: selected
+                              ? scheme.onPrimaryContainer
+                                  .withValues(alpha: 0.92)
+                              : scheme.primary,
                           fontWeight: FontWeight.w700,
                           fontSize: _compact ? 10.5 : 11.5,
                         ),
@@ -304,13 +329,17 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: selected ? Colors.white.withOpacity(0.12) : const Color(0xFFE2E8F0),
+                  color: selected
+                      ? scheme.primary.withValues(alpha: 0.18)
+                      : scheme.tertiaryContainer,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   "Recommended",
                   style: TextStyle(
-                    color: selected ? Colors.white : const Color(0xFF0F172A),
+                    color: selected
+                        ? scheme.onPrimaryContainer
+                        : scheme.onTertiaryContainer,
                     fontSize: _compact ? 10 : 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -322,7 +351,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label, {TextInputType? keyboard}) {
+  Widget _field(TextEditingController c, String label,
+      {TextInputType? keyboard}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
@@ -350,7 +380,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           labelText: 'State',
         ),
         items: nigeriaStates
-            .map((s) => DropdownMenuItem<String>(value: s, child: Text(displayState(s))))
+            .map((s) => DropdownMenuItem<String>(
+                value: s, child: Text(displayState(s))))
             .toList(),
         onChanged: _loading
             ? null
@@ -383,6 +414,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
   @override
   Widget build(BuildContext context) {
     _compact = MediaQuery.of(context).size.width < 360;
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text("Choose your path")),
       body: SafeArea(
@@ -401,14 +433,17 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               const SizedBox(height: 6),
               Text(
                 "Pick how you want to use FlipTrybe. You can upgrade roles later, but this helps us set you up right from day one.",
-                style: TextStyle(color: Colors.black.withOpacity(0.65), height: 1.35),
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  height: 1.35,
+                ),
               ),
               const SizedBox(height: 14),
-
               _roleCard(
                 value: "buyer",
                 title: "Buy & Sell",
-                subtitle: "Buy and sell, track orders, and chat admin for support.",
+                subtitle:
+                    "Buy and sell, track orders, and chat admin for support.",
                 icon: Icons.shopping_bag_rounded,
                 primary: true,
               ),
@@ -416,7 +451,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               _roleCard(
                 value: "merchant",
                 title: "Merchant",
-                subtitle: "List products and manage sales. Verified email required for sensitive actions.",
+                subtitle:
+                    "List products and manage sales. Verified email required for sensitive actions.",
                 icon: Icons.storefront_rounded,
                 badge: "Requires admin approval",
               ),
@@ -424,7 +460,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               _roleCard(
                 value: "driver",
                 title: "Driver",
-                subtitle: "Accept delivery jobs and complete pickup/dropoff code confirmations.",
+                subtitle:
+                    "Accept delivery jobs and complete pickup/dropoff code confirmations.",
                 icon: Icons.delivery_dining_rounded,
                 badge: "Requires admin approval",
               ),
@@ -432,50 +469,49 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               _roleCard(
                 value: "inspector",
                 title: "Inspector",
-                subtitle: "Handle inspection tickets and submit inspection outcomes.",
+                subtitle:
+                    "Handle inspection tickets and submit inspection outcomes.",
                 icon: Icons.verified_user_rounded,
                 badge: "Requires admin approval",
               ),
-
               const Divider(height: 28),
-
               _field(_name, "Full name"),
               _field(_email, "Email", keyboard: TextInputType.emailAddress),
               _field(_password, "Password"),
               _field(_phone, "Phone", keyboard: TextInputType.phone),
-
-              if (_role == "merchant" || _role == "driver" || _role == "inspector") ...[
+              if (_role == "merchant" ||
+                  _role == "driver" ||
+                  _role == "inspector") ...[
                 const SizedBox(height: 6),
                 _stateDropdown(),
                 _field(_city, "City"),
               ],
-
               if (_role == "merchant") ...[
                 const Divider(height: 28),
                 _field(_business, "Business name"),
                 _field(_category, "Category"),
                 _field(_reason, "Why do you want a merchant account?"),
               ],
-
               if (_role == "driver") ...[
                 const Divider(height: 28),
                 _field(_vehicle, "Vehicle type"),
                 _field(_plate, "Plate number"),
               ],
-
               if (_role == "inspector") ...[
                 const Divider(height: 28),
                 _field(_region, "Region (optional)"),
                 _field(_inspectorReason, "Why do you want to be an inspector?"),
               ],
-
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: _loading ? null : _signup,
                   icon: _loading
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.lock_rounded),
                   label: Text(_loading ? "Creating..." : "Create account"),
                 ),
@@ -485,7 +521,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                 _role == "buyer"
                     ? "Tip: You can start buying and selling instantly."
                     : "Note: ${_role.toUpperCase()} activation is reviewed for safety. You'll still have access to Buy & Sell while we verify you.",
-                style: TextStyle(color: Colors.black.withOpacity(0.6)),
+                style: TextStyle(color: scheme.onSurfaceVariant),
               ),
             ],
           ),

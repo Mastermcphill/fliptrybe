@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../screens/login_screen.dart';
 import '../screens/marketplace_screen.dart';
 import '../screens/role_signup_screen.dart';
+import '../screens/settings_demo_screen.dart';
 import '../screens/shortlet_screen.dart';
 
 class PublicBrowseShell extends StatefulWidget {
@@ -100,6 +101,7 @@ class _PublicHome extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Browse FlipTrybe')),
       body: ListView(
@@ -108,19 +110,24 @@ class _PublicHome extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: scheme.primaryContainer,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Declutter + Shortlet',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: scheme.onPrimaryContainer,
+                  ),
                 ),
                 SizedBox(height: 6),
                 Text(
                   'Browse listings and stays immediately. Login is only required when you want to transact.',
+                  style: TextStyle(color: scheme.onPrimaryContainer),
                 ),
               ],
             ),
@@ -160,6 +167,7 @@ class _EntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
@@ -167,14 +175,15 @@ class _EntryTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          color: scheme.surfaceContainerLow,
+          border: Border.all(color: scheme.outlineVariant),
         ),
         child: Row(
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: const Color(0xFFF1F5F9),
-              child: Icon(icon, color: const Color(0xFF0F172A)),
+              backgroundColor: scheme.secondaryContainer,
+              child: Icon(icon, color: scheme.onSecondaryContainer),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -182,14 +191,19 @@ class _EntryTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 16)),
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: scheme.onSurface)),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(color: Colors.black54)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right),
+            Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
           ],
         ),
       ),
@@ -202,6 +216,7 @@ class _GuestAccountTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Account')),
       body: Center(
@@ -210,6 +225,7 @@ class _GuestAccountTab extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Card(
+              color: scheme.surfaceContainerLow,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -225,6 +241,19 @@ class _GuestAccountTab extends StatelessWidget {
                     const Text(
                       'Browse is open. Login or create an account to buy, sell, book shortlets, and manage wallet actions.',
                       textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const SettingsDemoScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.palette_outlined),
+                        label: const Text('Appearance'),
+                      ),
                     ),
                     const SizedBox(height: 14),
                     SizedBox(

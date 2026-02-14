@@ -5,6 +5,8 @@ import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/ft_components.dart';
 import '../ui/foundation/app_tokens.dart';
 import 'admin_manual_payments_screen.dart';
+import 'settings_demo_screen.dart';
+import '../utils/auth_navigation.dart';
 
 class AdminAutopilotScreen extends StatefulWidget {
   const AdminAutopilotScreen({super.key});
@@ -37,6 +39,7 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   bool _legacyFallback = false;
   bool _otelEnabled = false;
   bool _rateLimitEnabled = true;
+  bool _signingOut = false;
 
   @override
   void initState() {
@@ -83,9 +86,11 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
               settings['integrations_mode'] ??
               "disabled")
           .toString();
-      _paymentsMode =
-          (payModeSettings['mode'] ?? paySettings['mode'] ?? settings['payments_mode'] ?? "mock")
-              .toString();
+      _paymentsMode = (payModeSettings['mode'] ??
+              paySettings['mode'] ??
+              settings['payments_mode'] ??
+              "mock")
+          .toString();
       _paystackEnabled = (integrations['paystack_enabled'] ??
               settings['paystack_enabled'] ??
               false) ==
@@ -98,14 +103,21 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
               settings['termii_enabled_wa'] ??
               false) ==
           true;
-      _searchV2Mode =
-          (featureFlags['search_v2_mode'] ?? settings['search_v2_mode'] ?? 'off')
-              .toString();
-      _legacyFallback =
-          (featureFlags['payments_allow_legacy_fallback'] ?? settings['payments_allow_legacy_fallback'] ?? false) == true;
-      _otelEnabled = (featureFlags['otel_enabled'] ?? settings['otel_enabled'] ?? false) == true;
-      _rateLimitEnabled =
-          (featureFlags['rate_limit_enabled'] ?? settings['rate_limit_enabled'] ?? true) == true;
+      _searchV2Mode = (featureFlags['search_v2_mode'] ??
+              settings['search_v2_mode'] ??
+              'off')
+          .toString();
+      _legacyFallback = (featureFlags['payments_allow_legacy_fallback'] ??
+              settings['payments_allow_legacy_fallback'] ??
+              false) ==
+          true;
+      _otelEnabled =
+          (featureFlags['otel_enabled'] ?? settings['otel_enabled'] ?? false) ==
+              true;
+      _rateLimitEnabled = (featureFlags['rate_limit_enabled'] ??
+              settings['rate_limit_enabled'] ??
+              true) ==
+          true;
       _health = health;
       _paymentsSettings = paySettings;
       _manualBankNameCtrl.text =
@@ -198,6 +210,20 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                   .toString())),
     );
     await _load();
+  }
+
+  Future<void> _openAppearance() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SettingsDemoScreen()),
+    );
+  }
+
+  Future<void> _signOut() async {
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
+    await logoutToLanding(context);
+    if (!mounted) return;
+    setState(() => _signingOut = false);
   }
 
   Widget _kv(String k, String v) {
@@ -433,18 +459,23 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                 DropdownButtonFormField<String>(
                   value: _searchV2Mode,
                   items: const [
-                    DropdownMenuItem(value: "off", child: Text("search_v2 off")),
-                    DropdownMenuItem(value: "shadow", child: Text("search_v2 shadow")),
+                    DropdownMenuItem(
+                        value: "off", child: Text("search_v2 off")),
+                    DropdownMenuItem(
+                        value: "shadow", child: Text("search_v2 shadow")),
                     DropdownMenuItem(value: "on", child: Text("search_v2 on")),
                   ],
                   decoration: const InputDecoration(
-                      border: OutlineInputBorder(), labelText: "Search V2 mode"),
-                  onChanged: (v) => setState(() => _searchV2Mode = (v ?? "off")),
+                      border: OutlineInputBorder(),
+                      labelText: "Search V2 mode"),
+                  onChanged: (v) =>
+                      setState(() => _searchV2Mode = (v ?? "off")),
                 ),
                 SwitchListTile(
                   value: _legacyFallback,
                   title: const Text("Allow legacy webhook fallback"),
-                  subtitle: const Text("Enable legacy metadata credit path when intent is missing"),
+                  subtitle: const Text(
+                      "Enable legacy metadata credit path when intent is missing"),
                   onChanged: (v) => setState(() => _legacyFallback = v),
                 ),
                 SwitchListTile(
@@ -483,6 +514,26 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                   _kv("Queue", (_lastTick['queue'] ?? '').toString()),
                   _kv("Drivers", (_lastTick['drivers'] ?? '').toString()),
                 ],
+                const SizedBox(height: 16),
+                FTSectionContainer(
+                  title: 'Appearance',
+                  subtitle: 'Theme mode and background palette',
+                  child: FTButton(
+                    label: 'Open appearance settings',
+                    icon: Icons.palette_outlined,
+                    variant: FTButtonVariant.secondary,
+                    onPressed: _openAppearance,
+                    expand: true,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FTButton(
+                  label: _signingOut ? 'Signing out...' : 'Sign out',
+                  icon: Icons.logout,
+                  variant: FTButtonVariant.destructive,
+                  onPressed: _signingOut ? null : _signOut,
+                  expand: true,
+                ),
               ],
             ),
     );

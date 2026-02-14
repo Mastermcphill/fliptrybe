@@ -75,9 +75,11 @@ class _ShortletScreenState extends State<ShortletScreen> {
   }
 
   Future<void> _pickCity() async {
+    final scheme = Theme.of(context).colorScheme;
     final selected = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: scheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -106,13 +108,11 @@ class _ShortletScreenState extends State<ShortletScreen> {
                       subtitle: Text(
                           'Shortlet recommendations prioritize your city first'),
                     ),
-                    TextField(
+                    FTInput(
                       controller: ctrl,
                       onChanged: (_) => setModal(() {}),
-                      decoration: const InputDecoration(
-                        hintText: 'Search city',
-                        prefixIcon: Icon(Icons.search),
-                      ),
+                      hint: 'Search city',
+                      prefixIcon: Icons.search,
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -124,8 +124,11 @@ class _ShortletScreenState extends State<ShortletScreen> {
                           return ListTile(
                             title: Text(city),
                             trailing: city == _selectedCity
-                                ? const Icon(Icons.check_circle,
-                                    color: Colors.green)
+                                ? Icon(
+                                    Icons.check_circle,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  )
                                 : null,
                             onTap: () => Navigator.of(ctx).pop(city),
                           );
@@ -171,6 +174,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final rows = _filtered();
     return FTScaffold(
       title: 'Haven Shortlets',
@@ -190,13 +194,11 @@ class _ShortletScreenState extends State<ShortletScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                       child: Column(
                         children: [
-                          TextField(
+                          FTInput(
                             controller: _searchCtrl,
                             onChanged: (_) => setState(() {}),
-                            decoration: const InputDecoration(
-                              hintText: 'Search by title or city',
-                              prefixIcon: Icon(Icons.search),
-                            ),
+                            hint: 'Search by title or city',
+                            prefixIcon: Icons.search,
                           ),
                           const SizedBox(height: 10),
                           FTCard(
@@ -290,10 +292,11 @@ class _ShortletScreenState extends State<ShortletScreen> {
                                                       row['nightly_price'] ??
                                                           row['price'],
                                                       decimals: 0),
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w900,
-                                                      fontSize: 17),
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 17,
+                                                    color: scheme.onSurface,
+                                                  ),
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
@@ -302,16 +305,19 @@ class _ShortletScreenState extends State<ShortletScreen> {
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.w800),
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w800,
+                                                    color: scheme.onSurface,
+                                                  ),
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
                                                   _location(row),
-                                                  style: const TextStyle(
-                                                      fontSize: 12,
-                                                      color: Colors.black54),
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color:
+                                                        scheme.onSurfaceVariant,
+                                                  ),
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Wrap(
@@ -319,14 +325,20 @@ class _ShortletScreenState extends State<ShortletScreen> {
                                                   runSpacing: 6,
                                                   children: [
                                                     FTPill(
-                                                        text: '$views views',
-                                                        bgColor: const Color(
-                                                            0xFFF1F5F9)),
+                                                      text: '$views views',
+                                                      bgColor: scheme
+                                                          .secondaryContainer,
+                                                      textColor: scheme
+                                                          .onSecondaryContainer,
+                                                    ),
                                                     FTPill(
-                                                        text:
-                                                            '$watching watching',
-                                                        bgColor: const Color(
-                                                            0xFFFFF1F2)),
+                                                      text:
+                                                          '$watching watching',
+                                                      bgColor: scheme
+                                                          .tertiaryContainer,
+                                                      textColor: scheme
+                                                          .onTertiaryContainer,
+                                                    ),
                                                     if (heatLevel == 'hot' ||
                                                         heatLevel == 'hotter')
                                                       FTPill(
@@ -336,10 +348,16 @@ class _ShortletScreenState extends State<ShortletScreen> {
                                                             : 'Hot',
                                                         bgColor: heatLevel ==
                                                                 'hotter'
-                                                            ? const Color(
-                                                                0xFFFFEDD5)
-                                                            : const Color(
-                                                                0xFFFEF3C7),
+                                                            ? scheme
+                                                                .errorContainer
+                                                            : scheme
+                                                                .primaryContainer,
+                                                        textColor: heatLevel ==
+                                                                'hotter'
+                                                            ? scheme
+                                                                .onErrorContainer
+                                                            : scheme
+                                                                .onPrimaryContainer,
                                                       ),
                                                   ],
                                                 ),

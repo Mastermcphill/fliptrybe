@@ -1,5 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
+import '../../screens/settings_demo_screen.dart';
+import '../../utils/auth_navigation.dart';
 import '../components/ft_app_bar.dart';
 import '../foundation/app_tokens.dart';
 
@@ -24,6 +26,23 @@ class AdminScaffold extends StatelessWidget {
   final VoidCallback? onRefresh;
   final EdgeInsetsGeometry? padding;
 
+  Future<void> _handleMenuAction(
+    BuildContext context,
+    _AdminMenuAction action,
+  ) async {
+    if (!context.mounted) return;
+    switch (action) {
+      case _AdminMenuAction.appearance:
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const SettingsDemoScreen()),
+        );
+        return;
+      case _AdminMenuAction.signOut:
+        await logoutToLanding(context);
+        return;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -39,6 +58,29 @@ class AdminScaffold extends StatelessWidget {
               icon: const Icon(Icons.refresh),
             ),
           ...?actions,
+          PopupMenuButton<_AdminMenuAction>(
+            tooltip: 'Admin menu',
+            onSelected: (value) => _handleMenuAction(context, value),
+            itemBuilder: (context) => [
+              const PopupMenuItem<_AdminMenuAction>(
+                value: _AdminMenuAction.appearance,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.palette_outlined),
+                  title: Text('Appearance'),
+                ),
+              ),
+              PopupMenuItem<_AdminMenuAction>(
+                value: _AdminMenuAction.signOut,
+                child: ListTile(
+                  dense: true,
+                  leading: Icon(Icons.logout, color: scheme.error),
+                  title:
+                      Text('Sign out', style: TextStyle(color: scheme.error)),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       body: Container(
@@ -57,3 +99,5 @@ class AdminScaffold extends StatelessWidget {
     );
   }
 }
+
+enum _AdminMenuAction { appearance, signOut }

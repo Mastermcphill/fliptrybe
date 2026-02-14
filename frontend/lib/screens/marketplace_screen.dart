@@ -6,7 +6,6 @@ import '../services/city_preference_service.dart';
 import '../services/marketplace_prefs_service.dart';
 import '../services/auth_gate_service.dart';
 import '../ui/components/ft_components.dart';
-import '../ui/theme/ft_tokens.dart';
 import '../widgets/listing/listing_card.dart';
 import 'cart_screen.dart';
 import 'create_listing_screen.dart';
@@ -174,7 +173,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           return ListTile(
                             title: Text(city),
                             trailing: isCurrent
-                                ? Icon(Icons.check_circle, color: scheme.primary)
+                                ? Icon(Icons.check_circle,
+                                    color: scheme.primary)
                                 : null,
                             onTap: () => Navigator.of(ctx).pop(city),
                           );
@@ -266,6 +266,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final recommended = _catalog.recommended(_all, limit: 10);
     final recommendedItems =
         _recommendedRemote.isNotEmpty ? _recommendedRemote : recommended;
@@ -326,28 +327,53 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         pinned: true,
                         floating: true,
                         toolbarHeight: 72,
-                        backgroundColor: FTTokens.bg,
-                        surfaceTintColor: FTTokens.bg,
+                        backgroundColor: scheme.surface,
+                        surfaceTintColor: scheme.surface,
                         elevation: 0,
-                        titleSpacing: 16,
-                        title: TextField(
-                          controller: _searchCtrl,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (value) => _openResults(query: value),
-                          decoration: InputDecoration(
-                            hintText: 'Search marketplace',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.tune),
-                              tooltip: 'Open filters',
-                              onPressed: () =>
-                                  _openResults(query: _searchCtrl.text),
+                        titleSpacing: 0,
+                        title: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (value) => _openResults(query: value),
+                            style: TextStyle(color: scheme.onSurface),
+                            decoration: InputDecoration(
+                              hintText: 'Search marketplace',
+                              hintStyle:
+                                  TextStyle(color: scheme.onSurfaceVariant),
+                              prefixIcon: Icon(Icons.search,
+                                  color: scheme.onSurfaceVariant),
+                              suffixIcon: IconButton(
+                                icon: Icon(Icons.tune,
+                                    color: scheme.onSurfaceVariant),
+                                tooltip: 'Open filters',
+                                onPressed: () =>
+                                    _openResults(query: _searchCtrl.text),
+                              ),
+                              filled: true,
+                              fillColor: scheme.surfaceContainerHigh,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide:
+                                    BorderSide(color: scheme.outlineVariant),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide:
+                                    BorderSide(color: scheme.outlineVariant),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide(color: scheme.primary),
+                              ),
                             ),
                           ),
                         ),
                       ),
                       SliverToBoxAdapter(
-                        child: Padding(
+                        child: Container(
+                          color: scheme.surface,
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
                           child: Column(
                             children: [
@@ -377,7 +403,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               _section(
                                 context,
                                 title: 'Trending near you',
-                                subtitle: 'Heat-ranked listings with strong demand',
+                                subtitle:
+                                    'Heat-ranked listings with strong demand',
                                 items: trending,
                                 seeAllSort: 'distance',
                               ),
@@ -393,7 +420,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               _section(
                                 context,
                                 title: 'Hot Deals',
-                                subtitle: 'Price-friendly picks and active offers',
+                                subtitle:
+                                    'Price-friendly picks and active offers',
                                 items: dealsItems,
                                 seeAllSort: 'price_low',
                               ),
