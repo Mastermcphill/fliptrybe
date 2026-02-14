@@ -22,6 +22,8 @@ import 'admin_system_health_screen.dart';
 import 'admin_feature_flags_screen.dart';
 import 'admin_growth_analytics_screen.dart';
 import 'investor_metrics_screen.dart';
+import 'admin_commission_engine_screen.dart';
+import 'admin_liquidity_lab_screen.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/ft_routes.dart';
 import '../ui/admin/admin_scaffold.dart';
@@ -231,6 +233,18 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             subtitle:
                 const Text('GMV, commissions, growth trend and projections'),
             onTap: () => _open(const AdminGrowthAnalyticsScreen()),
+          ),
+          FTTile(
+            leading: const Icon(Icons.tune_outlined),
+            title: const Text('Commission Engine'),
+            subtitle: const Text('Versioned commission policies and preview'),
+            onTap: () => _open(const AdminCommissionEngineScreen()),
+          ),
+          FTTile(
+            leading: const Icon(Icons.waterfall_chart_outlined),
+            title: const Text('Liquidity Lab'),
+            subtitle: const Text('Stress test platform liquidity and runway'),
+            onTap: () => _open(const AdminLiquidityLabScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.stacked_line_chart_outlined),

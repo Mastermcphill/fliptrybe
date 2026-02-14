@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from app.extensions import db
 from app.models.shortlet import Shortlet, ShortletBooking
-from app.utils.commission import compute_commission, RATES
+from app.services.commission_policy_service import compute_fee_minor
 from app.utils.receipts import create_receipt
 from app.utils.notify import queue_in_app, queue_sms, queue_whatsapp, mark_sent
 from app.utils.wallets import post_txn
@@ -71,6 +71,21 @@ def _platform_user_id() -> int:
     except Exception:
         pass
     return 1
+
+
+def _seller_type(owner_id: int | None) -> str:
+    if not owner_id:
+        return "all"
+    try:
+        user = db.session.get(User, int(owner_id))
+    except Exception:
+        user = None
+    role = (getattr(user, "role", None) or "").strip().lower()
+    if role == "merchant":
+        return "merchant"
+    if role:
+        return "user"
+    return "all"
 
 
 def _payments_mode(settings) -> str:
@@ -870,7 +885,15 @@ def book_shortlet(shortlet_id: int):
     if base_price <= 0.0:
         base_price = float(shortlet.nightly_price or 0.0)
     subtotal = float(base_price) * float(nights) + float(shortlet.cleaning_fee or 0.0)
-    platform_fee = compute_commission(subtotal, RATES.get("shortlet_booking", 0.05))
+    seller_type = _seller_type(getattr(shortlet, "owner_id", None))
+    fee_result = compute_fee_minor(
+        amount_minor=int(_to_minor(subtotal)),
+        applies_to="shortlet",
+        seller_type=seller_type,
+        city=(getattr(shortlet, "city", None) or ""),
+    )
+    policy_meta = fee_result.get("policy") if isinstance(fee_result.get("policy"), dict) else {}
+    platform_fee = _from_minor(int(fee_result.get("fee_minor") or 0))
     total = float(subtotal) + float(platform_fee)
     total_minor = _to_minor(total)
     payment_method = str(payload.get("payment_method") or "wallet").strip().lower()
@@ -892,7 +915,11 @@ def book_shortlet(shortlet_id: int):
         fee=platform_fee,
         total=total,
         description="Shortlet booking receipt (demo)",
-        meta={"shortlet_id": shortlet_id, "nights": nights},
+        meta={
+            "shortlet_id": shortlet_id,
+            "nights": nights,
+            "commission_policy": policy_meta,
+        },
     )
 
 
@@ -968,6 +995,7 @@ def book_shortlet(shortlet_id: int):
                         "booking_id": int(b.id),
                         "shortlet_id": int(shortlet_id),
                         "payment_method": "bank_transfer_manual",
+                        "commission_policy": policy_meta,
                         "order_ids": [],
                         "order_id": None,
                     }
@@ -1028,6 +1056,7 @@ def book_shortlet(shortlet_id: int):
                     "booking_id": int(b.id),
                     "shortlet_id": int(shortlet_id),
                     "payment_method": payment_method,
+                    "commission_policy": policy_meta,
                     "order_ids": [],
                     "order_id": None,
                 }

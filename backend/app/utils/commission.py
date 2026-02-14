@@ -70,6 +70,8 @@ def compute_order_commissions_minor(
     delivery_minor: int,
     inspection_minor: int,
     is_top_tier: bool,
+    seller_type: str = "all",
+    city: str = "",
 ) -> dict:
     kind = (sale_kind or "declutter").strip().lower()
     if kind not in ("declutter", "shortlet"):
@@ -80,10 +82,49 @@ def compute_order_commissions_minor(
     inspection_minor = _clamp_minor(inspection_minor)
     is_top_tier_flag = bool(is_top_tier)
 
-    sale_bps = SALE_FEE_BPS_SHORTLET if kind == "shortlet" else SALE_FEE_BPS_DECLUTTER
+    default_bps = SALE_FEE_BPS_SHORTLET if kind == "shortlet" else SALE_FEE_BPS_DECLUTTER
     sale_rule = SALE_RULE_SHORTLET_500_BPS if kind == "shortlet" else SALE_RULE_DECLUTTER_500_BPS
+    policy_context = {
+        "policy_id": None,
+        "policy_name": "default",
+        "rule_id": None,
+        "base_rate_bps": int(default_bps),
+        "promo_discount_bps": 0,
+        "effective_rate_bps": int(default_bps),
+        "min_fee_minor": None,
+        "max_fee_minor": None,
+        "source": "default",
+    }
+    try:
+        from app.services.commission_policy_service import compute_fee_minor
 
-    sale_fee_minor = _bps_minor_half_up(sale_charge_minor, sale_bps)
+        resolved = compute_fee_minor(
+            amount_minor=int(sale_charge_minor),
+            applies_to=kind,
+            seller_type=(seller_type or "all"),
+            city=(city or ""),
+        )
+        sale_fee_minor = int(resolved.get("fee_minor") or 0)
+        p = resolved.get("policy")
+        if isinstance(p, dict):
+            policy_context.update(
+                {
+                    "policy_id": p.get("policy_id"),
+                    "policy_name": p.get("policy_name") or "default",
+                    "rule_id": p.get("rule_id"),
+                    "base_rate_bps": int(p.get("base_rate_bps") or default_bps),
+                    "promo_discount_bps": int(p.get("promo_discount_bps") or 0),
+                    "effective_rate_bps": int(p.get("effective_rate_bps") or default_bps),
+                    "min_fee_minor": p.get("min_fee_minor"),
+                    "max_fee_minor": p.get("max_fee_minor"),
+                    "source": p.get("source") or "default",
+                }
+            )
+        if policy_context.get("rule_id") is not None:
+            sale_rule = f"POLICY_RULE_{int(policy_context['rule_id'])}"
+    except Exception:
+        sale_fee_minor = _bps_minor_half_up(sale_charge_minor, default_bps)
+
     sale_seller_minor = sale_charge_minor - sale_fee_minor
     if sale_seller_minor < 0:
         sale_seller_minor = 0
@@ -122,7 +163,9 @@ def compute_order_commissions_minor(
             "delivery_minor": int(delivery_minor),
             "inspection_minor": int(inspection_minor),
             "is_top_tier": bool(is_top_tier_flag),
-            "sale_fee_bps": int(sale_bps),
+            "sale_fee_bps": int(policy_context.get("effective_rate_bps") or default_bps),
+            "seller_type": (seller_type or "all"),
+            "city": (city or ""),
         },
         "sale": {
             "charge_minor": int(sale_charge_minor),
@@ -141,6 +184,7 @@ def compute_order_commissions_minor(
             "actor_minor": int(inspection_actor_minor),
             "platform_minor": int(inspection_platform_minor),
         },
+        "policy": policy_context,
     }
 
 
@@ -189,6 +233,22 @@ def resolve_rate(kind: str, state: str = "", category: str = "") -> float:
     """Resolve commission rate: DB rule (most specific) -> default RATES."""
     if (kind or "").strip() == "withdrawal":
         return 0.0
+    normalized_kind = (kind or "").strip().lower()
+    if normalized_kind in ("listing_sale", "shortlet_booking"):
+        try:
+            from app.services.commission_policy_service import resolve_commission_policy
+
+            applies_to = "shortlet" if normalized_kind == "shortlet_booking" else "declutter"
+            seller_hint = (category or "").strip().lower()
+            seller_type = seller_hint if seller_hint in ("merchant", "user") else "all"
+            resolved = resolve_commission_policy(
+                applies_to=applies_to,
+                seller_type=seller_type,
+                city=(state or ""),
+            )
+            return float(int(resolved.effective_rate_bps or 0) / 10000.0)
+        except Exception:
+            pass
     try:
         from app.models import CommissionRule  # lazy import
 

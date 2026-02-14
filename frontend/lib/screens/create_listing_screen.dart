@@ -14,6 +14,7 @@ import '../services/category_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
 import '../services/marketplace_catalog_service.dart';
+import '../services/pricing_service.dart';
 import '../services/analytics_hooks.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
@@ -34,6 +35,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _feedService = FeedService();
   final _catalog = MarketplaceCatalogService();
   final _categorySvc = CategoryService();
+  final _pricingService = PricingService();
 
   final _titleCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -49,6 +51,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   bool _inspectionEnabled = true;
   bool _deliveryEnabled = true;
   bool _loadingSuggestions = false;
+  bool _suggestingPrice = false;
 
   String _category = 'General';
   int? _parentCategoryId;
@@ -414,6 +417,122 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
+  int _priceMinorFromInput() {
+    final parsed = double.tryParse(_priceCtrl.text.trim()) ?? 0.0;
+    return (parsed * 100).round();
+  }
+
+  Future<void> _openPriceSuggestion() async {
+    if (_suggestingPrice) return;
+    final title = _titleCtrl.text.trim();
+    if (title.isEmpty) {
+      _showSnack('Enter a title first to get a useful suggestion.');
+      return;
+    }
+    setState(() => _suggestingPrice = true);
+    try {
+      final payload = await _pricingService.suggest(
+        category: 'declutter',
+        city: _cityCtrl.text.trim().isNotEmpty ? _cityCtrl.text.trim() : _state,
+        itemType: title,
+        condition: _condition,
+        currentPriceMinor: _priceMinorFromInput(),
+      );
+      if (!mounted) return;
+      if (payload['ok'] != true) {
+        _showSnack((payload['message'] ?? 'Could not fetch suggestion').toString());
+        return;
+      }
+      final suggestedMinor =
+          int.tryParse('${payload['suggested_price_minor'] ?? 0}') ?? 0;
+      final rangeMap = payload['range_minor'] is Map
+          ? Map<String, dynamic>.from(payload['range_minor'] as Map)
+          : const <String, dynamic>{};
+      final lowMinor = int.tryParse('${rangeMap['low'] ?? 0}') ?? 0;
+      final highMinor = int.tryParse('${rangeMap['high'] ?? 0}') ?? 0;
+      final explanation = (payload['explanation'] is List)
+          ? (payload['explanation'] as List)
+              .map((row) => row.toString())
+              .toList(growable: false)
+          : const <String>[];
+
+      final apply = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Price Suggestion',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    formatNaira(suggestedMinor / 100),
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Recommended range: ${formatNaira(lowMinor / 100)} - ${formatNaira(highMinor / 100)}',
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Confidence: ${(payload['confidence'] ?? 'low')}'),
+                  const SizedBox(height: 10),
+                  ...explanation
+                      .map(
+                        (line) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('• $line'),
+                        ),
+                      ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FTButton(
+                          label: 'Apply suggestion',
+                          icon: Icons.check_circle_outline,
+                          onPressed: () => Navigator.of(context).pop(true),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FTButton(
+                          label: 'Keep current',
+                          variant: FTButtonVariant.ghost,
+                          onPressed: () => Navigator.of(context).pop(false),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (apply == true && suggestedMinor > 0 && mounted) {
+        _priceCtrl.text = (suggestedMinor / 100).toStringAsFixed(0);
+        await _saveDraft();
+        if (!mounted) return;
+        _showSnack('Suggestion applied.');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      _showSnack('Could not fetch suggestion right now.');
+    } finally {
+      if (mounted) {
+        setState(() => _suggestingPrice = false);
+      }
+    }
+  }
+
   Future<void> _showDuplicateImageDialog(Map<String, dynamic> response) async {
     final supportCode = (response['trace_id'] ??
             response['request_id'] ??
@@ -458,6 +577,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   Future<void> _submitListing() async {
     if (_loading) return;
     final profile = await ApiService.getProfile();
+    if (!mounted) return;
     final block = RoleGates.forPostListing(profile);
     final allowed = await guardRestrictedAction(
       context,
@@ -889,6 +1009,18 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         : null,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FTButton(
+                    label: _suggestingPrice
+                        ? 'Calculating...'
+                        : 'Get price suggestion',
+                    icon: Icons.auto_graph_outlined,
+                    variant: FTButtonVariant.ghost,
+                    onPressed: _suggestingPrice ? null : _openPriceSuggestion,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _condition,
@@ -1086,3 +1218,4 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     );
   }
 }
+

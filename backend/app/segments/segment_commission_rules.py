@@ -5,7 +5,15 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
-from app.models import User, CommissionRule
+from app.models import User, CommissionRule, CommissionPolicy, CommissionPolicyRule
+from app.services.commission_policy_service import (
+    activate_policy,
+    add_policy_rule,
+    archive_policy,
+    compute_fee_minor,
+    create_policy,
+    resolve_commission_policy,
+)
 from app.utils.jwt_utils import decode_token
 
 commission_bp = Blueprint("commission_bp", __name__, url_prefix="/api/admin/commission")
@@ -61,6 +69,16 @@ def _is_admin(u: User | None) -> bool:
         return "admin" in (u.email or "").lower()
     except Exception:
         return False
+
+
+def _parse_dt(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except Exception:
+        return None
 
 
 @commission_bp.get("")
@@ -149,3 +167,145 @@ def disable_rule(rule_id: int):
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+@commission_bp.get("/policies")
+def list_policies():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    status = (request.args.get("status") or "").strip().lower()
+    query = CommissionPolicy.query
+    if status:
+        query = query.filter_by(status=status)
+    rows = query.order_by(CommissionPolicy.created_at.desc(), CommissionPolicy.id.desc()).limit(200).all()
+    policy_ids = [int(row.id) for row in rows]
+    rules_by_policy = {}
+    if policy_ids:
+        rules = CommissionPolicyRule.query.filter(CommissionPolicyRule.policy_id.in_(policy_ids)).all()
+        for row in rules:
+            rules_by_policy.setdefault(int(row.policy_id), []).append(row.to_dict())
+    return jsonify(
+        {
+            "ok": True,
+            "items": [
+                {
+                    **row.to_dict(),
+                    "rules": rules_by_policy.get(int(row.id), []),
+                }
+                for row in rows
+            ],
+        }
+    ), 200
+
+
+@commission_bp.post("/policies")
+def create_policy_draft():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    payload = request.get_json(silent=True) or {}
+    name = (payload.get("name") or "").strip()
+    notes = (payload.get("notes") or "").strip()
+    if not name:
+        return jsonify({"message": "name is required"}), 400
+    try:
+        row = create_policy(name=name, created_by_admin_id=int(u.id), notes=notes)
+        return jsonify({"ok": True, "policy": row.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+@commission_bp.post("/policies/<int:policy_id>/rules")
+def create_policy_rule(policy_id: int):
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    policy = db.session.get(CommissionPolicy, int(policy_id))
+    if not policy:
+        return jsonify({"message": "Policy not found"}), 404
+    payload = request.get_json(silent=True) or {}
+    try:
+        row = add_policy_rule(
+            policy_id=int(policy.id),
+            applies_to=(payload.get("applies_to") or "all"),
+            seller_type=(payload.get("seller_type") or "all"),
+            city=(payload.get("city") or ""),
+            base_rate_bps=int(payload.get("base_rate_bps") or 0),
+            min_fee_minor=int(payload["min_fee_minor"]) if payload.get("min_fee_minor") is not None else None,
+            max_fee_minor=int(payload["max_fee_minor"]) if payload.get("max_fee_minor") is not None else None,
+            promo_discount_bps=int(payload["promo_discount_bps"]) if payload.get("promo_discount_bps") is not None else None,
+            starts_at=_parse_dt(payload.get("starts_at")),
+            ends_at=_parse_dt(payload.get("ends_at")),
+        )
+        return jsonify({"ok": True, "rule": row.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+@commission_bp.post("/policies/<int:policy_id>/activate")
+def activate_policy_endpoint(policy_id: int):
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    try:
+        row = activate_policy(int(policy_id))
+        if not row:
+            return jsonify({"message": "Policy not found"}), 404
+        return jsonify({"ok": True, "policy": row.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+@commission_bp.post("/policies/<int:policy_id>/archive")
+def archive_policy_endpoint(policy_id: int):
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    try:
+        row = archive_policy(int(policy_id))
+        if not row:
+            return jsonify({"message": "Policy not found"}), 404
+        return jsonify({"ok": True, "policy": row.to_dict()}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
+@commission_bp.get("/preview")
+def preview_policy():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    applies_to = (request.args.get("applies_to") or "declutter").strip().lower()
+    seller_type = (request.args.get("seller_type") or "all").strip().lower()
+    city = (request.args.get("city") or "").strip()
+    try:
+        amount_minor = int(request.args.get("amount_minor") or 0)
+    except Exception:
+        amount_minor = 0
+    resolved = resolve_commission_policy(
+        applies_to=applies_to,
+        seller_type=seller_type,
+        city=city,
+    )
+    fee = compute_fee_minor(
+        amount_minor=int(max(0, amount_minor)),
+        applies_to=applies_to,
+        seller_type=seller_type,
+        city=city,
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "applies_to": applies_to,
+            "seller_type": seller_type,
+            "city": city,
+            "amount_minor": int(max(0, amount_minor)),
+            "commission_fee_minor": int(fee["fee_minor"]),
+            "policy": resolved.to_dict(),
+        }
+    ), 200

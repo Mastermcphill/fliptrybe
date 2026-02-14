@@ -103,6 +103,8 @@ def _ensure_commission_snapshot(order: Order, listing: Listing | None = None) ->
         listing_type = str(getattr(listing, "listing_type", "") or "").strip().lower()
         if listing_type == "shortlet":
             sale_kind = "shortlet"
+    seller_role = _seller_role(getattr(order, "merchant_id", None))
+    seller_type = "merchant" if seller_role == "merchant" else "user"
 
     snapshot = compute_order_commissions_minor(
         sale_kind=sale_kind,
@@ -110,6 +112,8 @@ def _ensure_commission_snapshot(order: Order, listing: Listing | None = None) ->
         delivery_minor=money_major_to_minor(float(getattr(order, "delivery_fee", 0.0) or 0.0)),
         inspection_minor=money_major_to_minor(float(getattr(order, "inspection_fee", 0.0) or 0.0)),
         is_top_tier=_is_top_tier(getattr(order, "merchant_id", None)),
+        seller_type=seller_type,
+        city=(getattr(listing, "city", "") if listing is not None else ""),
     )
     _apply_snapshot_to_order(order, snapshot)
     return snapshot

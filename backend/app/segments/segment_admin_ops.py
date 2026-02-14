@@ -36,6 +36,10 @@ from app.models import (
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.feature_flags import get_all_flags
+from app.services.simulation.liquidity_simulator import (
+    get_liquidity_baseline,
+    run_liquidity_simulation,
+)
 
 admin_ops_bp = Blueprint("admin_ops_bp", __name__, url_prefix="/api/admin")
 
@@ -997,6 +1001,98 @@ def admin_analytics_export_csv():
         mimetype="text/csv",
         headers={
             "Content-Disposition": 'attachment; filename="fliptrybe-analytics.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@admin_ops_bp.get("/simulation/baseline")
+def admin_simulation_baseline():
+    _, err = _require_admin()
+    if err:
+        return err
+    payload = get_liquidity_baseline()
+    return jsonify(payload), 200
+
+
+def _parse_simulation_payload(raw: dict) -> dict:
+    baseline = get_liquidity_baseline()
+
+    def _as_int(key: str, default: int) -> int:
+        try:
+            return int(raw.get(key) if raw.get(key) is not None else default)
+        except Exception:
+            return int(default)
+
+    def _as_float(key: str, default: float) -> float:
+        try:
+            return float(raw.get(key) if raw.get(key) is not None else default)
+        except Exception:
+            return float(default)
+
+    return {
+        "time_horizon_days": _as_int("time_horizon_days", 90),
+        "assumed_daily_gmv_minor": _as_int(
+            "assumed_daily_gmv_minor",
+            int(baseline.get("avg_daily_gmv_minor") or 0),
+        ),
+        "assumed_order_count_daily": _as_float(
+            "assumed_order_count_daily",
+            float(baseline.get("avg_daily_orders") or 0.0),
+        ),
+        "withdrawal_rate_pct": _as_float(
+            "withdrawal_rate_pct",
+            float(baseline.get("withdrawal_ratio") or 0.0) * 100.0,
+        ),
+        "payout_delay_days": _as_int("payout_delay_days", 3),
+        "chargeback_rate_pct": _as_float("chargeback_rate_pct", 1.5),
+        "operating_cost_daily_minor": _as_int("operating_cost_daily_minor", 0),
+        "commission_bps": _as_int("commission_bps", 500),
+        "scenario": str(raw.get("scenario") or "base").strip().lower() or "base",
+    }
+
+
+@admin_ops_bp.route("/simulation/liquidity", methods=["GET", "POST"])
+def admin_liquidity_simulation():
+    _, err = _require_admin()
+    if err:
+        return err
+    payload = request.get_json(silent=True) if request.method == "POST" else None
+    if not isinstance(payload, dict):
+        payload = request.args.to_dict(flat=True)
+    params = _parse_simulation_payload(payload or {})
+    result = run_liquidity_simulation(**params)
+    return jsonify(result), 200
+
+
+@admin_ops_bp.get("/simulation/export-csv")
+def admin_liquidity_simulation_export_csv():
+    _, err = _require_admin()
+    if err:
+        return err
+    params = _parse_simulation_payload(request.args.to_dict(flat=True))
+    result = run_liquidity_simulation(**params)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["day", "gmv_minor", "orders", "commission_minor", "chargebacks_minor", "payouts_minor", "operating_cost_minor", "balance_minor"])
+    for row in result.get("series") or []:
+        writer.writerow(
+            [
+                row.get("day"),
+                row.get("gmv_minor"),
+                row.get("orders"),
+                row.get("commission_minor"),
+                row.get("chargebacks_minor"),
+                row.get("payouts_minor"),
+                row.get("operating_cost_minor"),
+                row.get("balance_minor"),
+            ]
+        )
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="fliptrybe-liquidity-simulation.csv"',
             "Cache-Control": "no-store",
         },
     )

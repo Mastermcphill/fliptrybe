@@ -75,3 +75,4 @@ from .discovery import (
     ShortletMedia,
     ImageFingerprint,
 )  # noqa: F401
+from .economics import PricingBenchmark, CommissionPolicy, CommissionPolicyRule  # noqa: F401

@@ -552,6 +552,22 @@ def _is_top_tier_merchant(merchant_id: int | None) -> bool:
         return False
 
 
+def _seller_type_for_order(order: Order) -> str:
+    merchant_id = getattr(order, "merchant_id", None)
+    if not merchant_id:
+        return "all"
+    try:
+        seller = db.session.get(User, int(merchant_id))
+    except Exception:
+        seller = None
+    role = (getattr(seller, "role", None) or "").strip().lower()
+    if role == "merchant":
+        return "merchant"
+    if role:
+        return "user"
+    return "all"
+
+
 def _order_sale_kind(order: Order, listing: Listing | None = None) -> str:
     source = listing
     if source is None and getattr(order, "listing_id", None):
@@ -572,12 +588,21 @@ def _ensure_order_commission_snapshot(order: Order, listing: Listing | None = No
         return existing
 
     sale_kind = _order_sale_kind(order, listing)
+    source_listing = listing
+    if source_listing is None and getattr(order, "listing_id", None):
+        try:
+            source_listing = db.session.get(Listing, int(order.listing_id))
+        except Exception:
+            source_listing = None
+
     snapshot = compute_order_commissions_minor(
         sale_kind=sale_kind,
         sale_charge_minor=money_major_to_minor(float(getattr(order, "amount", 0.0) or 0.0)),
         delivery_minor=money_major_to_minor(float(getattr(order, "delivery_fee", 0.0) or 0.0)),
         inspection_minor=money_major_to_minor(float(getattr(order, "inspection_fee", 0.0) or 0.0)),
         is_top_tier=_is_top_tier_merchant(getattr(order, "merchant_id", None)),
+        seller_type=_seller_type_for_order(order),
+        city=(getattr(source_listing, "city", None) if source_listing is not None else ""),
     )
     _apply_snapshot_to_order(order, snapshot)
     order_id = int(getattr(order, "id", 0) or 0) if getattr(order, "id", None) is not None else None
@@ -597,6 +622,16 @@ def _ensure_order_commission_snapshot(order: Order, listing: Listing | None = No
             "sale_fee_minor": int(getattr(order, "sale_fee_minor", 0) or 0),
             "delivery_actor_minor": int(getattr(order, "delivery_actor_minor", 0) or 0),
             "inspection_actor_minor": int(getattr(order, "inspection_actor_minor", 0) or 0),
+            "policy_id": (
+                (snapshot.get("policy") or {}).get("policy_id")
+                if isinstance(snapshot.get("policy"), dict)
+                else None
+            ),
+            "rule_id": (
+                (snapshot.get("policy") or {}).get("rule_id")
+                if isinstance(snapshot.get("policy"), dict)
+                else None
+            ),
         },
     )
     return snapshot
