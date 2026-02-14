@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/login_screen.dart';
+import '../services/api_client.dart';
 import '../services/api_service.dart';
 import '../widgets/app_exit_guard.dart';
 
@@ -15,6 +16,9 @@ Future<void> logoutToLanding(BuildContext context) async {
     // Best effort: if there is no overlay route to pop, continue.
   }
 
+  // Immediately clear in-memory auth headers/cancelled requests before
+  // persistent/session cleanup to avoid stale-client reuse.
+  ApiClient.instance.resetSession();
   await ApiService.resetAuthSession();
   if (!context.mounted) return;
 

@@ -108,6 +108,9 @@ class ApiClient {
           final requestId = _newRequestId();
           options.headers['X-Request-ID'] = requestId;
           options.headers['X-Fliptrybe-Client'] = ApiConfig.clientFingerprint;
+          // Always rebuild Authorization from in-memory token per request.
+          // This prevents any stale header reuse across logout/login cycles.
+          options.headers.remove('Authorization');
           if (_requiresAuth(options.uri) && !_hasAuthToken()) {
             if (kDebugMode) {
               debugPrint(
@@ -130,11 +133,9 @@ class ApiClient {
           final cancelToken = options.cancelToken ?? CancelToken();
           options.cancelToken = cancelToken;
           _activeCancelTokens.add(cancelToken);
-          final token = _authToken;
-          if (token != null && token.isNotEmpty) {
+          final token = (_authToken ?? '').trim();
+          if (token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
-          } else {
-            options.headers.remove('Authorization');
           }
           Sentry.addBreadcrumb(Breadcrumb(
             category: 'http.request',
