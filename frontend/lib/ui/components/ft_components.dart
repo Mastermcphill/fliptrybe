@@ -3,6 +3,7 @@ export 'ft_badge.dart';
 export 'ft_button.dart';
 export 'ft_card.dart';
 export 'ft_empty_state.dart';
+export 'ft_form_fields.dart';
 export 'ft_input.dart';
 export 'ft_scaffold.dart';
 export 'ft_skeleton.dart';

@@ -5,6 +5,7 @@ import '../screens/marketplace_screen.dart';
 import '../screens/role_signup_screen.dart';
 import '../screens/settings_demo_screen.dart';
 import '../screens/shortlet_screen.dart';
+import '../utils/ft_routes.dart';
 
 class PublicBrowseShell extends StatefulWidget {
   const PublicBrowseShell({
@@ -124,7 +125,7 @@ class _PublicHome extends StatelessWidget {
                     color: scheme.onPrimaryContainer,
                   ),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Text(
                   'Browse listings and stays immediately. Login is only required when you want to transact.',
                   style: TextStyle(color: scheme.onPrimaryContainer),
@@ -247,8 +248,8 @@ class _GuestAccountTab extends StatelessWidget {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const SettingsDemoScreen(),
+                          FTRoutes.page(
+                            child: const SettingsDemoScreen(),
                           ),
                         ),
                         icon: const Icon(Icons.palette_outlined),
@@ -260,8 +261,7 @@ class _GuestAccountTab extends StatelessWidget {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const LoginScreen()),
+                          FTRoutes.page(child: const LoginScreen()),
                         ),
                         child: const Text('Login'),
                       ),
@@ -271,8 +271,7 @@ class _GuestAccountTab extends StatelessWidget {
                       width: double.infinity,
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const RoleSignupScreen()),
+                          FTRoutes.page(child: const RoleSignupScreen()),
                         ),
                         child: const Text('Sign up'),
                       ),

@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/ft_routes.dart';
 import '../utils/formatters.dart';
 import '../utils/ui_feedback.dart';
 import 'admin_autopilot_screen.dart';
@@ -121,6 +122,12 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
     );
   }
 
+  void _openSettings() {
+    Navigator.of(context).push(
+      FTRoutes.page(child: const AdminAutopilotScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FTScaffold(
@@ -132,12 +139,10 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
-                TextField(
+                FTTextField(
                   controller: _qCtrl,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Search listings or merchant',
-                  ),
+                  labelText: 'Search listings or merchant',
+                  prefixIcon: Icons.search,
                   onSubmitted: (_) => _load(),
                 ),
                 const SizedBox(height: 8),
@@ -203,17 +208,16 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Category',
-                        ),
+                      child: FTTextField(
+                        labelText: 'Category',
                         onChanged: (v) => _category = v,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    ElevatedButton(
-                        onPressed: _load, child: const Text('Apply')),
+                    FTButton(
+                      label: 'Apply',
+                      onPressed: _load,
+                    ),
                   ],
                 ),
               ],
@@ -240,13 +244,10 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                 primaryCtaText: 'Refresh',
                 onPrimaryCta: _load,
                 secondaryCtaText: 'Go to Settings',
-                onSecondaryCta: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const AdminAutopilotScreen(),
-                  ),
-                ),
+                onSecondaryCta: _openSettings,
               ),
               child: ListView.separated(
+                cacheExtent: 720,
                 itemCount: _items.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, index) {
@@ -262,6 +263,8 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                       .join(', ');
                   final price = formatNaira(item['price']);
                   return ListTile(
+                    key: ValueKey<String>(
+                        'admin_listing_${item['id'] ?? index}'),
                     title: Text(title),
                     subtitle: Text(
                       '$price • ${location.isEmpty ? "Location not set" : location}\nSeller: $merchantName',

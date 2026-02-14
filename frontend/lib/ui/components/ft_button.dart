@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../foundation/app_tokens.dart';
 
@@ -67,7 +68,8 @@ class _FTButtonState extends State<FTButton> {
       child: Listener(
         onPointerDown: enabled ? (_) => setState(() => _pressed = true) : null,
         onPointerUp: enabled ? (_) => setState(() => _pressed = false) : null,
-        onPointerCancel: enabled ? (_) => setState(() => _pressed = false) : null,
+        onPointerCancel:
+            enabled ? (_) => setState(() => _pressed = false) : null,
         child: AnimatedScale(
           duration: AppTokens.d150,
           curve: Curves.easeOut,
@@ -113,24 +115,36 @@ class _FTButtonState extends State<FTButton> {
           : BorderSide.none,
     );
 
-    return TextButton(
-      onPressed: enabled ? widget.onPressed : null,
-      style: ButtonStyle(
-        shape: WidgetStatePropertyAll<OutlinedBorder>(shape),
-        backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-          if (states.contains(WidgetState.disabled)) {
-            return scheme.surfaceContainerHighest;
-          }
-          return _backgroundColor(scheme);
-        }),
-        foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
-          if (states.contains(WidgetState.disabled)) {
-            return scheme.onSurfaceVariant;
-          }
-          return _foregroundColor(scheme);
-        }),
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.label,
+      child: TextButton(
+        onPressed: enabled
+            ? () {
+                if (widget.variant == FTButtonVariant.primary) {
+                  HapticFeedback.selectionClick();
+                }
+                widget.onPressed?.call();
+              }
+            : null,
+        style: ButtonStyle(
+          shape: WidgetStatePropertyAll<OutlinedBorder>(shape),
+          backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return scheme.surfaceContainerHighest;
+            }
+            return _backgroundColor(scheme);
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+            if (states.contains(WidgetState.disabled)) {
+              return scheme.onSurfaceVariant;
+            }
+            return _foregroundColor(scheme);
+          }),
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
 }

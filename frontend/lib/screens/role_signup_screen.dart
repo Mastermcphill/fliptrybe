@@ -5,6 +5,9 @@ import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
 import '../constants/ng_states.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/ft_routes.dart';
+import '../utils/ui_feedback.dart';
 import 'pending_approval_screen.dart';
 
 class RoleSignupScreen extends StatefulWidget {
@@ -22,6 +25,10 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _nameFocus = FocusNode();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+  final _phoneFocus = FocusNode();
 
   // shared
   final _phone = TextEditingController();
@@ -42,7 +49,8 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
   final _inspectorReason = TextEditingController();
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (!mounted) return;
+    UIFeedback.showErrorSnack(context, msg);
   }
 
   bool _responseIndicatesPending(Map<dynamic, dynamic> res) {
@@ -171,8 +179,9 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           if (!mounted) return;
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-                builder: (_) => PendingApprovalScreen(role: _role)),
+            FTRoutes.page(
+              child: PendingApprovalScreen(role: _role),
+            ),
           );
           return;
         }
@@ -193,7 +202,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         _toast("Signup failed");
       }
     } catch (e) {
-      _toast("Signup error: $e");
+      _toast(UIFeedback.mapDioErrorToMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -351,18 +360,34 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label,
-      {TextInputType? keyboard}) {
+  Widget _field(
+    TextEditingController c,
+    String label, {
+    TextInputType? keyboard,
+    FocusNode? focusNode,
+    FocusNode? nextFocusNode,
+    bool obscure = false,
+    int maxLines = 1,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: TextField(
-        controller: c,
-        keyboardType: keyboard,
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          labelText: label,
-        ),
-      ),
+      child: obscure
+          ? FTPasswordField(
+              controller: c,
+              focusNode: focusNode,
+              nextFocusNode: nextFocusNode,
+              labelText: label,
+              enabled: !_loading,
+            )
+          : FTTextField(
+              controller: c,
+              focusNode: focusNode,
+              nextFocusNode: nextFocusNode,
+              keyboardType: keyboard,
+              labelText: label,
+              enabled: !_loading,
+              maxLines: maxLines,
+            ),
     );
   }
 
@@ -374,7 +399,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: DropdownButtonFormField<String>(
-        value: nigeriaStates.contains(current) ? current : 'Lagos',
+        initialValue: nigeriaStates.contains(current) ? current : 'Lagos',
         decoration: const InputDecoration(
           border: OutlineInputBorder(),
           labelText: 'State',
@@ -398,6 +423,10 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     _name.dispose();
     _email.dispose();
     _password.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+    _phoneFocus.dispose();
     _phone.dispose();
     _state.dispose();
     _city.dispose();
@@ -415,116 +444,132 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
   Widget build(BuildContext context) {
     _compact = MediaQuery.of(context).size.width < 360;
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text("Choose your path")),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Choose your role",
-                style: TextStyle(
-                  fontSize: _compact ? 20 : 22,
-                  fontWeight: FontWeight.w900,
-                ),
+    return FTScaffold(
+      title: "Choose your path",
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Choose your role",
+              style: TextStyle(
+                fontSize: _compact ? 20 : 22,
+                fontWeight: FontWeight.w900,
               ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Pick how you want to use FlipTrybe. You can upgrade roles later, but this helps us set you up right from day one.",
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _roleCard(
+              value: "buyer",
+              title: "Buy & Sell",
+              subtitle:
+                  "Buy and sell, track orders, and chat admin for support.",
+              icon: Icons.shopping_bag_rounded,
+              primary: true,
+            ),
+            const SizedBox(height: 10),
+            _roleCard(
+              value: "merchant",
+              title: "Merchant",
+              subtitle:
+                  "List products and manage sales. Verified email required for sensitive actions.",
+              icon: Icons.storefront_rounded,
+              badge: "Requires admin approval",
+            ),
+            const SizedBox(height: 10),
+            _roleCard(
+              value: "driver",
+              title: "Driver",
+              subtitle:
+                  "Accept delivery jobs and complete pickup/dropoff code confirmations.",
+              icon: Icons.delivery_dining_rounded,
+              badge: "Requires admin approval",
+            ),
+            const SizedBox(height: 10),
+            _roleCard(
+              value: "inspector",
+              title: "Inspector",
+              subtitle:
+                  "Handle inspection tickets and submit inspection outcomes.",
+              icon: Icons.verified_user_rounded,
+              badge: "Requires admin approval",
+            ),
+            const Divider(height: 28),
+            _field(
+              _name,
+              "Full name",
+              focusNode: _nameFocus,
+              nextFocusNode: _emailFocus,
+            ),
+            _field(
+              _email,
+              "Email",
+              keyboard: TextInputType.emailAddress,
+              focusNode: _emailFocus,
+              nextFocusNode: _passwordFocus,
+            ),
+            _field(
+              _password,
+              "Password",
+              focusNode: _passwordFocus,
+              nextFocusNode: _phoneFocus,
+              obscure: true,
+            ),
+            _field(
+              _phone,
+              "Phone",
+              keyboard: TextInputType.phone,
+              focusNode: _phoneFocus,
+            ),
+            if (_role == "merchant" ||
+                _role == "driver" ||
+                _role == "inspector") ...[
               const SizedBox(height: 6),
-              Text(
-                "Pick how you want to use FlipTrybe. You can upgrade roles later, but this helps us set you up right from day one.",
-                style: TextStyle(
-                  color: scheme.onSurfaceVariant,
-                  height: 1.35,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _roleCard(
-                value: "buyer",
-                title: "Buy & Sell",
-                subtitle:
-                    "Buy and sell, track orders, and chat admin for support.",
-                icon: Icons.shopping_bag_rounded,
-                primary: true,
-              ),
-              const SizedBox(height: 10),
-              _roleCard(
-                value: "merchant",
-                title: "Merchant",
-                subtitle:
-                    "List products and manage sales. Verified email required for sensitive actions.",
-                icon: Icons.storefront_rounded,
-                badge: "Requires admin approval",
-              ),
-              const SizedBox(height: 10),
-              _roleCard(
-                value: "driver",
-                title: "Driver",
-                subtitle:
-                    "Accept delivery jobs and complete pickup/dropoff code confirmations.",
-                icon: Icons.delivery_dining_rounded,
-                badge: "Requires admin approval",
-              ),
-              const SizedBox(height: 10),
-              _roleCard(
-                value: "inspector",
-                title: "Inspector",
-                subtitle:
-                    "Handle inspection tickets and submit inspection outcomes.",
-                icon: Icons.verified_user_rounded,
-                badge: "Requires admin approval",
-              ),
-              const Divider(height: 28),
-              _field(_name, "Full name"),
-              _field(_email, "Email", keyboard: TextInputType.emailAddress),
-              _field(_password, "Password"),
-              _field(_phone, "Phone", keyboard: TextInputType.phone),
-              if (_role == "merchant" ||
-                  _role == "driver" ||
-                  _role == "inspector") ...[
-                const SizedBox(height: 6),
-                _stateDropdown(),
-                _field(_city, "City"),
-              ],
-              if (_role == "merchant") ...[
-                const Divider(height: 28),
-                _field(_business, "Business name"),
-                _field(_category, "Category"),
-                _field(_reason, "Why do you want a merchant account?"),
-              ],
-              if (_role == "driver") ...[
-                const Divider(height: 28),
-                _field(_vehicle, "Vehicle type"),
-                _field(_plate, "Plate number"),
-              ],
-              if (_role == "inspector") ...[
-                const Divider(height: 28),
-                _field(_region, "Region (optional)"),
-                _field(_inspectorReason, "Why do you want to be an inspector?"),
-              ],
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _loading ? null : _signup,
-                  icon: _loading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.lock_rounded),
-                  label: Text(_loading ? "Creating..." : "Create account"),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                _role == "buyer"
-                    ? "Tip: You can start buying and selling instantly."
-                    : "Note: ${_role.toUpperCase()} activation is reviewed for safety. You'll still have access to Buy & Sell while we verify you.",
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
+              _stateDropdown(),
+              _field(_city, "City"),
             ],
-          ),
+            if (_role == "merchant") ...[
+              const Divider(height: 28),
+              _field(_business, "Business name"),
+              _field(_category, "Category"),
+              _field(_reason, "Why do you want a merchant account?"),
+            ],
+            if (_role == "driver") ...[
+              const Divider(height: 28),
+              _field(_vehicle, "Vehicle type"),
+              _field(_plate, "Plate number"),
+            ],
+            if (_role == "inspector") ...[
+              const Divider(height: 28),
+              _field(_region, "Region (optional)"),
+              _field(_inspectorReason, "Why do you want to be an inspector?"),
+            ],
+            const SizedBox(height: 10),
+            Semantics(
+              label: "Create account action",
+              button: true,
+              child: FTPrimaryButton(
+                label: "Create account",
+                icon: Icons.lock_rounded,
+                loading: _loading,
+                onPressed: _loading ? null : _signup,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _role == "buyer"
+                  ? "Tip: You can start buying and selling instantly."
+                  : "Note: ${_role.toUpperCase()} activation is reviewed for safety. You'll still have access to Buy & Sell while we verify you.",
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+          ],
         ),
       ),
     );

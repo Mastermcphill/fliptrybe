@@ -6,6 +6,7 @@ import '../services/shortlet_service.dart';
 import '../ui/components/ft_components.dart';
 import '../ui/design/ft_tokens.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/ft_routes.dart';
 import '../utils/formatters.dart';
 import '../utils/ui_feedback.dart';
 import '../widgets/safe_image.dart';
@@ -93,7 +94,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: scheme.surface,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(FTDesignTokens.radiusLg),
         ),
@@ -213,6 +214,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
+                    cacheExtent: 640,
                     padding: const EdgeInsets.fromLTRB(
                       FTDesignTokens.md,
                       FTDesignTokens.sm,
@@ -257,6 +259,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
                         ListView.separated(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
+                          cacheExtent: 480,
                           itemCount: rows.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: FTDesignTokens.sm),
@@ -285,12 +288,13 @@ class _ShortletScreenState extends State<ShortletScreen> {
                                 .trim()
                                 .toLowerCase();
                             return InkWell(
+                              key: ValueKey<String>(
+                                  'shortlet_${row['id'] ?? index}'),
                               borderRadius: BorderRadius.circular(
                                   FTDesignTokens.radiusMd),
                               onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      ShortletDetailScreen(shortlet: row),
+                                FTRoutes.page(
+                                  child: ShortletDetailScreen(shortlet: row),
                                 ),
                               ),
                               child: FTCard(

@@ -20,6 +20,7 @@ import 'admin_risk_events_screen.dart';
 import 'admin_system_health_screen.dart';
 import 'admin_feature_flags_screen.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/ft_routes.dart';
 import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/ft_components.dart';
 
@@ -99,6 +100,12 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
     }
   }
 
+  void _open(Widget screen) {
+    Navigator.of(context).push(
+      FTRoutes.page(child: screen),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -120,24 +127,27 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
           primaryCtaText: 'Retry',
           onPrimaryCta: _ensureAdmin,
           secondaryCtaText: 'Go to Settings',
-          onSecondaryCta: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const AdminAutopilotScreen()),
-          ),
+          onSecondaryCta: () => _open(const AdminAutopilotScreen()),
         ),
       );
     }
     return AdminScaffold(
       title: 'Admin Hub',
       actions: [
-        TextButton(
-          onPressed: _signingOut ? null : _handleSignOut,
-          child: Text(
-            _signingOut ? 'Signing out...' : 'Sign out',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+        Semantics(
+          label: 'Sign out',
+          button: true,
+          child: TextButton(
+            onPressed: _signingOut ? null : _handleSignOut,
+            child: Text(
+              _signingOut ? 'Signing out...' : 'Sign out',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ],
       body: ListView(
+        cacheExtent: 720,
         children: [
           const Text(
             'Admin tools (demo-ready).',
@@ -148,164 +158,114 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             leading: const Icon(Icons.payments_outlined),
             title: const Text('Payout Console'),
             subtitle: const Text('Approve / reject / mark paid'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminPayoutConsoleScreen())),
+            onTap: () => _open(const AdminPayoutConsoleScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.receipt_long_outlined),
             title: const Text('Audit Logs'),
             subtitle: const Text('Everything the system is doing'),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const AdminAuditScreen())),
+            onTap: () => _open(const AdminAuditScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.support_agent_outlined),
             title: const Text('Support Chat'),
             subtitle: const Text('View and reply to support threads'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminSupportThreadsScreen())),
+            onTap: () => _open(const AdminSupportThreadsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.auto_awesome_outlined),
             title: const Text('Autopilot'),
             subtitle: const Text('Automate payouts, queue + driver assignment'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminAutopilotScreen())),
+            onTap: () => _open(const AdminAutopilotScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.account_balance_outlined),
             title: const Text('Manual Payments'),
             subtitle: const Text('Review manual payment intents and mark paid'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminManualPaymentsScreen())),
+            onTap: () => _open(const AdminManualPaymentsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.notifications_active_outlined),
             title: const Text('Notify Queue'),
             subtitle:
                 const Text('Retry and manage outbound notification queue'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminNotifyQueueScreen())),
+            onTap: () => _open(const AdminNotifyQueueScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.verified_user_outlined),
             title: const Text('Role Approvals'),
             subtitle: const Text('Approve merchants, drivers, inspectors'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminRoleApprovalsScreen())),
+            onTap: () => _open(const AdminRoleApprovalsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.assignment_ind_outlined),
             title: const Text('Inspector Requests'),
             subtitle: const Text('Review inspector access requests'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminInspectorRequestsScreen())),
+            onTap: () => _open(const AdminInspectorRequestsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.badge_outlined),
             title: const Text('KYC Review'),
             subtitle: const Text('Approve or reject KYC submissions'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminKycReviewScreen())),
+            onTap: () => _open(const AdminKycReviewScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.monitor_heart_outlined),
             title: const Text('System Health'),
             subtitle:
                 const Text('Queue backlog, runner state, payout pressure'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminSystemHealthScreen())),
+            onTap: () => _open(const AdminSystemHealthScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.manage_search_outlined),
             title: const Text('Global Search'),
             subtitle: const Text('Search users, orders, listings, intents'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminGlobalSearchScreen())),
+            onTap: () => _open(const AdminGlobalSearchScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.storefront_outlined),
             title: const Text('Marketplace'),
             subtitle: const Text('Browse and search listings as admin'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminMarketplaceScreen())),
+            onTap: () => _open(const AdminMarketplaceScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.emoji_events_outlined),
             title: const Text('Leaderboards'),
             subtitle: const Text('Top merchants & drivers'),
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const LeaderboardsScreen())),
+            onTap: () => _open(const LeaderboardsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.rule_folder_outlined),
             title: const Text('Anomalies'),
             subtitle: const Text('Detect payment, escrow and webhook drifts'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminAnomaliesScreen())),
+            onTap: () => _open(const AdminAnomaliesScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.security_outlined),
             title: const Text('Risk Events'),
             subtitle: const Text('Review throttles, spam and abuse signals'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminRiskEventsScreen())),
+            onTap: () => _open(const AdminRiskEventsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.toggle_on_outlined),
             title: const Text('Feature Flags'),
             subtitle: const Text('Runtime toggles for payments, jobs, media'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminFeatureFlagsScreen())),
+            onTap: () => _open(const AdminFeatureFlagsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.percent_outlined),
             title: const Text('Commission Rules'),
             subtitle: const Text('Set commission by kind/state/category'),
-            onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AdminCommissionRulesScreen())),
+            onTap: () => _open(const AdminCommissionRulesScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.gavel_outlined),
             title: const Text('Dispute Resolution'),
             subtitle: const Text('Not available yet'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const NotAvailableYetScreen(
-                  title: 'Dispute Resolution',
-                  reason: 'Dispute workflows are not enabled in this release.',
-                ),
+            onTap: () => _open(
+              const NotAvailableYetScreen(
+                title: 'Dispute Resolution',
+                reason: 'Dispute workflows are not enabled in this release.',
               ),
             ),
           ),
@@ -313,14 +273,11 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             leading: const Icon(Icons.shield_outlined),
             title: const Text('Inspector Bonds'),
             subtitle: const Text('Not available yet'),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const NotAvailableYetScreen(
-                  title: 'Inspector Bonds',
-                  reason:
-                      'Inspector bond workflows are not enabled in this release.',
-                ),
+            onTap: () => _open(
+              const NotAvailableYetScreen(
+                title: 'Inspector Bonds',
+                reason:
+                    'Inspector bond workflows are not enabled in this release.',
               ),
             ),
           ),

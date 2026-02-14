@@ -1,19 +1,21 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/material.dart';
 
-import '../services/auth_service.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/token_storage.dart';
-import 'pending_approval_screen.dart';
-import 'role_signup_screen.dart';
-import 'forgot_password_screen.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/ft_routes.dart';
+import '../utils/ui_feedback.dart';
+import '../widgets/app_exit_guard.dart';
 import '../shells/admin_shell.dart';
 import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
-import '../shells/merchant_shell.dart';
 import '../shells/inspector_shell.dart';
-import '../utils/auth_navigation.dart';
-import '../widgets/app_exit_guard.dart';
+import '../shells/merchant_shell.dart';
+import 'forgot_password_screen.dart';
+import 'pending_approval_screen.dart';
+import 'role_signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -35,8 +37,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _devTokenController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
 
   bool _isLoading = false;
+  String? _emailError;
+  String? _passwordError;
 
   Widget _screenForRole(String role) {
     final r = role.trim().toLowerCase();
@@ -47,38 +53,52 @@ class _LoginScreenState extends State<LoginScreen> {
     return const AppExitGuard(child: BuyerShell());
   }
 
-  void _toast(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  String? _validateEmail(String email) {
+    final v = email.trim();
+    if (v.isEmpty) return 'Email is required';
+    if (!v.contains('@') || !v.contains('.')) return 'Enter a valid email';
+    return null;
   }
 
-  void _log(String message) {
-    debugPrint('[LoginScreen] $message');
+  String? _validatePassword(String password) {
+    if (password.trim().isEmpty) return 'Password is required';
+    return null;
+  }
+
+  bool _validateFields() {
+    final emailError = _validateEmail(_emailController.text);
+    final passwordError = _validatePassword(_passwordController.text);
+    setState(() {
+      _emailError = emailError;
+      _passwordError = passwordError;
+    });
+    if (emailError != null || passwordError != null) {
+      UIFeedback.showErrorSnack(
+          context, 'Enter a valid email and password to continue.');
+      return false;
+    }
+    return true;
   }
 
   Future<void> _handleLogin() async {
-    _log('tap received');
     if (_isLoading) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!_validateFields()) return;
 
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      _toast('Email and password are required.');
-      return;
-    }
-
     setState(() => _isLoading = true);
-    _log('request started');
 
     try {
       final res = widget.loginAction != null
           ? await widget.loginAction!(email, password)
           : await ApiService.login(email: email, password: password);
-      _log('response received');
       final token = (res['token'] ?? res['access_token'])?.toString() ?? '';
       if (token.isEmpty) {
-        _toast(res['message']?.toString() ?? 'Login failed.');
+        if (!mounted) return;
+        UIFeedback.showErrorSnack(
+            context, res['message']?.toString() ?? 'Login failed.');
         return;
       }
 
@@ -92,31 +112,32 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       if (roleStatus.toLowerCase() == 'pending') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-              builder: (_) => PendingApprovalScreen(role: roleForNav)),
+          FTRoutes.page(
+            child: PendingApprovalScreen(role: roleForNav),
+          ),
         );
       } else {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => _screenForRole(roleForNav)),
+          FTRoutes.page(
+            child: _screenForRole(roleForNav),
+          ),
         );
       }
     } catch (e) {
-      _log('request failed: $e');
-      _toast('Login error: $e');
+      if (!mounted) return;
+      UIFeedback.showErrorSnack(context, UIFeedback.mapDioErrorToMessage(e));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-      _log('loading reset');
     }
   }
 
   Future<void> _handleDevTokenLogin() async {
-    if (!kDebugMode) return;
-    if (_isLoading) return;
+    if (!kDebugMode || _isLoading) return;
     final token = _devTokenController.text.trim();
     if (token.isEmpty) {
-      _toast('Paste a token first.');
+      UIFeedback.showErrorSnack(context, 'Paste a token first.');
       return;
     }
 
@@ -129,24 +150,20 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (profile == null) {
-        _toast('Token invalid or expired.');
-        await logoutToLanding(context);
-        if (!mounted) return;
+        UIFeedback.showErrorSnack(context, 'Token invalid or expired.');
         return;
       }
 
       final roleForNav = (profile['role'] ?? 'buyer').toString();
       final roleStatus = (profile['role_status'] ?? 'approved').toString();
 
-      if (!mounted) return;
       if (roleStatus.toLowerCase() == 'pending') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-              builder: (_) => PendingApprovalScreen(role: roleForNav)),
+          FTRoutes.page(child: PendingApprovalScreen(role: roleForNav)),
         );
       } else {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => _screenForRole(roleForNav)),
+          FTRoutes.page(child: _screenForRole(roleForNav)),
         );
       }
     } finally {
@@ -159,89 +176,101 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _devTokenController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+    return FTScaffold(
+      title: 'Login',
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
+            FTTextField(
               controller: _emailController,
+              focusNode: _emailFocus,
+              nextFocusNode: _passwordFocus,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
+              labelText: 'Email',
+              hintText: 'name@email.com',
+              prefixIcon: Icons.mail_outline,
+              errorText: _emailError,
               enabled: !_isLoading,
+              onChanged: (_) {
+                if (_emailError != null) {
+                  setState(() => _emailError = null);
+                }
+              },
             ),
             const SizedBox(height: 12),
-            TextField(
+            FTPasswordField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
+              focusNode: _passwordFocus,
+              textInputAction: TextInputAction.done,
+              labelText: 'Password',
+              errorText: _passwordError,
               enabled: !_isLoading,
+              onSubmitted: (_) => _handleLogin(),
+              onChanged: (_) {
+                if (_passwordError != null) {
+                  setState(() => _passwordError = null);
+                }
+              },
             ),
             const SizedBox(height: 18),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
+            Semantics(
+              label: 'Login action',
+              button: true,
+              child: FTPrimaryButton(
+                label: 'Login',
+                loading: _isLoading,
                 onPressed: _isLoading ? null : _handleLogin,
-                child: Text(_isLoading ? 'Please wait...' : 'Login'),
               ),
             ),
-            const SizedBox(height: 14),
-            TextButton(
+            const SizedBox(height: 12),
+            FTButton(
+              label: 'Forgot Password?',
+              variant: FTButtonVariant.ghost,
               onPressed: _isLoading
                   ? null
                   : () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const ForgotPasswordScreen()),
+                        FTRoutes.page(child: const ForgotPasswordScreen()),
                       );
                     },
-              child: const Text('Forgot Password?'),
             ),
-            const SizedBox(height: 6),
-            TextButton(
+            const SizedBox(height: 8),
+            FTButton(
+              label: 'Create Account',
+              variant: FTButtonVariant.secondary,
               onPressed: _isLoading
                   ? null
                   : () {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                            builder: (_) => const RoleSignupScreen()),
+                        FTRoutes.page(child: const RoleSignupScreen()),
                       );
                     },
-              child: const Text('Create Account'),
             ),
-            const SizedBox(height: 16),
             if (kDebugMode) ...[
+              const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 12),
-              TextField(
+              FTTextField(
                 controller: _devTokenController,
-                decoration: const InputDecoration(
-                  labelText: 'Dev token',
-                  hintText: 'Paste Bearer token',
-                  border: OutlineInputBorder(),
-                ),
+                labelText: 'Dev token',
+                hintText: 'Paste Bearer token',
+                prefixIcon: Icons.key_outlined,
                 enabled: !_isLoading,
               ),
               const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : _handleDevTokenLogin,
-                  child: const Text('Use Dev Token'),
-                ),
+              FTButton(
+                label: 'Use Dev Token',
+                variant: FTButtonVariant.ghost,
+                onPressed: _isLoading ? null : _handleDevTokenLogin,
+                expand: true,
               ),
             ],
           ],

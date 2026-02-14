@@ -1,29 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
-import 'driver_profile_screen.dart';
 import '../services/api_service.dart';
 import '../services/api_config.dart';
 import '../services/token_storage.dart';
-import 'login_screen.dart';
-import 'heatmap_screen.dart';
-import 'shortlets_screen.dart';
-import 'fees_demo_screen.dart';
-import 'shortlet_screen.dart';
 import 'merchant_listings_demo_screen.dart';
 import 'settings_demo_screen.dart';
-import 'notifications_inbox_screen.dart';
-import 'driver_jobs_screen.dart';
-import 'admin_screen.dart';
 import 'wallet_screen.dart';
-import 'merchants_screen.dart';
-import 'notifications_screen.dart';
 import 'receipts_screen.dart';
 import 'support_tickets_screen.dart';
 import 'support_chat_screen.dart';
 import 'kyc_demo_screen.dart';
-import 'admin_broadcast_screen.dart';
-import 'leaderboards_screen.dart';
 import 'orders_screen.dart';
 import 'investor_metrics_screen.dart';
 import 'sales_analytics_screen.dart';
@@ -132,11 +119,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final dynamic verifiedRaw = _profile?['is_verified'];
     final bool isVerified = verifiedRaw == true;
-    final kycTierRaw = _profile?['kyc_tier'];
-    final int kycTier = (kycTierRaw is int)
-        ? kycTierRaw
-        : int.tryParse(kycTierRaw?.toString() ?? '0') ?? 0;
-    final bool isAvailable = _profile?['is_available'] == true;
 
     final String tier = _profile?['tier']?.toString() ?? "Novice";
 
@@ -431,7 +413,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             context,
                             MaterialPageRoute(
                                 builder: (_) => const SettingsDemoScreen()));
-                      }),
+                      }, semanticLabel: 'Open appearance settings'),
 
                       const SizedBox(height: 20),
 
@@ -453,11 +435,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
 
-                      ListTile(
-                        leading: const Icon(Icons.logout, color: Colors.red),
-                        title: const Text("Log Out",
-                            style: TextStyle(color: Colors.red)),
-                        onTap: _handleLogout,
+                      Semantics(
+                        label: 'Sign out',
+                        button: true,
+                        child: ListTile(
+                          leading: const Icon(Icons.logout, color: Colors.red),
+                          title: const Text("Log Out",
+                              style: TextStyle(color: Colors.red)),
+                          onTap: _handleLogout,
+                        ),
                       ),
                     ],
                   ),
@@ -498,24 +484,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title, {VoidCallback? onTap}) {
+  Widget _buildMenuItem(
+    IconData icon,
+    String title, {
+    VoidCallback? onTap,
+    String? semanticLabel,
+  }) {
     final enabled = onTap != null;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: Colors.white),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        subtitle: enabled
-            ? null
-            : const Text('In next release',
-                style: TextStyle(color: Colors.grey)),
-        trailing: Icon(enabled ? Icons.arrow_forward_ios : Icons.lock_outline,
-            color: Colors.grey, size: 16),
-        onTap: onTap,
+    return Semantics(
+      label: semanticLabel ?? title,
+      button: true,
+      enabled: enabled,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ListTile(
+          leading: Icon(icon, color: Colors.white),
+          title: Text(title, style: const TextStyle(color: Colors.white)),
+          subtitle: enabled
+              ? null
+              : const Text('In next release',
+                  style: TextStyle(color: Colors.grey)),
+          trailing: Icon(enabled ? Icons.arrow_forward_ios : Icons.lock_outline,
+              color: Colors.grey, size: 16),
+          onTap: onTap,
+        ),
       ),
     );
   }

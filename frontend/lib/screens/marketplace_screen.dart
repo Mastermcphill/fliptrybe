@@ -8,6 +8,7 @@ import '../services/auth_gate_service.dart';
 import '../ui/components/ft_components.dart';
 import '../ui/design/ft_tokens.dart';
 import '../utils/auth_navigation.dart';
+import '../utils/ft_routes.dart';
 import '../widgets/listing/listing_card.dart';
 import '../utils/ui_feedback.dart';
 import 'cart_screen.dart';
@@ -213,8 +214,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     String sort = 'relevance',
   }) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => MarketplaceSearchResultsScreen(
+      FTRoutes.page(
+        child: MarketplaceSearchResultsScreen(
           initialQuery: query,
           initialSort: sort,
         ),
@@ -259,6 +260,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 )
               : ListView.separated(
                   scrollDirection: Axis.horizontal,
+                  cacheExtent: 480,
                   itemCount: items.length,
                   separatorBuilder: (_, __) =>
                       const SizedBox(width: FTDesignTokens.sm),
@@ -266,14 +268,15 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     final item = items[index];
                     final id = item['id'] as int;
                     return SizedBox(
+                      key: ValueKey<int>(id),
                       width: 210,
                       child: ListingCard(
                         item: item,
                         isFavorite: _favorites.contains(id),
                         onToggleFavorite: () => _toggleFavorite(item),
                         onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ListingDetailScreen(listing: item),
+                          FTRoutes.page(
+                            child: ListingDetailScreen(listing: item),
                           ),
                         ),
                       ),
@@ -303,21 +306,21 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         IconButton(
           tooltip: 'Saved searches',
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SavedSearchesScreen()),
+            FTRoutes.page(child: const SavedSearchesScreen()),
           ),
           icon: const Icon(Icons.bookmarks_outlined),
         ),
         IconButton(
           tooltip: 'Favorites',
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+            FTRoutes.page(child: const FavoritesScreen()),
           ),
           icon: const Icon(Icons.favorite_border),
         ),
         IconButton(
           tooltip: 'Cart',
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CartScreen()),
+            FTRoutes.page(child: const CartScreen()),
           ),
           icon: const Icon(Icons.shopping_cart_outlined),
         ),
@@ -329,7 +332,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           onAuthorized: () async {
             if (!context.mounted) return;
             await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CreateListingScreen()),
+              FTRoutes.page(child: const CreateListingScreen()),
             );
           },
         ),
@@ -343,6 +346,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: CustomScrollView(
+                    cacheExtent: 960,
                     slivers: [
                       SliverAppBar(
                         pinned: true,
