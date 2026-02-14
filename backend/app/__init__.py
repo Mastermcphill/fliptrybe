@@ -2,7 +2,7 @@ import os
 import subprocess
 import click
 from flask import Flask, jsonify, request, g
-from sqlalchemy import text
+from sqlalchemy import text, inspect
 
 from app.extensions import db, migrate, cors
 from app.models import User
@@ -52,9 +52,39 @@ from app.segments.segment_moneybox import moneybox_bp, moneybox_system_bp
 from app.segments.segment_public_feed import public_bp
 from app.segments.segment_admin_ops import admin_ops_bp
 from app.segments.segment_feature_flags import flags_bp
+from app.segments.segment_referral import referral_bp
+from app.segments.segment_user_analytics import user_analytics_bp
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.observability import init_sentry, init_otel, install_request_observers
+
+
+def _ensure_referral_schema_compatibility():
+    """
+    Keep runtime compatibility for SQLite/dev test databases that may not have
+    the latest referral columns yet.
+    """
+    try:
+        engine = db.engine
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+        if "users" not in tables:
+            return
+        cols = {str(c.get("name", "")).lower() for c in insp.get_columns("users")}
+        with engine.begin() as conn:
+            if "referral_code" not in cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN referral_code VARCHAR(32)"))
+            if "referred_by" not in cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN referred_by INTEGER"))
+        try:
+            from app.models import Referral
+
+            Referral.__table__.create(bind=engine, checkfirst=True)
+        except Exception:
+            pass
+    except Exception:
+        # Schema compatibility best-effort only; never block startup.
+        pass
 
 
 def create_app():
@@ -112,6 +142,7 @@ def create_app():
     migrate.init_app(app, db)
     install_request_observers(app)
     with app.app_context():
+        _ensure_referral_schema_compatibility()
         otel_env = (os.getenv("OTEL_ENABLED") or "").strip() == "1"
         otel_setting = False
         try:
@@ -133,6 +164,7 @@ def create_app():
     app.register_blueprint(payout_pdf_bp)
     app.register_blueprint(autopilot_bp)
     app.register_blueprint(payments_settings_bp)
+    app.register_blueprint(merchant_bp)
     app.register_blueprint(merchants_bp)
     app.register_blueprint(webhooks_bp)
     app.register_blueprint(notifications_bp)
@@ -163,6 +195,8 @@ def create_app():
     app.register_blueprint(public_payments_bp)
     app.register_blueprint(admin_ops_bp)
     app.register_blueprint(flags_bp)
+    app.register_blueprint(referral_bp)
+    app.register_blueprint(user_analytics_bp)
 
     # Health check
     @app.get("/api/health")

@@ -69,6 +69,7 @@ from app.integrations.payments.factory import build_payments_provider
 from app.integrations.payments.mock_provider import MockPaymentsProvider
 from app.integrations.common import IntegrationDisabledError, IntegrationMisconfiguredError
 from app.services.payment_intent_service import transition_intent, PaymentIntentStatus
+from app.services.referral_service import maybe_complete_referral_on_success
 from app.utils.idempotency import lookup_response, store_response, get_idempotency_key
 from app.utils.events import log_event
 from app.utils.observability import get_request_id
@@ -671,6 +672,14 @@ def _settle_wallet_batch(*, buyer_id: int, total_minor: int, reference: str, ord
         if not order:
             continue
         _mark_paid(order, reference=reference, actor_id=actor_id)
+        try:
+            maybe_complete_referral_on_success(
+                referred_user_id=int(order.buyer_id),
+                source_type="order",
+                source_id=int(order.id),
+            )
+        except Exception:
+            db.session.rollback()
     if amount > 0:
         post_ref = f"wallet_purchase:{reference}"
         try:
@@ -965,6 +974,14 @@ def create_order():
                 order.updated_at = datetime.utcnow()
                 db.session.add(order)
                 db.session.commit()
+                try:
+                    maybe_complete_referral_on_success(
+                        referred_user_id=int(order.buyer_id),
+                        source_type="order",
+                        source_id=int(order.id),
+                    )
+                except Exception:
+                    db.session.rollback()
             except Exception:
                 db.session.rollback()
                 try:
@@ -1420,6 +1437,14 @@ def mark_paid(order_id: int):
         o.updated_at = datetime.utcnow()
         db.session.add(o)
         db.session.commit()
+        try:
+            maybe_complete_referral_on_success(
+                referred_user_id=int(o.buyer_id),
+                source_type="order",
+                source_id=int(o.id),
+            )
+        except Exception:
+            db.session.rollback()
         return jsonify({"ok": True, "order": o.to_dict()}), 200
     except Exception as e:
         db.session.rollback()

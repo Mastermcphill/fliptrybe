@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../services/admin_ops_service.dart';
+import '../services/growth_analytics_service.dart';
 import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/formatters.dart';
 
 class AdminSystemHealthScreen extends StatefulWidget {
   const AdminSystemHealthScreen({super.key});
@@ -14,10 +16,12 @@ class AdminSystemHealthScreen extends StatefulWidget {
 
 class _AdminSystemHealthScreenState extends State<AdminSystemHealthScreen> {
   final _svc = AdminOpsService();
+  final _growth = GrowthAnalyticsService();
 
   bool _loading = true;
   String? _error;
   Map<String, dynamic> _health = const {};
+  Map<String, dynamic> _economics = const {};
 
   @override
   void initState() {
@@ -31,10 +35,14 @@ class _AdminSystemHealthScreenState extends State<AdminSystemHealthScreen> {
       _error = null;
     });
     try {
-      final payload = await _svc.healthSummary();
+      final values = await Future.wait<dynamic>([
+        _svc.healthSummary(),
+        _growth.adminEconomicsHealth(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _health = payload;
+        _health = values[0] as Map<String, dynamic>;
+        _economics = values[1] as Map<String, dynamic>;
         _loading = false;
       });
     } catch (_) {
@@ -62,6 +70,8 @@ class _AdminSystemHealthScreenState extends State<AdminSystemHealthScreen> {
   }
 
   int _asInt(String key) => int.tryParse('${_health[key] ?? 0}') ?? 0;
+  int _asEconomicsInt(String key) =>
+      int.tryParse('${_economics[key] ?? 0}') ?? 0;
 
   bool _notifyOk() => _asInt('notify_queue_failed') == 0;
   bool _payoutOk() => _asInt('payouts_pending_count') < 50;
@@ -184,6 +194,28 @@ class _AdminSystemHealthScreenState extends State<AdminSystemHealthScreen> {
                       'Cloudinary enabled: ${_health['cloudinary_enabled'] ?? false}'),
                   Text(
                       'Oldest notify age (sec): ${_health['oldest_pending_age_sec'] ?? 'n/a'}'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            FTSectionContainer(
+              title: 'Economics Health',
+              subtitle: 'Ledger-derived platform balances and float metrics.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Platform wallet: ${formatNaira(_asEconomicsInt('total_platform_wallet_balance_minor') / 100)}',
+                  ),
+                  Text(
+                    'Pending withdrawals: ${_asEconomicsInt('pending_withdrawals_count')} (${formatNaira(_asEconomicsInt('pending_withdrawals_minor') / 100)})',
+                  ),
+                  Text(
+                    'Commission float: ${formatNaira(_asEconomicsInt('commission_float_minor') / 100)}',
+                  ),
+                  Text(
+                    'Revenue (30d): ${formatNaira(_asEconomicsInt('revenue_last_30_days_minor') / 100)}',
+                  ),
                 ],
               ),
             ),

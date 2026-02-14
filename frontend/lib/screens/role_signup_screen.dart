@@ -33,6 +33,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
 
   // shared
   final _phone = TextEditingController();
+  final _referral = TextEditingController();
   final _state = TextEditingController(text: "Lagos");
   final _city = TextEditingController(text: "Lagos");
 
@@ -103,6 +104,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
         "email": email,
         "password": password,
         "phone": phone,
+        "referral_code": _referral.text.trim(),
       };
 
       if (_role == "buyer") {
@@ -128,6 +130,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           "city": _city.text.trim(),
           "category": _category.text.trim(),
           "reason": _reason.text.trim(),
+          "referral_code": _referral.text.trim(),
         };
       } else if (_role == "driver") {
         path = "/auth/register/driver";
@@ -140,6 +143,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           "city": _city.text.trim(),
           "vehicle_type": _vehicle.text.trim(),
           "plate_number": _plate.text.trim(),
+          "referral_code": _referral.text.trim(),
         };
       } else if (_role == "inspector") {
         if (_inspectorReason.text.trim().isEmpty) {
@@ -156,6 +160,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
           "city": _city.text.trim(),
           "region": _region.text.trim(),
           "reason": _inspectorReason.text.trim(),
+          "referral_code": _referral.text.trim(),
         };
       }
 
@@ -428,6 +433,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     _passwordFocus.dispose();
     _phoneFocus.dispose();
     _phone.dispose();
+    _referral.dispose();
     _state.dispose();
     _city.dispose();
     _business.dispose();
@@ -531,6 +537,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
                 enabled: !_loading,
               ),
             ),
+            _field(_referral, "Referral code (optional)"),
             if (_role == "merchant" ||
                 _role == "driver" ||
                 _role == "inspector") ...[

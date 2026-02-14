@@ -25,6 +25,7 @@ from app.services.payment_intent_service import (
     transition_intent,
 )
 from app.services.risk_engine_service import record_event
+from app.services.referral_service import maybe_complete_referral_on_success
 
 payments_bp = Blueprint("payments_bp", __name__, url_prefix="/api/payments")
 admin_payments_bp = Blueprint("admin_payments_bp", __name__, url_prefix="/api/admin/payments")
@@ -443,6 +444,14 @@ def _mark_order_paid(order: Order, reference: str):
         order.payment_reference = reference
     db.session.add(order)
     db.session.commit()
+    try:
+        maybe_complete_referral_on_success(
+            referred_user_id=int(order.buyer_id),
+            source_type="order",
+            source_id=int(order.id),
+        )
+    except Exception:
+        db.session.rollback()
 
 
 def _mark_shortlet_booking_paid(booking: ShortletBooking, reference: str):
@@ -450,6 +459,14 @@ def _mark_shortlet_booking_paid(booking: ShortletBooking, reference: str):
     booking.status = "confirmed"
     db.session.add(booking)
     db.session.commit()
+    try:
+        maybe_complete_referral_on_success(
+            referred_user_id=int(booking.user_id) if booking.user_id is not None else None,
+            source_type="shortlet_booking",
+            source_id=int(booking.id),
+        )
+    except Exception:
+        db.session.rollback()
 
 
 def _check_webhook_amount(pi: PaymentIntent | None, data: dict) -> bool:

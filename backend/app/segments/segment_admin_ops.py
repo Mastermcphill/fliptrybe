@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import csv
+import io
 from datetime import datetime, timedelta
 import os
 import subprocess
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, Response
 from sqlalchemy import or_
 
 from app.extensions import db
@@ -20,11 +22,16 @@ from app.models import (
     RiskEvent,
     User,
     WalletTxn,
+    Wallet,
     WebhookEvent,
     PlatformEvent,
     JobRun,
     NotificationQueue,
     PayoutRequest,
+    Shortlet,
+    ShortletBooking,
+    Referral,
+    ListingFavorite,
 )
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
@@ -141,6 +148,125 @@ def _git_sha() -> str:
         return out.decode().strip()
     except Exception:
         return (os.getenv("GIT_SHA") or os.getenv("RENDER_GIT_COMMIT") or "unknown").strip() or "unknown"
+
+
+def _money_to_minor(value) -> int:
+    try:
+        return int(round(float(value or 0.0) * 100.0))
+    except Exception:
+        return 0
+
+
+def _month_floor(dt: datetime) -> datetime:
+    return datetime(dt.year, dt.month, 1)
+
+
+def _month_add(dt: datetime, months: int) -> datetime:
+    year = dt.year + (dt.month - 1 + months) // 12
+    month = (dt.month - 1 + months) % 12 + 1
+    return datetime(year, month, 1)
+
+
+def _paid_orders(from_dt: datetime | None = None, to_dt: datetime | None = None):
+    q = Order.query.filter(
+        Order.status.in_(("paid", "merchant_accepted", "driver_assigned", "picked_up", "delivered", "completed"))
+    )
+    if from_dt is not None:
+        q = q.filter(Order.created_at >= from_dt)
+    if to_dt is not None:
+        q = q.filter(Order.created_at < to_dt)
+    return q
+
+
+def _paid_shortlet_bookings(from_dt: datetime | None = None, to_dt: datetime | None = None):
+    q = ShortletBooking.query.filter(ShortletBooking.payment_status == "paid")
+    if from_dt is not None:
+        q = q.filter(ShortletBooking.created_at >= from_dt)
+    if to_dt is not None:
+        q = q.filter(ShortletBooking.created_at < to_dt)
+    return q
+
+
+def _analytics_overview_payload() -> dict:
+    now = datetime.utcnow()
+    users_total = User.query.count()
+    merchants_total = User.query.filter(User.role == "merchant").count()
+    shortlets_total = Shortlet.query.count()
+    orders_q = _paid_orders()
+    bookings_q = _paid_shortlet_bookings()
+    orders = orders_q.all()
+    bookings = bookings_q.all()
+
+    orders_gmv_minor = sum(_money_to_minor(getattr(o, "total_price", None) or getattr(o, "amount", 0.0)) for o in orders)
+    shortlet_gmv_minor = sum(_money_to_minor(getattr(b, "total_amount", 0.0)) for b in bookings)
+    total_gmv_minor = int(orders_gmv_minor + shortlet_gmv_minor)
+
+    order_commission_minor = sum(
+        int(getattr(o, "sale_platform_minor", 0) or 0)
+        + int(getattr(o, "delivery_platform_minor", 0) or 0)
+        + int(getattr(o, "inspection_platform_minor", 0) or 0)
+        for o in orders
+    )
+    shortlet_commission_minor = sum(
+        _money_to_minor(float(getattr(b, "total_amount", 0.0) or 0.0) * 0.05) for b in bookings
+    )
+    total_commission_minor = int(order_commission_minor + shortlet_commission_minor)
+
+    last_30 = now - timedelta(days=30)
+    prev_30 = now - timedelta(days=60)
+    current_tx = _paid_orders(last_30, now).count() + _paid_shortlet_bookings(last_30, now).count()
+    prev_tx = _paid_orders(prev_30, last_30).count() + _paid_shortlet_bookings(prev_30, last_30).count()
+    if prev_tx <= 0:
+        monthly_growth_rate = 100.0 if current_tx > 0 else 0.0
+    else:
+        monthly_growth_rate = round(((current_tx - prev_tx) / prev_tx) * 100.0, 2)
+
+    active_users = set()
+    for row in Order.query.filter(Order.created_at >= last_30).all():
+        if row.buyer_id:
+            active_users.add(int(row.buyer_id))
+        if row.merchant_id:
+            active_users.add(int(row.merchant_id))
+    for row in ShortletBooking.query.filter(ShortletBooking.created_at >= last_30).all():
+        if row.user_id:
+            active_users.add(int(row.user_id))
+    for row in WalletTxn.query.filter(WalletTxn.created_at >= last_30).all():
+        if row.user_id:
+            active_users.add(int(row.user_id))
+
+    return {
+        "ok": True,
+        "total_users": int(users_total),
+        "total_merchants": int(merchants_total),
+        "total_shortlets": int(shortlets_total),
+        "total_orders": int(len(orders) + len(bookings)),
+        "total_gmv_minor": int(total_gmv_minor),
+        "total_commission_minor": int(total_commission_minor),
+        "monthly_growth_rate": float(monthly_growth_rate),
+        "active_users_last_30_days": int(len(active_users)),
+    }
+
+
+def _analytics_breakdown_payload() -> dict:
+    orders = _paid_orders().all()
+    bookings = _paid_shortlet_bookings().all()
+
+    declutter_gmv = sum(_money_to_minor(getattr(o, "total_price", None) or getattr(o, "amount", 0.0)) for o in orders)
+    shortlet_gmv = sum(_money_to_minor(getattr(b, "total_amount", 0.0)) for b in bookings)
+    merchant_gmv = sum(int(getattr(o, "sale_seller_minor", 0) or 0) for o in orders)
+    commissions_by_type = {
+        "sale_platform_minor": int(sum(int(getattr(o, "sale_platform_minor", 0) or 0) for o in orders)),
+        "delivery_platform_minor": int(sum(int(getattr(o, "delivery_platform_minor", 0) or 0) for o in orders)),
+        "inspection_platform_minor": int(sum(int(getattr(o, "inspection_platform_minor", 0) or 0) for o in orders)),
+        "shortlet_sale_minor": int(sum(_money_to_minor(float(getattr(b, "total_amount", 0.0) or 0.0) * 0.05) for b in bookings)),
+    }
+    return {
+        "ok": True,
+        "declutter_gmv": int(declutter_gmv),
+        "shortlet_gmv": int(shortlet_gmv),
+        "merchant_gmv": int(merchant_gmv),
+        "commissions_by_type": commissions_by_type,
+    }
 
 
 @admin_ops_bp.get("/events")
@@ -715,4 +841,212 @@ def admin_risk_events():
     rows = query.order_by(RiskEvent.created_at.desc()).offset(offset).limit(limit).all()
     return jsonify(
         {"ok": True, "items": [row.to_dict() for row in rows], "total": int(total), "limit": limit, "offset": offset}
+    ), 200
+
+
+@admin_ops_bp.get("/analytics/overview")
+def admin_analytics_overview():
+    _, err = _require_admin()
+    if err:
+        return err
+    return jsonify(_analytics_overview_payload()), 200
+
+
+@admin_ops_bp.get("/analytics/revenue-breakdown")
+def admin_analytics_revenue_breakdown():
+    _, err = _require_admin()
+    if err:
+        return err
+    return jsonify(_analytics_breakdown_payload()), 200
+
+
+@admin_ops_bp.get("/analytics/projection")
+def admin_analytics_projection():
+    _, err = _require_admin()
+    if err:
+        return err
+    try:
+        months = int(request.args.get("months") or 6)
+    except Exception:
+        months = 6
+    months = max(1, min(months, 24))
+
+    now = datetime.utcnow()
+    this_month = _month_floor(now)
+    history = []
+    for back in range(3, -1, -1):
+        start = _month_add(this_month, -back)
+        end = _month_add(start, 1)
+        orders = _paid_orders(start, end).all()
+        bookings = _paid_shortlet_bookings(start, end).all()
+        tx_count = int(len(orders) + len(bookings))
+        gmv_minor = int(
+            sum(_money_to_minor(getattr(o, "total_price", None) or getattr(o, "amount", 0.0)) for o in orders)
+            + sum(_money_to_minor(getattr(b, "total_amount", 0.0)) for b in bookings)
+        )
+        commission_minor = int(
+            sum(
+                int(getattr(o, "sale_platform_minor", 0) or 0)
+                + int(getattr(o, "delivery_platform_minor", 0) or 0)
+                + int(getattr(o, "inspection_platform_minor", 0) or 0)
+                for o in orders
+            )
+            + sum(_money_to_minor(float(getattr(b, "total_amount", 0.0) or 0.0) * 0.05) for b in bookings)
+        )
+        history.append(
+            {
+                "month": start.strftime("%Y-%m"),
+                "transactions": tx_count,
+                "gmv_minor": gmv_minor,
+                "commission_minor": commission_minor,
+            }
+        )
+
+    growth_rates = []
+    for idx in range(1, len(history)):
+        prev = float(history[idx - 1]["gmv_minor"] or 0)
+        curr = float(history[idx]["gmv_minor"] or 0)
+        if prev > 0:
+            growth_rates.append((curr - prev) / prev)
+    avg_growth_rate = sum(growth_rates) / len(growth_rates) if growth_rates else 0.0
+    if avg_growth_rate < -0.9:
+        avg_growth_rate = -0.9
+    if avg_growth_rate > 3.0:
+        avg_growth_rate = 3.0
+
+    recent = history[-3:] if len(history) >= 3 else history
+    recent_tx = sum(int(r["transactions"]) for r in recent)
+    recent_gmv = sum(int(r["gmv_minor"]) for r in recent)
+    recent_commission = sum(int(r["commission_minor"]) for r in recent)
+    avg_order_value_minor = int(round(recent_gmv / recent_tx)) if recent_tx > 0 else 0
+    avg_commission_per_tx_minor = int(round(recent_commission / recent_tx)) if recent_tx > 0 else 0
+
+    base_tx = int(history[-1]["transactions"]) if history else 0
+    base_gmv = int(history[-1]["gmv_minor"]) if history else 0
+    if base_tx <= 0 and avg_order_value_minor > 0:
+        base_tx = 1
+    projections = []
+    for step in range(1, months + 1):
+        month_start = _month_add(this_month, step)
+        if base_tx > 0:
+            projected_tx = max(0, int(round(base_tx * ((1.0 + avg_growth_rate) ** step))))
+        else:
+            projected_tx = 0
+        if avg_order_value_minor > 0:
+            projected_gmv_minor = int(projected_tx * avg_order_value_minor)
+        else:
+            projected_gmv_minor = int(round(base_gmv * ((1.0 + avg_growth_rate) ** step)))
+        projected_commission_minor = int(projected_tx * avg_commission_per_tx_minor)
+        projections.append(
+            {
+                "month": month_start.strftime("%Y-%m"),
+                "projected_transactions": int(projected_tx),
+                "projected_gmv_minor": int(max(projected_gmv_minor, 0)),
+                "projected_commission_minor": int(max(projected_commission_minor, 0)),
+            }
+        )
+
+    return jsonify(
+        {
+            "ok": True,
+            "months": months,
+            "assumptions": {
+                "average_growth_rate": float(round(avg_growth_rate, 4)),
+                "avg_order_value_minor": int(avg_order_value_minor),
+                "avg_commission_per_transaction_minor": int(avg_commission_per_tx_minor),
+            },
+            "history": history,
+            "projections": projections,
+        }
+    ), 200
+
+
+@admin_ops_bp.get("/analytics/export-csv")
+def admin_analytics_export_csv():
+    _, err = _require_admin()
+    if err:
+        return err
+    overview = _analytics_overview_payload()
+    breakdown = _analytics_breakdown_payload()
+    now = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["section", "metric", "value"])
+    for key in (
+        "total_users",
+        "total_merchants",
+        "total_shortlets",
+        "total_orders",
+        "total_gmv_minor",
+        "total_commission_minor",
+        "monthly_growth_rate",
+        "active_users_last_30_days",
+    ):
+        writer.writerow(["overview", key, overview.get(key)])
+    writer.writerow(["breakdown", "declutter_gmv", breakdown.get("declutter_gmv")])
+    writer.writerow(["breakdown", "shortlet_gmv", breakdown.get("shortlet_gmv")])
+    writer.writerow(["breakdown", "merchant_gmv", breakdown.get("merchant_gmv")])
+    commissions = breakdown.get("commissions_by_type") or {}
+    if isinstance(commissions, dict):
+        for key, value in commissions.items():
+            writer.writerow(["breakdown.commissions_by_type", key, value])
+    writer.writerow(["meta", "generated_at", now])
+    csv_bytes = output.getvalue()
+    return Response(
+        csv_bytes,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="fliptrybe-analytics.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+def _platform_user_id() -> int:
+    raw = (os.getenv("PLATFORM_USER_ID") or "").strip()
+    if raw.isdigit():
+        return int(raw)
+    admin = User.query.filter_by(role="admin").order_by(User.id.asc()).first()
+    if admin:
+        return int(admin.id)
+    return 1
+
+
+@admin_ops_bp.get("/economics/health")
+def admin_economics_health():
+    _, err = _require_admin()
+    if err:
+        return err
+    now = datetime.utcnow()
+    platform_user_id = _platform_user_id()
+    platform_wallet = Wallet.query.filter_by(user_id=int(platform_user_id)).first()
+    total_platform_wallet_balance_minor = _money_to_minor(
+        float(getattr(platform_wallet, "balance", 0.0) or 0.0)
+    )
+
+    pending_withdrawals = PayoutRequest.query.filter_by(status="pending").all()
+    pending_withdrawals_minor = sum(_money_to_minor(getattr(p, "amount", 0.0)) for p in pending_withdrawals)
+    pending_withdrawals_count = len(pending_withdrawals)
+
+    platform_kinds = {"platform_fee", "delivery_commission", "inspection_commission", "shortlet_platform_fee"}
+    revenue_last_30_days_minor = 0
+    commission_float_minor = 0
+    for txn in WalletTxn.query.filter(WalletTxn.user_id == int(platform_user_id)).all():
+        sign = 1 if (txn.direction or "").lower() == "credit" else -1
+        amt_minor = _money_to_minor(txn.amount)
+        if (txn.kind or "").lower() in platform_kinds:
+            commission_float_minor += sign * amt_minor
+            if txn.created_at and txn.created_at >= now - timedelta(days=30):
+                revenue_last_30_days_minor += sign * amt_minor
+
+    return jsonify(
+        {
+            "ok": True,
+            "platform_user_id": int(platform_user_id),
+            "total_platform_wallet_balance_minor": int(total_platform_wallet_balance_minor),
+            "pending_withdrawals_count": int(pending_withdrawals_count),
+            "pending_withdrawals_minor": int(max(pending_withdrawals_minor, 0)),
+            "commission_float_minor": int(max(commission_float_minor, 0)),
+            "revenue_last_30_days_minor": int(max(revenue_last_30_days_minor, 0)),
+        }
     ), 200

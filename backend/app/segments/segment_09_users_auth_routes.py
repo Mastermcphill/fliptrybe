@@ -19,6 +19,10 @@ from app.utils.rate_limit import check_limit
 from app.utils.events import log_event
 from app.utils.observability import get_request_id
 from app.services.risk_engine_service import record_event
+from app.services.referral_service import (
+    apply_referral_code as apply_referral_code_service,
+    ensure_user_referral_code,
+)
 
 
 def _conflict_message(email_user: User | None, phone_user: User | None) -> str | None:
@@ -398,6 +402,11 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
         return None, ({"message": "Failed to create user"}, 500)
 
     try:
+        ensure_user_referral_code(u)
+    except Exception:
+        db.session.rollback()
+
+    try:
         vtoken = _issue_verification_token(u, ttl_minutes=30)
         if vtoken:
             _send_verification_email(u, vtoken)
@@ -491,6 +500,26 @@ def _user_payload_with_role_status(user: User) -> dict:
     return payload
 
 
+def _maybe_apply_referral_from_payload(user: User | None, payload: dict | None) -> dict | None:
+    if not user or not isinstance(payload, dict):
+        return None
+    code = (
+        payload.get("referral_code")
+        or payload.get("ref_code")
+        or payload.get("invite_code")
+        or payload.get("referred_by")
+        or ""
+    )
+    code = str(code or "").strip()
+    if not code:
+        return None
+    try:
+        return apply_referral_code_service(user=user, code=code)
+    except Exception:
+        db.session.rollback()
+        return {"ok": False, "error": "REFERRAL_APPLY_FAILED", "message": "Failed to apply referral code"}
+
+
 def _bearer_token() -> str | None:
     header = request.headers.get("Authorization", "")
     return get_bearer_token(header)
@@ -544,16 +573,20 @@ def register():
     if err:
         body, code = err
         return jsonify(body), code
+    referral_apply = _maybe_apply_referral_from_payload(u, data)
     try:
         access_token, access_expires_at = _issue_access_token(int(u.id))
         _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(u.id), device_id=request.headers.get("X-Device-Id"))
         db.session.commit()
-        return jsonify(_session_payload(
+        body = _session_payload(
             u,
             access_token=access_token,
             access_expires_at=access_expires_at,
             refresh_token=refresh_token,
-        )), 201
+        )
+        if referral_apply is not None:
+            body["referral_apply"] = referral_apply
+        return jsonify(body), 201
     except Exception:
         db.session.rollback()
         current_app.logger.exception("register_session_issue_failed")
@@ -964,6 +997,11 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
             return None, (jsonify({"message": "Failed to register"}), 500)
 
         try:
+            ensure_user_referral_code(u)
+        except Exception:
+            db.session.rollback()
+
+        try:
             vtoken = _issue_verification_token(u, ttl_minutes=30)
             if vtoken:
                 _send_verification_email(u, vtoken)
@@ -995,16 +1033,20 @@ def register_buyer():
     user = User.query.get(user_id) if user_id else None
     if not user:
         return jsonify({"message": "Failed to load user after signup"}), 500
+    referral_apply = _maybe_apply_referral_from_payload(user, data)
     try:
         access_token, access_expires_at = _issue_access_token(int(user.id))
         _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
         db.session.commit()
-        return jsonify(_session_payload(
+        body = _session_payload(
             user,
             access_token=access_token,
             access_expires_at=access_expires_at,
             refresh_token=refresh_token,
-        )), 201
+        )
+        if referral_apply is not None:
+            body["referral_apply"] = referral_apply
+        return jsonify(body), 201
     except Exception:
         db.session.rollback()
         current_app.logger.exception("register_buyer_session_issue_failed")
@@ -1190,6 +1232,7 @@ def register_merchant():
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
+    referral_apply = _maybe_apply_referral_from_payload(user, data)
     try:
         access_token, access_expires_at = _issue_access_token(int(user.id))
         _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
@@ -1205,6 +1248,8 @@ def register_merchant():
         refresh_token=refresh_token,
     )
     body["request"] = req.to_dict()
+    if referral_apply is not None:
+        body["referral_apply"] = referral_apply
     return jsonify(body), 201
 
 
@@ -1292,6 +1337,7 @@ def register_driver():
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
+    referral_apply = _maybe_apply_referral_from_payload(user, data)
     try:
         access_token, access_expires_at = _issue_access_token(int(user.id))
         _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
@@ -1308,6 +1354,8 @@ def register_driver():
     )
     body["request"] = req.to_dict()
     body["message"] = "Driver signup submitted. Activation is admin-mediated."
+    if referral_apply is not None:
+        body["referral_apply"] = referral_apply
     return jsonify(body), 201
 
 
@@ -1391,6 +1439,7 @@ def register_inspector():
         db.session.rollback()
         return jsonify({"message": "Failed to create request", "error": str(e)}), 500
 
+    referral_apply = _maybe_apply_referral_from_payload(user, data)
     try:
         access_token, access_expires_at = _issue_access_token(int(user.id))
         _refresh_rec, refresh_token = _issue_refresh_token_record(user_id=int(user.id), device_id=request.headers.get("X-Device-Id"))
@@ -1407,6 +1456,8 @@ def register_inspector():
     )
     body["request"] = req.to_dict()
     body["message"] = "Inspector signup submitted. Activation is admin-mediated."
+    if referral_apply is not None:
+        body["referral_apply"] = referral_apply
     return jsonify(body), 201
 
 

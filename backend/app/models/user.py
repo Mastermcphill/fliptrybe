@@ -23,6 +23,8 @@ class User(db.Model, UserMixin):
     is_verified = db.Column(db.Boolean, nullable=False, default=False)
 
     role = db.Column(db.String(32), nullable=False, default='buyer')
+    referral_code = db.Column(db.String(32), nullable=True, unique=True, index=True)
+    referred_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
 
     # KYC tier: 0=unverified, 1=basic, 2=verified
     kyc_tier = db.Column(db.Integer, nullable=False, default=0)
@@ -46,6 +48,8 @@ class User(db.Model, UserMixin):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "is_verified": bool(self.is_verified),
             "role": self.role or "buyer",
+            "referral_code": (getattr(self, "referral_code", None) or ""),
+            "referred_by": int(getattr(self, "referred_by", 0) or 0) or None,
             "kyc_tier": int(getattr(self, "kyc_tier", 0) or 0),
             "is_available": bool(getattr(self, "is_available", True)),
         }

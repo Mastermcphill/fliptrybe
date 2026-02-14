@@ -152,13 +152,9 @@ def merchant_analytics():
         base_q = Order.query.filter_by(merchant_id=mid).filter(Order.status.in_(list(paid_statuses)))
         paid_last_7 = base_q.filter(Order.created_at >= (now - timedelta(days=7))).count()
         paid_last_30 = base_q.filter(Order.created_at >= (now - timedelta(days=30))).count()
+        paid_orders = base_q.all()
 
-        recent = (
-            base_q.order_by(Order.created_at.desc())
-            .limit(12)
-            .all()
-        )
-
+        recent = base_q.order_by(Order.created_at.desc()).limit(12).all()
         recent_out = []
         for o in recent:
             recent_out.append({
@@ -169,8 +165,29 @@ def merchant_analytics():
                 "created_at": o.created_at.isoformat() if o.created_at else None,
             })
 
+        total_sales = int(len(paid_orders))
+        commission_paid_minor = 0
+        net_earnings_minor = 0
+        for o in paid_orders:
+            sale_fee_minor = int(getattr(o, "sale_fee_minor", 0) or 0)
+            seller_minor = int(getattr(o, "sale_seller_minor", 0) or 0)
+            if sale_fee_minor <= 0:
+                sale_fee_minor = int(round(float(getattr(o, "amount", 0.0) or 0.0) * 100 * 0.05))
+            if seller_minor <= 0:
+                seller_minor = int(round(float(getattr(o, "amount", 0.0) or 0.0) * 100 * 0.95))
+            commission_paid_minor += sale_fee_minor
+            net_earnings_minor += seller_minor
+
+        listings = Listing.query.filter_by(user_id=mid).all()
+        total_views = sum(int(getattr(row, "views_count", 0) or 0) for row in listings)
+        conversion_rate = (float(total_sales) / float(total_views) * 100.0) if total_views > 0 else 0.0
+
         return jsonify({
             "ok": True,
+            "total_sales": int(total_sales),
+            "commission_paid_minor": int(commission_paid_minor),
+            "net_earnings_minor": int(net_earnings_minor),
+            "conversion_rate": round(conversion_rate, 2),
             "paid_last_7": int(paid_last_7),
             "paid_last_30": int(paid_last_30),
             "recent_paid": recent_out,
@@ -181,7 +198,16 @@ def merchant_analytics():
             current_app.logger.exception("merchant_analytics_error")
         except Exception:
             pass
-        return jsonify({"ok": True, "paid_last_7": 0, "paid_last_30": 0, "recent_paid": []}), 200
+        return jsonify({
+            "ok": True,
+            "total_sales": 0,
+            "commission_paid_minor": 0,
+            "net_earnings_minor": 0,
+            "conversion_rate": 0.0,
+            "paid_last_7": 0,
+            "paid_last_30": 0,
+            "recent_paid": [],
+        }), 200
 
 
 @merchant_bp.get("/leaderboard")

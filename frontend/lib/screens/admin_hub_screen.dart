@@ -20,6 +20,8 @@ import 'admin_anomalies_screen.dart';
 import 'admin_risk_events_screen.dart';
 import 'admin_system_health_screen.dart';
 import 'admin_feature_flags_screen.dart';
+import 'admin_growth_analytics_screen.dart';
+import 'investor_metrics_screen.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/ft_routes.dart';
 import '../ui/admin/admin_scaffold.dart';
@@ -222,6 +224,20 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
             subtitle:
                 const Text('Queue backlog, runner state, payout pressure'),
             onTap: () => _open(const AdminSystemHealthScreen()),
+          ),
+          FTTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Growth Analytics'),
+            subtitle:
+                const Text('GMV, commissions, growth trend and projections'),
+            onTap: () => _open(const AdminGrowthAnalyticsScreen()),
+          ),
+          FTTile(
+            leading: const Icon(Icons.stacked_line_chart_outlined),
+            title: const Text('Investor Dashboard'),
+            subtitle: const Text(
+                'Unit economics and CSV export for investor reporting'),
+            onTap: () => _open(const InvestorMetricsScreen()),
           ),
           FTTile(
             leading: const Icon(Icons.manage_search_outlined),

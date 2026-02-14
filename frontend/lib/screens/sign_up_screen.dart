@@ -28,6 +28,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _reasonCtrl = TextEditingController();
+  final _referralCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
@@ -126,6 +127,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               : _selectedState,
           'category': 'general',
           'reason': reason,
+          'referral_code': _referralCtrl.text.trim(),
         };
       } else if (backendRole == 'driver') {
         path = '/auth/register/driver';
@@ -140,6 +142,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
               : _selectedState,
           'vehicle_type': 'bike',
           'plate_number': 'DEMO-001',
+          'referral_code': _referralCtrl.text.trim(),
         };
       } else {
         path = '/auth/register/buyer';
@@ -148,6 +151,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'email': email,
           'password': password,
           'phone': phone,
+          'referral_code': _referralCtrl.text.trim(),
         };
       }
 
@@ -195,6 +199,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
     _reasonCtrl.dispose();
+    _referralCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     _nameFocus.dispose();
@@ -287,6 +292,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ),
               const SizedBox(height: 12),
             ],
+            FTTextField(
+              controller: _referralCtrl,
+              labelText: 'Referral Code (optional)',
+              prefixIcon: Icons.card_giftcard_outlined,
+              enabled: !_loading,
+            ),
+            const SizedBox(height: 12),
             FTPasswordField(
               controller: _passwordCtrl,
               focusNode: _passwordFocus,

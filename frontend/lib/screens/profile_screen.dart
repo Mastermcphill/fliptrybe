@@ -13,15 +13,16 @@ import '../utils/ui_feedback.dart';
 import 'email_verify_screen.dart';
 import 'following_merchants_screen.dart';
 import 'investor_metrics_screen.dart';
+import 'invite_earn_screen.dart';
 import 'kyc_demo_screen.dart';
 import 'marketplace/favorites_screen.dart';
 import 'marketplace/saved_searches_screen.dart';
 import 'merchant_listings_demo_screen.dart';
 import 'notifications_inbox_screen.dart';
 import 'orders_screen.dart';
+import 'personal_analytics_screen.dart';
 import 'receipts_screen.dart';
 import 'report_problem_screen.dart';
-import 'sales_analytics_screen.dart';
 import 'settings_demo_screen.dart';
 import 'support_chat_screen.dart';
 import 'support_tickets_screen.dart';
@@ -121,6 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final role = (_profile?['role'] ?? 'buyer').toString().toLowerCase();
     final isMerchant = role == 'merchant' || role == 'admin';
+    final isInvestorRole = role == 'admin' || role == 'investor';
     final isVerified = _profile?['is_verified'] == true;
     final balance = double.tryParse('${_profile?['wallet_balance'] ?? 0}') ?? 0;
     final tierLabel = (_profile?['tier'] ?? 'Novice').toString();
@@ -254,6 +256,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           builder: (_) => const FavoritesScreen()),
                     ),
                   ),
+                  FTListTile(
+                    leading: const Icon(Icons.card_giftcard_outlined),
+                    title: 'Invite & Earn',
+                    subtitle: 'Share your referral code and track rewards.',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const InviteEarnScreen(),
+                      ),
+                    ),
+                  ),
                   if (isMerchant)
                     FTListTile(
                       leading: const Icon(Icons.storefront_outlined),
@@ -268,14 +280,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   FTListTile(
                     leading: const Icon(Icons.analytics_outlined),
                     title: 'Analytics',
-                    subtitle: isMerchant
-                        ? 'Sales and revenue trends.'
-                        : 'Investor and growth metrics.',
+                    subtitle: isInvestorRole
+                        ? 'Investor and growth metrics.'
+                        : isMerchant
+                            ? 'Sales, commission and conversion trends.'
+                            : 'Purchases and spending insights.',
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => isMerchant
-                            ? const SalesAnalyticsScreen()
-                            : const InvestorMetricsScreen(),
+                        builder: (_) => isInvestorRole
+                            ? const InvestorMetricsScreen()
+                            : PersonalAnalyticsScreen(role: role),
                       ),
                     ),
                   ),

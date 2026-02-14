@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'dart:async';
 import 'dart:ui';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -8,12 +8,14 @@ import 'screens/landing_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_signup_screen.dart';
 import 'screens/pending_approval_screen.dart';
+import 'screens/investor_metrics_screen.dart';
 import 'shells/admin_shell.dart';
 import 'shells/buyer_shell.dart';
 import 'shells/merchant_shell.dart';
 import 'shells/driver_shell.dart';
 import 'shells/inspector_shell.dart';
 import 'shells/public_browse_shell.dart';
+import 'public_site/public_marketing_site.dart';
 import 'services/api_client.dart';
 import 'services/api_service.dart';
 import 'services/api_config.dart';
@@ -235,9 +237,14 @@ class StartupScreen extends StatefulWidget {
 }
 
 class _StartupScreenState extends State<StartupScreen> {
+  final String _initialPath = Uri.base.path;
   bool _isCheckingSession = false;
   bool _hasCheckedSession = false;
   bool _hasNavigated = false;
+
+  bool get _isInvestorPath => _initialPath.trim().toLowerCase() == '/investor';
+  bool get _isMarketingPath =>
+      PublicMarketingSite.isMarketingPath(_initialPath);
 
   @override
   void initState() {
@@ -253,6 +260,10 @@ class _StartupScreenState extends State<StartupScreen> {
       if (restored.authenticated && restored.user != null) {
         final user = restored.user!;
         await ApiService.syncSentryUser(user);
+        if (_isInvestorPath) {
+          _navigateToInvestorDashboard();
+          return;
+        }
         _navigateToRoleHome(
           (user['role'] ?? 'buyer').toString(),
           roleStatus: (user['role_status'] ?? 'approved').toString(),
@@ -297,8 +308,39 @@ class _StartupScreenState extends State<StartupScreen> {
     });
   }
 
+  void _navigateToInvestorDashboard() {
+    if (_hasNavigated) return;
+    _hasNavigated = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const AppExitGuard(child: InvestorMetricsScreen()),
+        ),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_isInvestorPath) {
+      return const LoginScreen();
+    }
+    if (kIsWeb && _isMarketingPath) {
+      return PublicMarketingSite(
+        initialPath: _initialPath,
+        onLogin: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        },
+        onSignup: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const RoleSignupScreen()),
+          );
+        },
+      );
+    }
     return LandingScreen(
       onLogin: () {
         Navigator.of(context).push(
