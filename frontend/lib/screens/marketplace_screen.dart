@@ -32,6 +32,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   final _searchCtrl = TextEditingController();
 
   bool _loading = true;
+  bool _refreshing = false;
   String? _error;
   List<Map<String, dynamic>> _all = const [];
   List<Map<String, dynamic>> _recommendedRemote = const [];
@@ -44,7 +45,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _seedFromCache();
+    _load(showLoading: _all.isEmpty);
   }
 
   @override
@@ -53,9 +55,49 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  void _seedFromCache() {
+    final cached = _catalog.cachedDiscoveryFeed();
+    if (cached == null) return;
+    final cachedListings = (cached['listings'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((raw) => Map<String, dynamic>.from(raw))
+        .toList(growable: false);
+    final cachedRecommended =
+        (cached['recommended'] as List<dynamic>? ?? const [])
+            .whereType<Map>()
+            .map((raw) => Map<String, dynamic>.from(raw))
+            .toList(growable: false);
+    final cachedDeals = (cached['deals'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((raw) => Map<String, dynamic>.from(raw))
+        .toList(growable: false);
+    final cachedDrops = (cached['new_drops'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((raw) => Map<String, dynamic>.from(raw))
+        .toList(growable: false);
     setState(() {
-      _loading = true;
+      _all = cachedListings;
+      _recommendedRemote = cachedRecommended;
+      _dealsRemote = cachedDeals;
+      _newDropsRemote = cachedDrops;
+      _loading = false;
+      _error = null;
+    });
+  }
+
+  bool get _hasRenderableData =>
+      _all.isNotEmpty ||
+      _recommendedRemote.isNotEmpty ||
+      _dealsRemote.isNotEmpty ||
+      _newDropsRemote.isNotEmpty;
+
+  Future<void> _load({bool showLoading = true}) async {
+    setState(() {
+      if (showLoading) {
+        _loading = true;
+      } else {
+        _refreshing = true;
+      }
       _error = null;
     });
     try {
@@ -92,6 +134,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         _dealsRemote = remoteDeals;
         _newDropsRemote = remoteDrops;
         _loading = false;
+        _refreshing = false;
+        _error = null;
       });
     } catch (e) {
       final errorMessage = UIFeedback.mapDioErrorToMessage(e);
@@ -105,6 +149,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _refreshing = false;
         _error = errorMessage;
       });
       UIFeedback.showErrorSnack(context, errorMessage);
@@ -253,7 +298,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     title: 'Nothing here yet',
                     subtitle: 'Try refreshing or explore all listings.',
                     primaryCtaText: 'Refresh',
-                    onPrimaryCta: _load,
+                    onPrimaryCta: () => _load(showLoading: !_hasRenderableData),
                     secondaryCtaText: 'Browse categories',
                     onSecondaryCta: () => _openResults(sort: seeAllSort),
                   ),
@@ -339,129 +384,164 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Sell Item'),
       ),
-      child: _loading
-          ? const _MarketplaceSkeleton()
-          : _error != null
-              ? FTErrorState(message: _error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: CustomScrollView(
-                    cacheExtent: 960,
-                    slivers: [
-                      SliverAppBar(
-                        pinned: true,
-                        floating: true,
-                        toolbarHeight: 72,
-                        backgroundColor: scheme.surface,
-                        surfaceTintColor: scheme.surface,
-                        elevation: 0,
-                        titleSpacing: 0,
-                        title: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                          child: TextField(
-                            controller: _searchCtrl,
-                            textInputAction: TextInputAction.search,
-                            onSubmitted: (value) => _openResults(query: value),
-                            style: TextStyle(color: scheme.onSurface),
-                            decoration: InputDecoration(
-                              hintText: 'Search marketplace',
-                              hintStyle:
-                                  TextStyle(color: scheme.onSurfaceVariant),
-                              prefixIcon: Icon(Icons.search,
-                                  color: scheme.onSurfaceVariant),
-                              suffixIcon: IconButton(
-                                icon: Icon(Icons.tune,
-                                    color: scheme.onSurfaceVariant),
-                                tooltip: 'Open filters',
-                                onPressed: () =>
-                                    _openResults(query: _searchCtrl.text),
-                              ),
-                              filled: true,
-                              fillColor: scheme.surfaceContainerHigh,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide:
-                                    BorderSide(color: scheme.outlineVariant),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide:
-                                    BorderSide(color: scheme.outlineVariant),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide(color: scheme.primary),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SliverToBoxAdapter(
-                        child: Container(
-                          color: scheme.surface,
-                          padding: const EdgeInsets.fromLTRB(
-                            FTDesignTokens.md,
-                            FTDesignTokens.xs,
-                            FTDesignTokens.md,
-                            FTDesignTokens.lg,
-                          ),
-                          child: Column(
-                            children: [
-                              FTCard(
-                                child: FTResponsiveTitleAction(
-                                  title: 'City Discovery',
-                                  subtitle:
-                                      'Showing results around $_preferredCity',
-                                  action: FTButton(
-                                    label: _preferredCity,
-                                    icon: Icons.location_city_outlined,
-                                    variant: FTButtonVariant.ghost,
-                                    onPressed: _pickCity,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: _loading
+            ? const KeyedSubtree(
+                key: ValueKey<String>('marketplace_loading'),
+                child: _MarketplaceSkeleton(),
+              )
+            : _error != null && !_hasRenderableData
+                ? KeyedSubtree(
+                    key: const ValueKey<String>('marketplace_error'),
+                    child: FTErrorState(message: _error!, onRetry: _load),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey<String>('marketplace_data'),
+                    child: RefreshIndicator(
+                      onRefresh: () => _load(showLoading: false),
+                      child: CustomScrollView(
+                        cacheExtent: 960,
+                        slivers: [
+                          SliverAppBar(
+                            pinned: true,
+                            floating: true,
+                            toolbarHeight: 72,
+                            backgroundColor: scheme.surface,
+                            surfaceTintColor: scheme.surface,
+                            elevation: 0,
+                            titleSpacing: 0,
+                            title: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                              child: TextField(
+                                controller: _searchCtrl,
+                                textInputAction: TextInputAction.search,
+                                onSubmitted: (value) =>
+                                    _openResults(query: value),
+                                style: TextStyle(color: scheme.onSurface),
+                                decoration: InputDecoration(
+                                  hintText: 'Search marketplace',
+                                  hintStyle:
+                                      TextStyle(color: scheme.onSurfaceVariant),
+                                  prefixIcon: Icon(Icons.search,
+                                      color: scheme.onSurfaceVariant),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(Icons.tune,
+                                        color: scheme.onSurfaceVariant),
+                                    tooltip: 'Open filters',
+                                    onPressed: () =>
+                                        _openResults(query: _searchCtrl.text),
+                                  ),
+                                  filled: true,
+                                  fillColor: scheme.surfaceContainerHigh,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                        color: scheme.outlineVariant),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                        color: scheme.outlineVariant),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide:
+                                        BorderSide(color: scheme.primary),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: FTDesignTokens.md),
-                              _section(
-                                context,
-                                title: 'Recommended for you',
-                                subtitle:
-                                    'Ranked by city, heat, freshness, and quality',
-                                items: recommendedItems,
-                                seeAllSort: 'relevance',
-                              ),
-                              const SizedBox(height: FTDesignTokens.md),
-                              _section(
-                                context,
-                                title: 'Trending near you',
-                                subtitle:
-                                    'Heat-ranked listings with strong demand',
-                                items: trending,
-                                seeAllSort: 'distance',
-                              ),
-                              const SizedBox(height: FTDesignTokens.md),
-                              _section(
-                                context,
-                                title: 'New Drops',
-                                subtitle: 'Fresh listings from across Nigeria',
-                                items: newDropsItems,
-                                seeAllSort: 'newest',
-                              ),
-                              const SizedBox(height: FTDesignTokens.md),
-                              _section(
-                                context,
-                                title: 'Hot Deals',
-                                subtitle:
-                                    'Price-friendly picks and active offers',
-                                items: dealsItems,
-                                seeAllSort: 'price_low',
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
+                          SliverToBoxAdapter(
+                            child: Container(
+                              color: scheme.surface,
+                              padding: const EdgeInsets.fromLTRB(
+                                FTDesignTokens.md,
+                                FTDesignTokens.xs,
+                                FTDesignTokens.md,
+                                FTDesignTokens.lg,
+                              ),
+                              child: Column(
+                                children: [
+                                  FTCard(
+                                    child: FTResponsiveTitleAction(
+                                      title: 'City Discovery',
+                                      subtitle:
+                                          'Showing results around $_preferredCity',
+                                      action: FTButton(
+                                        label: _preferredCity,
+                                        icon: Icons.location_city_outlined,
+                                        variant: FTButtonVariant.ghost,
+                                        onPressed: _pickCity,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: FTDesignTokens.md),
+                                  if (_error != null) ...[
+                                    FTCard(
+                                      child: FTResponsiveTitleAction(
+                                        title: 'Could not refresh feed',
+                                        subtitle: _error!,
+                                        action: FTButton(
+                                          label: _refreshing
+                                              ? 'Refreshing...'
+                                              : 'Retry',
+                                          icon: Icons.refresh,
+                                          variant: FTButtonVariant.ghost,
+                                          onPressed: _refreshing
+                                              ? null
+                                              : () => _load(showLoading: false),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: FTDesignTokens.md),
+                                  ],
+                                  _section(
+                                    context,
+                                    title: 'Recommended for you',
+                                    subtitle:
+                                        'Ranked by city, heat, freshness, and quality',
+                                    items: recommendedItems,
+                                    seeAllSort: 'relevance',
+                                  ),
+                                  const SizedBox(height: FTDesignTokens.md),
+                                  _section(
+                                    context,
+                                    title: 'Trending near you',
+                                    subtitle:
+                                        'Heat-ranked listings with strong demand',
+                                    items: trending,
+                                    seeAllSort: 'distance',
+                                  ),
+                                  const SizedBox(height: FTDesignTokens.md),
+                                  _section(
+                                    context,
+                                    title: 'New Drops',
+                                    subtitle:
+                                        'Fresh listings from across Nigeria',
+                                    items: newDropsItems,
+                                    seeAllSort: 'newest',
+                                  ),
+                                  const SizedBox(height: FTDesignTokens.md),
+                                  _section(
+                                    context,
+                                    title: 'Hot Deals',
+                                    subtitle:
+                                        'Price-friendly picks and active offers',
+                                    items: dealsItems,
+                                    seeAllSort: 'price_low',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
+      ),
     );
   }
 }

@@ -224,9 +224,10 @@ class _LoginScreenState extends State<LoginScreen> {
             Semantics(
               label: 'Login action',
               button: true,
-              child: FTPrimaryButton(
+              child: FTAsyncButton(
                 label: 'Login',
-                loading: _isLoading,
+                variant: FTButtonVariant.primary,
+                externalLoading: _isLoading,
                 onPressed: _isLoading ? null : _handleLogin,
               ),
             ),

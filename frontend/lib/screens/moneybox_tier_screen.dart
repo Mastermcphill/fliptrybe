@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
+import '../services/moneybox_service.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/ft_routes.dart';
 import '../widgets/email_verification_dialog.dart';
 import 'kyc_demo_screen.dart';
 
@@ -20,10 +22,20 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
   String _moneyboxStatus = 'none';
 
   final _tiers = const [
-    {'tier': 1, 'label': 'Tier 1', 'duration': 'Up to 30 days', 'bonus': '0% bonus'},
+    {
+      'tier': 1,
+      'label': 'Tier 1',
+      'duration': 'Up to 30 days',
+      'bonus': '0% bonus'
+    },
     {'tier': 2, 'label': 'Tier 2', 'duration': '4 months', 'bonus': '3% bonus'},
     {'tier': 3, 'label': 'Tier 3', 'duration': '7 months', 'bonus': '8% bonus'},
-    {'tier': 4, 'label': 'Tier 4', 'duration': '11 months', 'bonus': '15% bonus'},
+    {
+      'tier': 4,
+      'label': 'Tier 4',
+      'duration': '11 months',
+      'bonus': '15% bonus'
+    },
   ];
 
   @override
@@ -56,7 +68,8 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
-      if (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(showMsg)) {
+      if (ApiService.isEmailNotVerified(res) ||
+          ApiService.isEmailNotVerified(showMsg)) {
         await showEmailVerificationRequiredDialog(
           context,
           message: showMsg,
@@ -64,14 +77,18 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
         );
         return;
       }
-      if (ApiService.isTierOrKycRestriction(res) || ApiService.isTierOrKycRestriction(showMsg)) {
+      if (ApiService.isTierOrKycRestriction(res) ||
+          ApiService.isTierOrKycRestriction(showMsg)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(showMsg),
             action: SnackBarAction(
               label: 'Verify ID',
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+                Navigator.push(
+                  context,
+                  FTPageRoute.slideUp(child: const KycDemoScreen()),
+                );
               },
             ),
           ),
@@ -105,7 +122,8 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
                     title: Text('Current tier: $_currentTier'),
-                    subtitle: Text('MoneyBox status: ${_moneyboxStatus.toUpperCase()}'),
+                    subtitle: Text(
+                        'MoneyBox status: ${_moneyboxStatus.toUpperCase()}'),
                   ),
                 );
               }
@@ -124,10 +142,30 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
                 child: ListTile(
                   title: Text('${t['label']} - ${t['duration']}'),
                   subtitle: Text('${t['bonus']} | $lockText'),
-                  trailing: _loading
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Icon(locked ? Icons.lock_outline : Icons.arrow_forward),
-                  onTap: (_loading || locked || isCurrent) ? null : () => _open(tierValue),
+                  trailing: (_loading || locked || isCurrent)
+                      ? (_loading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Icon(
+                              locked
+                                  ? Icons.lock_outline
+                                  : Icons.check_circle_outline,
+                            ))
+                      : SizedBox(
+                          width: 96,
+                          child: FTAsyncButton(
+                            label: 'Upgrade',
+                            variant: FTButtonVariant.secondary,
+                            externalLoading: _loading,
+                            onPressed: _loading ? null : () => _open(tierValue),
+                          ),
+                        ),
+                  onTap: (_loading || locked || isCurrent)
+                      ? null
+                      : () => _open(tierValue),
                 ),
               );
             },

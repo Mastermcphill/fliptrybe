@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../foundation/app_tokens.dart';
 import 'ft_app_bar.dart';
+import 'ft_network_banner.dart';
 
 class FTScaffold extends StatelessWidget {
   const FTScaffold({
@@ -16,6 +17,7 @@ class FTScaffold extends StatelessWidget {
     this.padding,
     this.footer,
     this.resizeToAvoidBottomInset,
+    this.showNetworkBanner = true,
   });
 
   final String? title;
@@ -28,6 +30,7 @@ class FTScaffold extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final Widget? footer;
   final bool? resizeToAvoidBottomInset;
+  final bool showNetworkBanner;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +39,7 @@ class FTScaffold extends StatelessWidget {
         padding: padding ?? const EdgeInsets.all(AppTokens.s16),
         child: Column(
           children: [
+            if (showNetworkBanner) const FTNetworkBanner(),
             Expanded(child: child),
             if (footer != null) ...[
               const SizedBox(height: AppTokens.s12),

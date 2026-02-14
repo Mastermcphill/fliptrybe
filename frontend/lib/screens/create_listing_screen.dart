@@ -14,6 +14,7 @@ import '../services/category_service.dart';
 import '../services/feed_service.dart';
 import '../services/listing_service.dart';
 import '../services/marketplace_catalog_service.dart';
+import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import '../widgets/email_verification_dialog.dart';
 
@@ -578,7 +579,10 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
+                  child: FTAsyncButton(
+                    label: isLast ? 'Publish listing' : 'Continue',
+                    variant: FTButtonVariant.primary,
+                    externalLoading: _loading,
                     onPressed: _loading
                         ? null
                         : () async {
@@ -590,16 +594,13 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                             setState(() => _step = (_step + 1).clamp(0, 4));
                             await _saveDraft();
                           },
-                    child: Text(
-                      _loading
-                          ? 'Please wait...'
-                          : (isLast ? 'Publish listing' : 'Continue'),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
+                  child: FTButton(
+                    variant: FTButtonVariant.ghost,
+                    label: _step == 0 ? 'Cancel' : 'Back',
                     onPressed: _loading
                         ? null
                         : () async {
@@ -610,7 +611,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                             setState(() => _step = (_step - 1).clamp(0, 4));
                             await _saveDraft();
                           },
-                    child: Text(_step == 0 ? 'Cancel' : 'Back'),
                   ),
                 ),
               ],
@@ -730,7 +730,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                   ),
                 ] else
                   DropdownButtonFormField<String>(
-                    value: _category,
+                    initialValue: _category,
                     items: const [
                       'General',
                       'Electronics',
@@ -755,7 +755,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                   ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _state,
+                  initialValue: _state,
                   items: _stateItems()
                       .map((s) => DropdownMenuItem(
                           value: s, child: Text(displayState(s))))
@@ -872,7 +872,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _condition,
+                  initialValue: _condition,
                   items: const [
                     'Brand New',
                     'Used - Like New',

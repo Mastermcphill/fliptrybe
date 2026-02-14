@@ -27,13 +27,15 @@ class _ShortletScreenState extends State<ShortletScreen> {
   String _selectedCity = defaultDiscoveryCity;
   String _selectedState = defaultDiscoveryState;
   bool _loading = true;
+  bool _refreshing = false;
   String? _error;
   List<Map<String, dynamic>> _all = const <Map<String, dynamic>>[];
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _seedFromCache();
+    _load(showLoading: _all.isEmpty);
   }
 
   @override
@@ -42,9 +44,25 @@ class _ShortletScreenState extends State<ShortletScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  void _seedFromCache() {
+    final cached = _svc.cachedShortlets();
+    if (cached.isEmpty) return;
     setState(() {
-      _loading = true;
+      _all = cached;
+      _loading = false;
+      _error = null;
+    });
+  }
+
+  bool get _hasRenderableData => _all.isNotEmpty;
+
+  Future<void> _load({bool showLoading = true}) async {
+    setState(() {
+      if (showLoading) {
+        _loading = true;
+      } else {
+        _refreshing = true;
+      }
       _error = null;
     });
     try {
@@ -68,6 +86,8 @@ class _ShortletScreenState extends State<ShortletScreen> {
             .map((row) => Map<String, dynamic>.from(row))
             .toList(growable: false);
         _loading = false;
+        _refreshing = false;
+        _error = null;
       });
     } catch (e) {
       if (UIFeedback.shouldForceLogoutOn401(e)) {
@@ -82,6 +102,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _refreshing = false;
         _error = errorMessage;
       });
       UIFeedback.showErrorSnack(context, errorMessage);
@@ -166,7 +187,7 @@ class _ShortletScreenState extends State<ShortletScreen> {
       preferredState: _selectedState,
     );
     if (!mounted) return;
-    await _load();
+    await _load(showLoading: false);
   }
 
   List<Map<String, dynamic>> _filtered() {
@@ -197,7 +218,6 @@ class _ShortletScreenState extends State<ShortletScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final rows = _filtered();
     return FTScaffold(
       title: 'Haven Shortlets',
@@ -207,194 +227,111 @@ class _ShortletScreenState extends State<ShortletScreen> {
           icon: const Icon(Icons.refresh),
         ),
       ],
-      child: _loading
-          ? const _ShortletSkeleton()
-          : _error != null
-              ? FTErrorState(message: _error!, onRetry: _load)
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    cacheExtent: 640,
-                    padding: const EdgeInsets.fromLTRB(
-                      FTDesignTokens.md,
-                      FTDesignTokens.sm,
-                      FTDesignTokens.md,
-                      FTDesignTokens.lg,
-                    ),
-                    children: [
-                      FTInput(
-                        controller: _searchCtrl,
-                        onChanged: (_) => setState(() {}),
-                        hint: 'Search by title or city',
-                        prefixIcon: Icons.search,
-                      ),
-                      const SizedBox(height: FTDesignTokens.sm),
-                      FTCard(
-                        child: FTResponsiveTitleAction(
-                          title: 'City-first feed',
-                          subtitle:
-                              'Showing top shortlets around $_selectedCity',
-                          action: FTButton(
-                            label: _selectedCity,
-                            icon: Icons.location_city_outlined,
-                            variant: FTButtonVariant.ghost,
-                            onPressed: _pickCity,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: _loading
+            ? const KeyedSubtree(
+                key: ValueKey<String>('shortlet_loading'),
+                child: _ShortletSkeleton(),
+              )
+            : _error != null && !_hasRenderableData
+                ? KeyedSubtree(
+                    key: const ValueKey<String>('shortlet_error'),
+                    child: FTErrorState(message: _error!, onRetry: _load),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey<String>('shortlet_data'),
+                    child: RefreshIndicator(
+                      onRefresh: () => _load(showLoading: false),
+                      child: ListView(
+                        cacheExtent: 640,
+                        padding: const EdgeInsets.fromLTRB(
+                          FTDesignTokens.md,
+                          FTDesignTokens.sm,
+                          FTDesignTokens.md,
+                          FTDesignTokens.lg,
+                        ),
+                        children: [
+                          FTInput(
+                            controller: _searchCtrl,
+                            onChanged: (_) => setState(() {}),
+                            hint: 'Search by title or city',
+                            prefixIcon: Icons.search,
                           ),
-                        ),
+                          const SizedBox(height: FTDesignTokens.sm),
+                          FTCard(
+                            child: FTResponsiveTitleAction(
+                              title: 'City-first feed',
+                              subtitle:
+                                  'Showing top shortlets around $_selectedCity',
+                              action: FTButton(
+                                label: _selectedCity,
+                                icon: Icons.location_city_outlined,
+                                variant: FTButtonVariant.ghost,
+                                onPressed: _pickCity,
+                              ),
+                            ),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: FTDesignTokens.sm),
+                            FTCard(
+                              child: FTResponsiveTitleAction(
+                                title: 'Could not refresh shortlets',
+                                subtitle: _error!,
+                                action: FTButton(
+                                  label:
+                                      _refreshing ? 'Refreshing...' : 'Retry',
+                                  icon: Icons.refresh,
+                                  variant: FTButtonVariant.ghost,
+                                  onPressed: _refreshing
+                                      ? null
+                                      : () => _load(showLoading: false),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: FTDesignTokens.sm),
+                          if (rows.isEmpty)
+                            FTEmptyState(
+                              icon: Icons.home_work_outlined,
+                              title: 'No shortlets found',
+                              subtitle: _searchCtrl.text.trim().isNotEmpty
+                                  ? 'No results match your current search.'
+                                  : 'Try another city or refresh the feed.',
+                              primaryCtaText: 'Clear filters',
+                              onPrimaryCta: _clearFilters,
+                              secondaryCtaText: 'Refresh',
+                              onSecondaryCta: _load,
+                            )
+                          else
+                            ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              cacheExtent: 480,
+                              itemCount: rows.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: FTDesignTokens.sm),
+                              itemBuilder: (_, index) {
+                                final row = rows[index];
+                                return _ShortletListItem(
+                                  key: ValueKey<String>(
+                                      'shortlet_${row['id'] ?? index}'),
+                                  row: row,
+                                  location: _location(row),
+                                  onOpen: () => Navigator.of(context).push(
+                                    FTRoutes.page(
+                                      child:
+                                          ShortletDetailScreen(shortlet: row),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: FTDesignTokens.sm),
-                      if (rows.isEmpty)
-                        FTEmptyState(
-                          icon: Icons.home_work_outlined,
-                          title: 'No shortlets found',
-                          subtitle: _searchCtrl.text.trim().isNotEmpty
-                              ? 'No results match your current search.'
-                              : 'Try another city or refresh the feed.',
-                          primaryCtaText: 'Clear filters',
-                          onPrimaryCta: _clearFilters,
-                          secondaryCtaText: 'Refresh',
-                          onSecondaryCta: _load,
-                        )
-                      else
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          cacheExtent: 480,
-                          itemCount: rows.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: FTDesignTokens.sm),
-                          itemBuilder: (_, index) {
-                            final row = rows[index];
-                            final mediaRows = (row['media'] is List)
-                                ? (row['media'] as List)
-                                    .whereType<Map>()
-                                    .map((v) => Map<String, dynamic>.from(v))
-                                    .toList(growable: false)
-                                : const <Map<String, dynamic>>[];
-                            final image = mediaRows.isNotEmpty
-                                ? (mediaRows.first['thumbnail_url'] ??
-                                        mediaRows.first['url'] ??
-                                        '')
-                                    .toString()
-                                : (row['image'] ?? row['image_url'] ?? '')
-                                    .toString();
-                            final views =
-                                int.tryParse('${row['views_count'] ?? 0}') ?? 0;
-                            final watching = int.tryParse(
-                                    '${row['favorites_count'] ?? 0}') ??
-                                0;
-                            final heatLevel = (row['heat_level'] ?? '')
-                                .toString()
-                                .trim()
-                                .toLowerCase();
-                            return InkWell(
-                              key: ValueKey<String>(
-                                  'shortlet_${row['id'] ?? index}'),
-                              borderRadius: BorderRadius.circular(
-                                  FTDesignTokens.radiusMd),
-                              onTap: () => Navigator.of(context).push(
-                                FTRoutes.page(
-                                  child: ShortletDetailScreen(shortlet: row),
-                                ),
-                              ),
-                              child: FTCard(
-                                child: Row(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                          FTDesignTokens.radiusSm),
-                                      child: SafeImage(
-                                        url: image,
-                                        width: 110,
-                                        height: 98,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                    const SizedBox(width: FTDesignTokens.sm),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            formatNaira(
-                                              row['nightly_price'] ??
-                                                  row['price'],
-                                              decimals: 0,
-                                            ),
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 17,
-                                              color: scheme.onSurface,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            (row['title'] ?? 'Shortlet')
-                                                .toString(),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              color: scheme.onSurface,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            _location(row),
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: scheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Wrap(
-                                            spacing: 6,
-                                            runSpacing: 6,
-                                            children: [
-                                              FTPill(
-                                                text: '$views views',
-                                                bgColor:
-                                                    scheme.secondaryContainer,
-                                                textColor:
-                                                    scheme.onSecondaryContainer,
-                                              ),
-                                              FTPill(
-                                                text: '$watching watching',
-                                                bgColor:
-                                                    scheme.tertiaryContainer,
-                                                textColor:
-                                                    scheme.onTertiaryContainer,
-                                              ),
-                                              if (heatLevel == 'hot' ||
-                                                  heatLevel == 'hotter')
-                                                FTPill(
-                                                  text: heatLevel == 'hotter'
-                                                      ? 'Hotter'
-                                                      : 'Hot',
-                                                  bgColor: heatLevel == 'hotter'
-                                                      ? scheme.errorContainer
-                                                      : scheme.primaryContainer,
-                                                  textColor: heatLevel ==
-                                                          'hotter'
-                                                      ? scheme.onErrorContainer
-                                                      : scheme
-                                                          .onPrimaryContainer,
-                                                ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                    ],
+                    ),
                   ),
-                ),
+      ),
     );
   }
 }
@@ -407,6 +344,118 @@ class _ShortletSkeleton extends StatelessWidget {
     return FTSkeletonList(
       itemCount: 5,
       itemBuilder: (context, index) => const FTSkeletonCard(height: 96),
+    );
+  }
+}
+
+class _ShortletListItem extends StatelessWidget {
+  const _ShortletListItem({
+    super.key,
+    required this.row,
+    required this.location,
+    required this.onOpen,
+  });
+
+  final Map<String, dynamic> row;
+  final String location;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final mediaRows = (row['media'] is List)
+        ? (row['media'] as List)
+            .whereType<Map>()
+            .map((v) => Map<String, dynamic>.from(v))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final image = mediaRows.isNotEmpty
+        ? (mediaRows.first['thumbnail_url'] ?? mediaRows.first['url'] ?? '')
+            .toString()
+        : (row['image'] ?? row['image_url'] ?? '').toString();
+    final views = int.tryParse('${row['views_count'] ?? 0}') ?? 0;
+    final watching = int.tryParse('${row['favorites_count'] ?? 0}') ?? 0;
+    final heatLevel = (row['heat_level'] ?? '').toString().trim().toLowerCase();
+    return InkWell(
+      borderRadius: BorderRadius.circular(FTDesignTokens.radiusMd),
+      onTap: onOpen,
+      child: FTCard(
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(FTDesignTokens.radiusSm),
+              child: SafeImage(
+                url: image,
+                width: 110,
+                height: 98,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(width: FTDesignTokens.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    formatNaira(row['nightly_price'] ?? row['price'],
+                        decimals: 0),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    (row['title'] ?? 'Shortlet').toString(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    location,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      FTPill(
+                        text: '$views views',
+                        bgColor: scheme.secondaryContainer,
+                        textColor: scheme.onSecondaryContainer,
+                      ),
+                      FTPill(
+                        text: '$watching watching',
+                        bgColor: scheme.tertiaryContainer,
+                        textColor: scheme.onTertiaryContainer,
+                      ),
+                      if (heatLevel == 'hot' || heatLevel == 'hotter')
+                        FTPill(
+                          text: heatLevel == 'hotter' ? 'Hotter' : 'Hot',
+                          bgColor: heatLevel == 'hotter'
+                              ? scheme.errorContainer
+                              : scheme.primaryContainer,
+                          textColor: heatLevel == 'hotter'
+                              ? scheme.onErrorContainer
+                              : scheme.onPrimaryContainer,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

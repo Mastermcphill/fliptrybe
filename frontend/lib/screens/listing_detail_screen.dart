@@ -204,9 +204,12 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       rows.sort((a, b) {
         int score(Map<String, dynamic> row) {
           int s = 0;
-          if ((row['category'] ?? '').toString().toLowerCase() == category)
+          if ((row['category'] ?? '').toString().toLowerCase() == category) {
             s += 2;
-          if ((row['state'] ?? '').toString().toLowerCase() == state) s += 1;
+          }
+          if ((row['state'] ?? '').toString().toLowerCase() == state) {
+            s += 1;
+          }
           return s;
         }
 
@@ -533,6 +536,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         _asInt(_detail['owner_id']);
     final isOwnListing =
         _viewerId != null && merchantId != null && merchantId == _viewerId;
+    final heroTag =
+        'listing-image-${_detail['id'] ?? widget.listing['id'] ?? title}';
 
     return FTScaffold(
       title: 'Listing Details',
@@ -542,6 +547,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           icon: const Icon(Icons.refresh),
         ),
       ],
+      // ignore: sort_child_properties_last
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
         children: [
@@ -553,29 +559,32 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
           ],
           AspectRatio(
             aspectRatio: 4 / 3,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: _images.isEmpty
-                  ? Container(
-                      color: const Color(0xFFE2E8F0),
-                      child: const Center(
-                          child: Icon(Icons.image_outlined, size: 34)),
-                    )
-                  : PageView.builder(
-                      controller: _pageCtrl,
-                      itemCount: _images.length,
-                      onPageChanged: (index) =>
-                          setState(() => _imageIndex = index),
-                      itemBuilder: (_, index) {
-                        return SafeImage(
-                          url: _images[index],
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          borderRadius: BorderRadius.circular(14),
-                        );
-                      },
-                    ),
+            child: Hero(
+              tag: heroTag,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: _images.isEmpty
+                    ? Container(
+                        color: const Color(0xFFE2E8F0),
+                        child: const Center(
+                            child: Icon(Icons.image_outlined, size: 34)),
+                      )
+                    : PageView.builder(
+                        controller: _pageCtrl,
+                        itemCount: _images.length,
+                        onPageChanged: (index) =>
+                            setState(() => _imageIndex = index),
+                        itemBuilder: (_, index) {
+                          return SafeImage(
+                            url: _images[index],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            borderRadius: BorderRadius.circular(14),
+                          );
+                        },
+                      ),
+              ),
             ),
           ),
           if (_images.length > 1) ...[

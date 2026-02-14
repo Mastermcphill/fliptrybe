@@ -1,15 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../constants/ng_states.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
-import 'login_screen.dart';
-import '../constants/ng_states.dart';
 import '../shells/buyer_shell.dart';
 import '../shells/driver_shell.dart';
 import '../shells/inspector_shell.dart';
 import '../shells/merchant_shell.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/ft_routes.dart';
+import '../utils/ui_feedback.dart';
 import '../widgets/app_exit_guard.dart';
+import 'login_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -25,6 +29,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _reasonCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+
+  final _nameFocus = FocusNode();
+  final _emailFocus = FocusNode();
+  final _phoneFocus = FocusNode();
+  final _reasonFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+  final _confirmFocus = FocusNode();
 
   String _role = 'user';
   String _selectedState = 'Lagos';
@@ -57,7 +68,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    UIFeedback.showErrorSnack(context, msg);
   }
 
   void _log(String message) {
@@ -164,12 +175,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => _screenForRole(backendRole)),
+        FTRoutes.page(child: _screenForRole(backendRole)),
       );
       _log('response received');
     } catch (e) {
       _log('request failed: $e');
-      _toast('Signup error: $e');
+      _toast(UIFeedback.mapDioErrorToMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
       _log('loading reset');
@@ -184,27 +195,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _reasonCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _phoneFocus.dispose();
+    _reasonFocus.dispose();
+    _passwordFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+    return FTScaffold(
+      title: 'Create Account',
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            DropdownButtonFormField<String>(
-              value: _role,
-              decoration: const InputDecoration(
-                labelText: 'Role',
-                border: OutlineInputBorder(),
-              ),
+            FTDropDownField<String>(
+              initialValue: _role,
+              labelText: 'Role',
               items: _roles
                   .map(
-                    (r) => DropdownMenuItem(
+                    (r) => DropdownMenuItem<String>(
                       value: r['value'],
                       child: Text(r['label'] ?? ''),
                     ),
@@ -214,55 +227,50 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   _loading ? null : (v) => setState(() => _role = v ?? 'user'),
             ),
             const SizedBox(height: 14),
-            TextField(
+            FTTextField(
               controller: _nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Full Name',
-                border: OutlineInputBorder(),
-              ),
+              focusNode: _nameFocus,
+              nextFocusNode: _emailFocus,
+              labelText: 'Full Name',
+              prefixIcon: Icons.person_outline,
               enabled: !_loading,
             ),
             const SizedBox(height: 12),
-            TextField(
+            FTTextField(
               controller: _emailCtrl,
+              focusNode: _emailFocus,
+              nextFocusNode: _phoneFocus,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
+              labelText: 'Email',
+              prefixIcon: Icons.mail_outline,
               enabled: !_loading,
             ),
             const SizedBox(height: 12),
-            TextField(
+            FTPhoneField(
               controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone Number',
-                border: OutlineInputBorder(),
-              ),
+              focusNode: _phoneFocus,
+              nextFocusNode:
+                  _role == 'merchant' ? _reasonFocus : _passwordFocus,
+              labelText: 'Phone Number',
               enabled: !_loading,
             ),
             const SizedBox(height: 12),
             if (_role == 'merchant') ...[
-              TextField(
+              FTTextField(
                 controller: _reasonCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Reason for merchant account',
-                  hintText: 'Tell us why you want to sell on FlipTrybe',
-                  border: OutlineInputBorder(),
-                ),
+                focusNode: _reasonFocus,
+                nextFocusNode: _passwordFocus,
+                labelText: 'Reason for merchant account',
+                hintText: 'Tell us why you want to sell on FlipTrybe',
                 enabled: !_loading,
                 maxLines: 2,
               ),
               const SizedBox(height: 12),
             ],
             if (_role == 'merchant' || _role == 'driver') ...[
-              DropdownButtonFormField<String>(
-                value: _selectedState,
-                decoration: const InputDecoration(
-                  labelText: 'State',
-                  border: OutlineInputBorder(),
-                ),
+              FTDropDownField<String>(
+                initialValue: _selectedState,
+                labelText: 'State',
                 items: nigeriaStates
                     .map(
                       (s) => DropdownMenuItem<String>(
@@ -277,43 +285,40 @@ class _SignUpScreenState extends State<SignUpScreen> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
+            FTPasswordField(
               controller: _passwordCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
+              focusNode: _passwordFocus,
+              nextFocusNode: _confirmFocus,
+              labelText: 'Password',
               enabled: !_loading,
             ),
             const SizedBox(height: 12),
-            TextField(
+            FTPasswordField(
               controller: _confirmCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Confirm Password',
-                border: OutlineInputBorder(),
-              ),
+              focusNode: _confirmFocus,
+              textInputAction: TextInputAction.done,
+              labelText: 'Confirm Password',
               enabled: !_loading,
+              onSubmitted: (_) => _signup(),
             ),
             const SizedBox(height: 18),
-            SizedBox(
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _signup,
-                child: Text(_loading ? 'Creating...' : 'Create Account'),
-              ),
+            FTAsyncButton(
+              label: 'Create Account',
+              variant: FTButtonVariant.primary,
+              externalLoading: _loading,
+              onPressed: _loading ? null : _signup,
             ),
             const SizedBox(height: 14),
-            TextButton(
+            FTButton(
+              label: 'Already have an account? Login',
+              variant: FTButtonVariant.ghost,
               onPressed: _loading
                   ? null
                   : () {
                       Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        FTRoutes.slideUp(child: const LoginScreen()),
                       );
                     },
-              child: const Text('Already have an account? Login'),
             ),
           ],
         ),

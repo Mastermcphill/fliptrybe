@@ -13,6 +13,7 @@ class ApiClient {
   final Set<CancelToken> _activeCancelTokens = <CancelToken>{};
   final Random _rand = Random.secure();
   String? _lastFailedRequestId;
+  final ValueNotifier<bool> networkOnline = ValueNotifier<bool>(true);
   Future<void> Function()? _onUnauthorized;
   void Function(String message)? _onGlobalErrorMessage;
   bool _forcingReauth = false;
@@ -43,6 +44,11 @@ class ApiClient {
   }
 
   String? get lastFailedRequestId => _lastFailedRequestId;
+
+  void _setNetworkOnline(bool online) {
+    if (networkOnline.value == online) return;
+    networkOnline.value = online;
+  }
 
   void configureGlobalHandlers({
     Future<void> Function()? onUnauthorized,
@@ -195,6 +201,7 @@ class ApiClient {
         onResponse: (response, handler) {
           final token = response.requestOptions.cancelToken;
           if (token != null) _activeCancelTokens.remove(token);
+          _setNetworkOnline(true);
           // ignore: avoid_print
           if (kDebugMode) {
             debugPrint(
@@ -253,6 +260,7 @@ class ApiClient {
               e.type == DioExceptionType.sendTimeout ||
               e.type == DioExceptionType.receiveTimeout ||
               e.type == DioExceptionType.connectionError) {
+            _setNetworkOnline(false);
             _emitGlobalErrorMessage(
               'Network timeout, try again',
               requestId: rid,

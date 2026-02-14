@@ -50,6 +50,7 @@ class ListingCard extends StatelessWidget {
         item['delivery_enabled']?.toString().toLowerCase() == 'true';
     final inspectionEnabled = item['inspection_enabled'] == true ||
         item['inspection_enabled']?.toString().toLowerCase() == 'true';
+    final heroTag = 'listing-image-${item['id'] ?? title}';
 
     return InkWell(
       borderRadius: BorderRadius.circular(FTTokens.radiusMd),
@@ -63,27 +64,30 @@ class ListingCard extends StatelessWidget {
               children: [
                 AspectRatio(
                   aspectRatio: compact ? 1.35 : 1.2,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(FTTokens.radiusMd),
+                  child: Hero(
+                    tag: heroTag,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(FTTokens.radiusMd),
+                      ),
+                      child: image.trim().isEmpty
+                          ? Container(
+                              color: const Color(0xFFE2E8F0),
+                              child: const Center(
+                                child: Icon(Icons.image_outlined,
+                                    size: 34, color: Color(0xFF94A3B8)),
+                              ),
+                            )
+                          : SafeImage(
+                              url: image,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(FTTokens.radiusMd),
+                              ),
+                            ),
                     ),
-                    child: image.trim().isEmpty
-                        ? Container(
-                            color: const Color(0xFFE2E8F0),
-                            child: const Center(
-                              child: Icon(Icons.image_outlined,
-                                  size: 34, color: Color(0xFF94A3B8)),
-                            ),
-                          )
-                        : SafeImage(
-                            url: image,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(FTTokens.radiusMd),
-                            ),
-                          ),
                   ),
                 ),
                 Positioned(

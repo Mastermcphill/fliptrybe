@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
+import '../services/moneybox_service.dart';
+import '../ui/components/ft_components.dart';
+import '../utils/ft_routes.dart';
+import '../utils/ui_feedback.dart';
 import '../widgets/email_verification_dialog.dart';
 import 'kyc_demo_screen.dart';
 
@@ -49,7 +52,8 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
-      if (ApiService.isEmailNotVerified(res) || ApiService.isEmailNotVerified(showMsg)) {
+      if (ApiService.isEmailNotVerified(res) ||
+          ApiService.isEmailNotVerified(showMsg)) {
         await showEmailVerificationRequiredDialog(
           context,
           message: showMsg,
@@ -57,65 +61,77 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
         );
         return;
       }
-      if (ApiService.isTierOrKycRestriction(res) || ApiService.isTierOrKycRestriction(showMsg)) {
+      if (ApiService.isTierOrKycRestriction(res) ||
+          ApiService.isTierOrKycRestriction(showMsg)) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(showMsg),
             action: SnackBarAction(
               label: 'Verify ID',
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+                Navigator.push(
+                  context,
+                  FTPageRoute.slideUp(child: const KycDemoScreen()),
+                );
               },
             ),
           ),
         );
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(showMsg)),
-      );
+      UIFeedback.showErrorSnack(context, showMsg);
       return;
     }
-    if (ok) Navigator.of(context).pop(true);
+    if (!mounted) return;
+    UIFeedback.showSuccessSnack(context, 'Withdrawal moved to wallet');
+    Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final principal = double.tryParse(widget.status['principal_balance']?.toString() ?? '0') ?? 0;
-    final bonus = double.tryParse(widget.status['projected_bonus']?.toString() ?? '0') ?? 0;
+    final principal = double.tryParse(
+            widget.status['principal_balance']?.toString() ?? '0') ??
+        0;
+    final bonus =
+        double.tryParse(widget.status['projected_bonus']?.toString() ?? '0') ??
+            0;
     final penaltyRate = _penaltyRate();
     final penalty = (principal * penaltyRate);
     final payout = (principal - penalty + bonus).clamp(0, double.infinity);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Withdraw')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Principal: ₦${principal.toStringAsFixed(2)}'),
-            Text('Projected bonus: ₦${bonus.toStringAsFixed(2)}'),
-            const SizedBox(height: 8),
-            Text('Penalty rate: ${(penaltyRate * 100).toStringAsFixed(0)}%'),
-            Text('Penalty estimate: ₦${penalty.toStringAsFixed(2)}'),
-            const SizedBox(height: 8),
-            Text('Estimated payout: ₦${payout.toStringAsFixed(2)}'),
-            const SizedBox(height: 6),
-            const Text(
-              'Early withdrawal voids your tier bonus.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _withdrawAll,
-                child: Text(_loading ? 'Processing...' : 'Withdraw to Wallet'),
-              ),
-            ),
-          ],
-        ),
+    return FTScaffold(
+      title: 'Withdraw',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Principal: ₦${principal.toStringAsFixed(2)}'),
+          Text('Projected bonus: ₦${bonus.toStringAsFixed(2)}'),
+          const SizedBox(height: 8),
+          Text('Penalty rate: ${(penaltyRate * 100).toStringAsFixed(0)}%'),
+          Text('Penalty estimate: ₦${penalty.toStringAsFixed(2)}'),
+          const SizedBox(height: 8),
+          Text(
+            'Estimated payout: ₦${payout.toStringAsFixed(2)}',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Early withdrawal voids your tier bonus.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+          const Spacer(),
+          FTAsyncButton(
+            label: 'Withdraw to Wallet',
+            variant: FTButtonVariant.primary,
+            externalLoading: _loading,
+            onPressed: _loading ? null : _withdrawAll,
+          ),
+        ],
       ),
     );
   }

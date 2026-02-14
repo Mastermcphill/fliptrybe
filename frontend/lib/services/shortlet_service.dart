@@ -6,6 +6,16 @@ class ShortletService {
   ShortletService({ApiClient? client}) : _client = client ?? ApiClient.instance;
 
   final ApiClient _client;
+  static List<Map<String, dynamic>> _cachedShortlets = <Map<String, dynamic>>[];
+  static DateTime? _cachedAt;
+
+  DateTime? get cachedAt => _cachedAt;
+
+  List<Map<String, dynamic>> cachedShortlets() {
+    return _cachedShortlets
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
 
   Future<List<dynamic>> listShortlets({
     String state = '',
@@ -17,16 +27,27 @@ class ShortletService {
     double radiusKm = 10,
   }) async {
     final qp = <String>[];
-    if (state.trim().isNotEmpty)
+    if (state.trim().isNotEmpty) {
       qp.add('state=${Uri.encodeComponent(state.trim())}');
-    if (city.trim().isNotEmpty)
+    }
+    if (city.trim().isNotEmpty) {
       qp.add('city=${Uri.encodeComponent(city.trim())}');
-    if (locality.trim().isNotEmpty)
+    }
+    if (locality.trim().isNotEmpty) {
       qp.add('locality=${Uri.encodeComponent(locality.trim())}');
-    if (lga.trim().isNotEmpty) qp.add('lga=${Uri.encodeComponent(lga.trim())}');
-    if (lat != null) qp.add('lat=${lat.toString()}');
-    if (lng != null) qp.add('lng=${lng.toString()}');
-    if (radiusKm > 0) qp.add('radius_km=${radiusKm.toString()}');
+    }
+    if (lga.trim().isNotEmpty) {
+      qp.add('lga=${Uri.encodeComponent(lga.trim())}');
+    }
+    if (lat != null) {
+      qp.add('lat=${lat.toString()}');
+    }
+    if (lng != null) {
+      qp.add('lng=${lng.toString()}');
+    }
+    if (radiusKm > 0) {
+      qp.add('radius_km=${radiusKm.toString()}');
+    }
 
     final suffix = qp.isEmpty ? '' : '?${qp.join('&')}';
     final url = ApiConfig.api('/shortlets') + suffix;
@@ -36,10 +57,30 @@ class ShortletService {
       final status = res.statusCode ?? 0;
       if (status < 200 || status >= 300) return <dynamic>[];
       final data = res.data;
-      if (data is List) return data;
+      if (data is List) {
+        final items = data
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedShortlets = items;
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return data;
+      }
       if (data is Map) {
         final items = data['items'];
-        if (items is List) return items;
+        if (items is List) {
+          final mapped = items
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .toList(growable: false);
+          if (mapped.isNotEmpty) {
+            _cachedShortlets = mapped;
+            _cachedAt = DateTime.now().toUtc();
+          }
+          return items;
+        }
       }
       return <dynamic>[];
     } catch (_) {
@@ -53,10 +94,12 @@ class ShortletService {
     int limit = 20,
   }) async {
     final qp = <String>[];
-    if (city.trim().isNotEmpty)
+    if (city.trim().isNotEmpty) {
       qp.add('city=${Uri.encodeComponent(city.trim())}');
-    if (state.trim().isNotEmpty)
+    }
+    if (state.trim().isNotEmpty) {
       qp.add('state=${Uri.encodeComponent(state.trim())}');
+    }
     qp.add('limit=${limit < 1 ? 20 : limit > 60 ? 60 : limit}');
     final suffix = qp.isEmpty ? '' : '?${qp.join('&')}';
     try {
@@ -65,8 +108,28 @@ class ShortletService {
       final status = res.statusCode ?? 0;
       if (status < 200 || status >= 300) return <dynamic>[];
       final data = res.data;
-      if (data is Map && data['items'] is List) return data['items'] as List;
-      if (data is List) return data;
+      if (data is Map && data['items'] is List) {
+        final items = (data['items'] as List)
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedShortlets = items;
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return data['items'] as List;
+      }
+      if (data is List) {
+        final items = data
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedShortlets = items;
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return data;
+      }
       return <dynamic>[];
     } catch (_) {
       return <dynamic>[];
@@ -237,8 +300,9 @@ class ShortletService {
       {String sessionKey = ''}) async {
     try {
       final payload = <String, dynamic>{};
-      if (sessionKey.trim().isNotEmpty)
+      if (sessionKey.trim().isNotEmpty) {
         payload['session_key'] = sessionKey.trim();
+      }
       final res = await _client.dio
           .post(ApiConfig.api('/shortlets/$shortletId/view'), data: payload);
       if (res.data is Map) return Map<String, dynamic>.from(res.data as Map);
@@ -271,8 +335,12 @@ class ShortletService {
           : DateTime.now().millisecondsSinceEpoch ~/ 1000,
       'resource_type': resourceType,
     };
-    if (folder.trim().isNotEmpty) payload['folder'] = folder.trim();
-    if (publicId.trim().isNotEmpty) payload['public_id'] = publicId.trim();
+    if (folder.trim().isNotEmpty) {
+      payload['folder'] = folder.trim();
+    }
+    if (publicId.trim().isNotEmpty) {
+      payload['public_id'] = publicId.trim();
+    }
     try {
       final res = await _client.dio
           .post(ApiConfig.api('/media/cloudinary/sign'), data: payload);

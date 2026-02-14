@@ -21,6 +21,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
   final _qCtrl = TextEditingController();
 
   bool _loading = true;
+  bool _refreshing = false;
   String? _error;
   List<Map<String, dynamic>> _items = const [];
   String _state = allNigeriaLabel;
@@ -40,9 +41,13 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showLoading = true}) async {
     setState(() {
-      _loading = true;
+      if (showLoading) {
+        _loading = true;
+      } else {
+        _refreshing = true;
+      }
       _error = null;
     });
     try {
@@ -65,8 +70,9 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
         _items = rows
             .whereType<Map>()
             .map((raw) => Map<String, dynamic>.from(raw))
-            .toList();
+            .toList(growable: false);
         _loading = false;
+        _refreshing = false;
       });
     } catch (e) {
       if (UIFeedback.shouldForceLogoutOn401(e)) {
@@ -81,6 +87,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _refreshing = false;
         _error = errorMessage;
       });
       UIFeedback.showErrorSnack(context, errorMessage);
@@ -115,8 +122,9 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close')),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -132,7 +140,12 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
   Widget build(BuildContext context) {
     return FTScaffold(
       title: 'Admin Marketplace',
-      actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
+      actions: [
+        IconButton(
+          onPressed: () => _load(showLoading: _items.isEmpty),
+          icon: const Icon(Icons.refresh),
+        )
+      ],
       child: Column(
         children: [
           Padding(
@@ -143,14 +156,15 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                   controller: _qCtrl,
                   labelText: 'Search listings or merchant',
                   prefixIcon: Icons.search,
-                  onSubmitted: (_) => _load(),
+                  onSubmitted: (_) => _load(showLoading: _items.isEmpty),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: FTDropDownField<String>(
                         initialValue: _status,
+                        labelText: 'Status',
                         items: const [
                           DropdownMenuItem(
                               value: 'all', child: Text('All Status')),
@@ -159,15 +173,14 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                           DropdownMenuItem(
                               value: 'inactive', child: Text('Inactive')),
                         ],
-                        decoration: const InputDecoration(
-                            border: OutlineInputBorder(), labelText: 'Status'),
                         onChanged: (v) => setState(() => _status = v ?? 'all'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: FTDropDownField<String>(
                         initialValue: _sort,
+                        labelText: 'Sort',
                         items: const [
                           DropdownMenuItem(
                               value: 'newest', child: Text('Newest')),
@@ -178,8 +191,6 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                               value: 'price_desc',
                               child: Text('Price High to Low')),
                         ],
-                        decoration: const InputDecoration(
-                            border: OutlineInputBorder(), labelText: 'Sort'),
                         onChanged: (v) => setState(() => _sort = v ?? 'newest'),
                       ),
                     ),
@@ -189,8 +200,9 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: FTDropDownField<String>(
                         initialValue: _state,
+                        labelText: 'State',
                         isExpanded: true,
                         items: <String>[allNigeriaLabel, ...nigeriaStates]
                             .map((state) => DropdownMenuItem(
@@ -199,9 +211,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                                       ? state
                                       : displayState(state)),
                                 ))
-                            .toList(),
-                        decoration: const InputDecoration(
-                            border: OutlineInputBorder(), labelText: 'State'),
+                            .toList(growable: false),
                         onChanged: (v) =>
                             setState(() => _state = v ?? allNigeriaLabel),
                       ),
@@ -216,7 +226,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                     const SizedBox(width: 8),
                     FTButton(
                       label: 'Apply',
-                      onPressed: _load,
+                      onPressed: () => _load(showLoading: _items.isEmpty),
                     ),
                   ],
                 ),
@@ -226,15 +236,15 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
           Expanded(
             child: FTLoadStateLayout(
               loading: _loading,
-              error: _error,
-              onRetry: _load,
+              error: _items.isEmpty ? _error : null,
+              onRetry: () => _load(showLoading: _items.isEmpty),
               empty: _items.isEmpty,
               loadingState: ListView(
                 padding: const EdgeInsets.all(16),
                 children: const [
                   FTSkeletonCard(height: 92),
                   FTSkeletonCard(height: 92),
-                  FTSkeletonCard(height: 92)
+                  FTSkeletonCard(height: 92),
                 ],
               ),
               emptyState: FTEmptyState(
@@ -242,16 +252,33 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                 title: 'No listings found',
                 subtitle: 'Adjust search text or filters and try again.',
                 primaryCtaText: 'Refresh',
-                onPrimaryCta: _load,
+                onPrimaryCta: () => _load(showLoading: true),
                 secondaryCtaText: 'Go to Settings',
                 onSecondaryCta: _openSettings,
               ),
               child: ListView.separated(
                 cacheExtent: 720,
-                itemCount: _items.length,
+                itemCount: _items.length + (_error == null ? 0 : 1),
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, index) {
-                  final item = _items[index];
+                  if (_error != null && index == 0) {
+                    return FTCard(
+                      child: FTResponsiveTitleAction(
+                        title: 'Could not refresh admin listings',
+                        subtitle: _error!,
+                        action: FTButton(
+                          label: _refreshing ? 'Refreshing...' : 'Retry',
+                          icon: Icons.refresh,
+                          variant: FTButtonVariant.ghost,
+                          onPressed: _refreshing
+                              ? null
+                              : () => _load(showLoading: false),
+                        ),
+                      ),
+                    );
+                  }
+                  final itemIndex = _error == null ? index : index - 1;
+                  final item = _items[itemIndex];
                   final title = (item['title'] ?? 'Listing').toString();
                   final merchantName = (item['merchant'] is Map)
                       ? (item['merchant']['name'] ?? '').toString()
@@ -264,7 +291,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                   final price = formatNaira(item['price']);
                   return ListTile(
                     key: ValueKey<String>(
-                        'admin_listing_${item['id'] ?? index}'),
+                        'admin_listing_${item['id'] ?? itemIndex}'),
                     title: Text(title),
                     subtitle: Text(
                       '$price • ${location.isEmpty ? "Location not set" : location}\nSeller: $merchantName',

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../screens/settings_demo_screen.dart';
 import '../../utils/auth_navigation.dart';
+import '../../utils/ft_routes.dart';
 import '../components/ft_app_bar.dart';
+import '../components/ft_network_banner.dart';
 import '../foundation/app_tokens.dart';
 
 class AdminScaffold extends StatelessWidget {
@@ -34,7 +36,7 @@ class AdminScaffold extends StatelessWidget {
     switch (action) {
       case _AdminMenuAction.appearance:
         await Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SettingsDemoScreen()),
+          FTPageRoute.slideUp(child: const SettingsDemoScreen()),
         );
         return;
       case _AdminMenuAction.signOut:
@@ -92,7 +94,12 @@ class AdminScaffold extends StatelessWidget {
                   horizontal: isWide ? AppTokens.s24 : AppTokens.s16,
                   vertical: AppTokens.s16,
                 ),
-            child: body ?? child!,
+            child: Column(
+              children: [
+                const FTNetworkBanner(),
+                Expanded(child: body ?? child!),
+              ],
+            ),
           ),
         ),
       ),

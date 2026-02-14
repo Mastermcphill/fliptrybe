@@ -398,12 +398,9 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
+      child: FTDropDownField<String>(
         initialValue: nigeriaStates.contains(current) ? current : 'Lagos',
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          labelText: 'State',
-        ),
+        labelText: 'State',
         items: nigeriaStates
             .map((s) => DropdownMenuItem<String>(
                 value: s, child: Text(displayState(s))))
@@ -522,11 +519,14 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               nextFocusNode: _phoneFocus,
               obscure: true,
             ),
-            _field(
-              _phone,
-              "Phone",
-              keyboard: TextInputType.phone,
-              focusNode: _phoneFocus,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: FTPhoneField(
+                controller: _phone,
+                focusNode: _phoneFocus,
+                labelText: 'Phone',
+                enabled: !_loading,
+              ),
             ),
             if (_role == "merchant" ||
                 _role == "driver" ||
@@ -555,10 +555,11 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
             Semantics(
               label: "Create account action",
               button: true,
-              child: FTPrimaryButton(
+              child: FTAsyncButton(
                 label: "Create account",
+                variant: FTButtonVariant.primary,
                 icon: Icons.lock_rounded,
-                loading: _loading,
+                externalLoading: _loading,
                 onPressed: _loading ? null : _signup,
               ),
             ),

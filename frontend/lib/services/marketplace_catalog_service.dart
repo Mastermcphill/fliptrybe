@@ -19,6 +19,14 @@ class MarketplaceCatalogService {
       : _listingService = listingService ?? ListingService();
 
   final ListingService _listingService;
+  static List<Map<String, dynamic>> _cachedListings = <Map<String, dynamic>>[];
+  static List<Map<String, dynamic>> _cachedRecommendedRemote =
+      <Map<String, dynamic>>[];
+  static List<Map<String, dynamic>> _cachedDealsRemote =
+      <Map<String, dynamic>>[];
+  static List<Map<String, dynamic>> _cachedNewDropsRemote =
+      <Map<String, dynamic>>[];
+  static DateTime? _cachedAt;
 
   final List<Map<String, dynamic>> _fallback = [
     {
@@ -155,9 +163,39 @@ class MarketplaceCatalogService {
         .toList();
 
     if (mapped.isNotEmpty) {
+      _cachedListings =
+          mapped.map((row) => Map<String, dynamic>.from(row)).toList();
+      _cachedAt = DateTime.now().toUtc();
       return mapped;
     }
-    return _fallback.map(_normalize).toList();
+    final fallback = _fallback.map(_normalize).toList();
+    _cachedListings =
+        fallback.map((row) => Map<String, dynamic>.from(row)).toList();
+    _cachedAt = DateTime.now().toUtc();
+    return fallback;
+  }
+
+  Map<String, dynamic>? cachedDiscoveryFeed() {
+    final hasData = _cachedListings.isNotEmpty ||
+        _cachedRecommendedRemote.isNotEmpty ||
+        _cachedDealsRemote.isNotEmpty ||
+        _cachedNewDropsRemote.isNotEmpty;
+    if (!hasData) return null;
+    return <String, dynamic>{
+      'listings': _cachedListings
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      'recommended': _cachedRecommendedRemote
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      'deals': _cachedDealsRemote
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      'new_drops': _cachedNewDropsRemote
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      'cached_at': _cachedAt?.toIso8601String(),
+    };
   }
 
   Future<String> searchV2Mode() async {
@@ -203,16 +241,28 @@ class MarketplaceCatalogService {
       final data =
           await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
       if (data is Map && data['items'] is List) {
-        return (data['items'] as List)
+        final items = (data['items'] as List)
             .whereType<Map>()
             .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
             .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedRecommendedRemote =
+              items.map((row) => Map<String, dynamic>.from(row)).toList();
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return items;
       }
       if (data is List) {
-        return data
+        final items = data
             .whereType<Map>()
             .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
             .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedRecommendedRemote =
+              items.map((row) => Map<String, dynamic>.from(row)).toList();
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return items;
       }
     } catch (_) {}
     return const <Map<String, dynamic>>[];
@@ -233,10 +283,16 @@ class MarketplaceCatalogService {
       final data =
           await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
       if (data is Map && data['items'] is List) {
-        return (data['items'] as List)
+        final items = (data['items'] as List)
             .whereType<Map>()
             .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
             .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedDealsRemote =
+              items.map((row) => Map<String, dynamic>.from(row)).toList();
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return items;
       }
     } catch (_) {}
     return const <Map<String, dynamic>>[];
@@ -257,10 +313,16 @@ class MarketplaceCatalogService {
       final data =
           await ApiClient.instance.getJson(ApiConfig.api(uri.toString()));
       if (data is Map && data['items'] is List) {
-        return (data['items'] as List)
+        final items = (data['items'] as List)
             .whereType<Map>()
             .map((raw) => _normalize(Map<String, dynamic>.from(raw)))
             .toList(growable: false);
+        if (items.isNotEmpty) {
+          _cachedNewDropsRemote =
+              items.map((row) => Map<String, dynamic>.from(row)).toList();
+          _cachedAt = DateTime.now().toUtc();
+        }
+        return items;
       }
     } catch (_) {}
     return const <Map<String, dynamic>>[];
@@ -310,8 +372,9 @@ class MarketplaceCatalogService {
       {String sessionKey = ''}) async {
     final path = '/listings/$listingId/view';
     final payload = <String, dynamic>{};
-    if (sessionKey.trim().isNotEmpty)
+    if (sessionKey.trim().isNotEmpty) {
       payload['session_key'] = sessionKey.trim();
+    }
     try {
       final data =
           await ApiClient.instance.postJson(ApiConfig.api(path), payload);
@@ -536,7 +599,8 @@ class MarketplaceCatalogService {
       final matchesQuery =
           q.isEmpty || title.contains(q) || description.contains(q);
       final matchesCategory = category == 'All' || category == itemCategory;
-      final matchesCategoryId = categoryId == null || itemCategoryId == categoryId;
+      final matchesCategoryId =
+          categoryId == null || itemCategoryId == categoryId;
       final matchesParentCategory = parentCategoryId == null ||
           itemCategoryId == parentCategoryId ||
           itemCategory.toLowerCase().contains(category.toLowerCase());

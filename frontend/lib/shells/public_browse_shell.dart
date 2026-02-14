@@ -260,8 +260,8 @@ class _GuestAccountTab extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).push(
-                          FTRoutes.page(child: const LoginScreen()),
+                        onPressed: () => Navigator.of(context).pushReplacement(
+                          FTRoutes.slideUp(child: const LoginScreen()),
                         ),
                         child: const Text('Login'),
                       ),
@@ -270,8 +270,8 @@ class _GuestAccountTab extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).push(
-                          FTRoutes.page(child: const RoleSignupScreen()),
+                        onPressed: () => Navigator.of(context).pushReplacement(
+                          FTRoutes.slideUp(child: const RoleSignupScreen()),
                         ),
                         child: const Text('Sign up'),
                       ),
