@@ -169,4 +169,65 @@ class AdminAutopilotService {
     );
     return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
   }
+
+  Future<Map<String, dynamic>> runAutopilot({required int window}) async {
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/admin/autopilot/run?window=$window'),
+      const {},
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<List<Map<String, dynamic>>> listSnapshots({int limit = 20}) async {
+    final data = await ApiClient.instance.getJson(
+      ApiConfig.api('/admin/autopilot/snapshots?limit=$limit'),
+    );
+    if (data is Map && data['items'] is List) {
+      return (data['items'] as List)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList(growable: false);
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
+  Future<Map<String, dynamic>> getRecommendations({int? snapshotId}) async {
+    final suffix = snapshotId == null ? '' : '?snapshot_id=$snapshotId';
+    final data = await ApiClient.instance.getJson(
+      ApiConfig.api('/admin/autopilot/recommendations$suffix'),
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> updateRecommendationStatus({
+    required int recommendationId,
+    required String status,
+  }) async {
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/admin/autopilot/recommendations/$recommendationId/status'),
+      {'status': status},
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> generateDraft({
+    required int window,
+    bool acceptedOnly = true,
+  }) async {
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/admin/autopilot/generate-draft?window=$window'),
+      {'accepted_only': acceptedOnly},
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> previewImpact({
+    required int draftPolicyId,
+  }) async {
+    final data = await ApiClient.instance.postJson(
+      ApiConfig.api('/admin/autopilot/preview-impact'),
+      {'draft_policy_id': draftPolicyId},
+    );
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
 }

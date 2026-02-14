@@ -4,19 +4,23 @@ import '../services/admin_autopilot_service.dart';
 import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/ft_components.dart';
 import '../ui/foundation/app_tokens.dart';
+import '../utils/ui_feedback.dart';
 import 'admin_manual_payments_screen.dart';
+import 'admin_commission_engine_screen.dart';
 import 'settings_demo_screen.dart';
 import '../utils/auth_navigation.dart';
 
 class AdminAutopilotScreen extends StatefulWidget {
-  const AdminAutopilotScreen({super.key});
+  const AdminAutopilotScreen({super.key, this.service});
+
+  final AdminAutopilotService? service;
 
   @override
   State<AdminAutopilotScreen> createState() => _AdminAutopilotScreenState();
 }
 
 class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
-  final _svc = AdminAutopilotService();
+  late final AdminAutopilotService _svc;
   final _manualBankNameCtrl = TextEditingController();
   final _manualAccountNumberCtrl = TextEditingController();
   final _manualAccountNameCtrl = TextEditingController();
@@ -40,10 +44,19 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
   bool _otelEnabled = false;
   bool _rateLimitEnabled = true;
   bool _signingOut = false;
+  int _windowDays = 30;
+  bool _autopilotBusy = false;
+  bool _autopilotLoading = true;
+  int? _selectedSnapshotId;
+  int? _draftPolicyId;
+  Map<String, dynamic>? _impactPreview;
+  List<Map<String, dynamic>> _snapshots = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _recommendations = const <Map<String, dynamic>>[];
 
   @override
   void initState() {
     super.initState();
+    _svc = widget.service ?? AdminAutopilotService();
     _load();
   }
 
@@ -62,6 +75,23 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     final s = await _svc.status();
     final payMode = await _svc.getPaymentsMode();
     final pay = await _svc.getPaymentsSettings();
+    final snapshots = await _svc.listSnapshots(limit: 20);
+    int? targetSnapshot = _selectedSnapshotId;
+    if (targetSnapshot == null && snapshots.isNotEmpty) {
+      targetSnapshot = int.tryParse('${snapshots.first['id'] ?? 0}');
+    }
+    final recommendationsPayload =
+        await _svc.getRecommendations(snapshotId: targetSnapshot);
+    final recommendationItems =
+        (recommendationsPayload['items'] is List)
+            ? (recommendationsPayload['items'] as List)
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList(growable: false)
+            : const <Map<String, dynamic>>[];
+    final snapshotFromRec = (recommendationsPayload['snapshot'] is Map)
+        ? Map<String, dynamic>.from(recommendationsPayload['snapshot'] as Map)
+        : <String, dynamic>{};
     if (!mounted) return;
     final settings = Map<String, dynamic>.from(
         (s['settings'] ?? {}) as Map? ?? <String, dynamic>{});
@@ -130,6 +160,11 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
           (paySettings['manual_payment_note'] ?? '').toString();
       _manualSlaCtrl.text =
           (paySettings['manual_payment_sla_minutes'] ?? 360).toString();
+      _snapshots = snapshots;
+      _selectedSnapshotId =
+          int.tryParse('${snapshotFromRec['id'] ?? targetSnapshot ?? 0}');
+      _recommendations = recommendationItems;
+      _autopilotLoading = false;
       _loading = false;
     });
   }
@@ -149,6 +184,179 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
       _loading = false;
     });
     await _load();
+  }
+
+  Future<void> _refreshAutopilotPanel({int? snapshotId}) async {
+    setState(() => _autopilotLoading = true);
+    final snapshots = await _svc.listSnapshots(limit: 20);
+    int? target = snapshotId ?? _selectedSnapshotId;
+    if (target == null && snapshots.isNotEmpty) {
+      target = int.tryParse('${snapshots.first['id'] ?? 0}');
+    }
+    final recPayload = await _svc.getRecommendations(snapshotId: target);
+    final recItems = (recPayload['items'] is List)
+        ? (recPayload['items'] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final selected = (recPayload['snapshot'] is Map)
+        ? int.tryParse('${(recPayload['snapshot'] as Map)['id'] ?? target ?? 0}')
+        : target;
+    if (!mounted) return;
+    setState(() {
+      _snapshots = snapshots;
+      _selectedSnapshotId = selected;
+      _recommendations = recItems;
+      _autopilotLoading = false;
+    });
+  }
+
+  Future<void> _runAutopilot() async {
+    if (_autopilotBusy) return;
+    setState(() {
+      _autopilotBusy = true;
+      _autopilotLoading = true;
+    });
+    try {
+      final res = await _svc.runAutopilot(window: _windowDays);
+      if (!mounted) return;
+      final snapshot = (res['snapshot'] is Map)
+          ? Map<String, dynamic>.from(res['snapshot'] as Map)
+          : <String, dynamic>{};
+      final snapId = int.tryParse('${snapshot['id'] ?? 0}');
+      UIFeedback.showSuccessSnack(
+        context,
+        res['idempotent'] == true
+            ? 'Autopilot run reused existing snapshot.'
+            : 'Autopilot run completed.',
+      );
+      await _refreshAutopilotPanel(snapshotId: snapId);
+    } catch (e) {
+      if (mounted) {
+        UIFeedback.showErrorSnack(context, UIFeedback.mapDioErrorToMessage(e));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _autopilotBusy = false);
+      }
+    }
+  }
+
+  Future<void> _setRecommendationStatus({
+    required int recommendationId,
+    required String status,
+  }) async {
+    if (_autopilotBusy) return;
+    setState(() => _autopilotBusy = true);
+    try {
+      final res = await _svc.updateRecommendationStatus(
+        recommendationId: recommendationId,
+        status: status,
+      );
+      if (!mounted) return;
+      if (res['ok'] == true) {
+        setState(() {
+          _recommendations = _recommendations.map((row) {
+            if (int.tryParse('${row['id'] ?? 0}') == recommendationId) {
+              final updated = Map<String, dynamic>.from(row);
+              updated['status'] = status;
+              return updated;
+            }
+            return row;
+          }).toList(growable: false);
+        });
+      } else {
+        UIFeedback.showErrorSnack(
+            context, (res['message'] ?? 'Failed to update status').toString());
+      }
+    } catch (e) {
+      if (mounted) {
+        UIFeedback.showErrorSnack(context, UIFeedback.mapDioErrorToMessage(e));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _autopilotBusy = false);
+      }
+    }
+  }
+
+  Future<void> _generateDraftPolicy() async {
+    if (_autopilotBusy) return;
+    setState(() => _autopilotBusy = true);
+    try {
+      final res = await _svc.generateDraft(window: _windowDays, acceptedOnly: true);
+      if (!mounted) return;
+      if (res['ok'] == true && res['policy'] is Map) {
+        final policy = Map<String, dynamic>.from(res['policy'] as Map);
+        final draftPolicyId = int.tryParse('${policy['id'] ?? 0}');
+        setState(() => _draftPolicyId = draftPolicyId);
+        UIFeedback.showSuccessSnack(
+          context,
+          res['idempotent'] == true
+              ? 'Existing autopilot draft reused.'
+              : 'Autopilot draft policy generated.',
+        );
+        await _refreshAutopilotPanel(snapshotId: _selectedSnapshotId);
+      } else {
+        UIFeedback.showErrorSnack(
+            context, (res['message'] ?? 'Failed to generate draft').toString());
+      }
+    } catch (e) {
+      if (mounted) {
+        UIFeedback.showErrorSnack(context, UIFeedback.mapDioErrorToMessage(e));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _autopilotBusy = false);
+      }
+    }
+  }
+
+  Future<void> _previewImpact() async {
+    int? policyId = _draftPolicyId;
+    if (policyId == null || policyId <= 0) {
+      for (final row in _snapshots) {
+        final id = int.tryParse('${row['id'] ?? 0}');
+        if (id != null && id == _selectedSnapshotId) {
+          policyId = int.tryParse('${row['draft_policy_id'] ?? 0}');
+          break;
+        }
+      }
+    }
+    if (policyId == null || policyId <= 0) {
+      UIFeedback.showErrorSnack(
+          context, 'Generate a draft policy before previewing impact.');
+      return;
+    }
+    setState(() => _autopilotBusy = true);
+    try {
+      final res = await _svc.previewImpact(draftPolicyId: policyId);
+      if (!mounted) return;
+      if (res['ok'] == true) {
+        setState(() {
+          _impactPreview = res;
+          _draftPolicyId = policyId;
+        });
+      } else {
+        UIFeedback.showErrorSnack(
+            context, (res['message'] ?? 'Preview failed').toString());
+      }
+    } catch (e) {
+      if (mounted) {
+        UIFeedback.showErrorSnack(context, UIFeedback.mapDioErrorToMessage(e));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _autopilotBusy = false);
+      }
+    }
+  }
+
+  Future<void> _openCommissionEngine() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AdminCommissionEngineScreen()),
+    );
   }
 
   Future<void> _saveIntegrationSettings() async {
@@ -263,6 +471,52 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     );
   }
 
+  Widget _recommendationCard(Map<String, dynamic> row) {
+    final recommendation = (row['recommendation'] is Map)
+        ? Map<String, dynamic>.from(row['recommendation'] as Map)
+        : <String, dynamic>{};
+    final riskFlags = (recommendation['risk_flags'] is List)
+        ? (recommendation['risk_flags'] as List)
+            .map((e) => '$e')
+            .toList(growable: false)
+        : const <String>[];
+    final explanation = (recommendation['explanation'] is List)
+        ? (recommendation['explanation'] as List)
+            .map((e) => '$e')
+            .where((e) => e.trim().isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
+    final impact = (recommendation['expected_impact'] is Map)
+        ? Map<String, dynamic>.from(recommendation['expected_impact'] as Map)
+        : <String, dynamic>{};
+    final revenueDelta = int.tryParse('${impact['revenue_delta_minor'] ?? 0}') ?? 0;
+    final gmvDelta = int.tryParse('${impact['gmv_delta_minor'] ?? 0}') ?? 0;
+    final recommendationId = int.tryParse('${row['id'] ?? 0}') ?? 0;
+    final status = (row['status'] ?? 'new').toString();
+
+    return AutopilotRecommendationCard(
+      title: (recommendation['title'] ?? 'Recommendation').toString(),
+      confidence: (recommendation['confidence'] ?? 'low').toString(),
+      status: status,
+      riskFlags: riskFlags,
+      explanation: explanation,
+      revenueDeltaMinor: revenueDelta,
+      gmvDeltaMinor: gmvDelta,
+      onAccept: _autopilotBusy
+          ? null
+          : () => _setRecommendationStatus(
+              recommendationId: recommendationId,
+              status: 'accepted',
+            ),
+      onDismiss: _autopilotBusy
+          ? null
+          : () => _setRecommendationStatus(
+              recommendationId: recommendationId,
+              status: 'dismissed',
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -279,6 +533,16 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
             .map((e) => '$e')
             .toList()
         : <String>[];
+    Map<String, dynamic> selectedSnapshot = const <String, dynamic>{};
+    for (final row in _snapshots) {
+      final id = int.tryParse('${row['id'] ?? 0}');
+      if (id != null && id == _selectedSnapshotId) {
+        selectedSnapshot = row;
+        break;
+      }
+    }
+    final selectedDraftPolicyId =
+        int.tryParse('${selectedSnapshot['draft_policy_id'] ?? _draftPolicyId ?? 0}') ?? 0;
     return AdminScaffold(
       title: 'Admin: Autopilot',
       onRefresh: _load,
@@ -497,6 +761,147 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                 const SizedBox(height: 12),
                 _healthCard("Payments health", paymentsHealth),
                 _healthCard("Messaging health", messagingHealth),
+                const SizedBox(height: 16),
+                FTSectionContainer(
+                  title: 'Commission Autopilot',
+                  subtitle:
+                      'Deterministic recommendations only. Policy activation remains manual.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<int>(
+                        initialValue: _windowDays,
+                        decoration: const InputDecoration(
+                          labelText: 'Analysis window',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 7, child: Text('Last 7 days')),
+                          DropdownMenuItem(value: 30, child: Text('Last 30 days')),
+                          DropdownMenuItem(value: 90, child: Text('Last 90 days')),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() => _windowDays = v);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      FTAsyncButton(
+                        label: _autopilotBusy ? 'Running...' : 'Run Autopilot',
+                        icon: Icons.auto_graph_outlined,
+                        externalLoading: _autopilotBusy,
+                        onPressed: _runAutopilot,
+                        expand: true,
+                      ),
+                      const SizedBox(height: 10),
+                      if (_snapshots.isNotEmpty)
+                        DropdownButtonFormField<int>(
+                          initialValue: _selectedSnapshotId,
+                          decoration: const InputDecoration(
+                            labelText: 'Snapshot',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _snapshots.map((row) {
+                            final id = int.tryParse('${row['id'] ?? 0}') ?? 0;
+                            final window = int.tryParse('${row['window_days'] ?? 0}') ?? 0;
+                            final recCount =
+                                int.tryParse('${row['recommendations_count'] ?? 0}') ?? 0;
+                            return DropdownMenuItem<int>(
+                              value: id,
+                              child: Text('Snapshot #$id ($window d, $recCount recs)'),
+                            );
+                          }).toList(growable: false),
+                          onChanged: (v) async {
+                            if (v == null) return;
+                            setState(() => _selectedSnapshotId = v);
+                            await _refreshAutopilotPanel(snapshotId: v);
+                          },
+                        ),
+                      const SizedBox(height: 10),
+                      if (_autopilotLoading)
+                        Column(
+                          children: const [
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 8),
+                              child: FTSkeletonCard(height: 116),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.only(bottom: 8),
+                              child: FTSkeletonCard(height: 116),
+                            ),
+                            FTSkeletonCard(height: 116),
+                          ],
+                        )
+                      else if (_recommendations.isEmpty)
+                        FTEmptyState(
+                          icon: Icons.insights_outlined,
+                          title: 'No recommendations yet',
+                          subtitle:
+                              'Run autopilot to generate draft-safe commission recommendations.',
+                          primaryCtaText: 'Run now',
+                          onPrimaryCta: _runAutopilot,
+                        )
+                      else
+                        ..._recommendations.map(
+                          (row) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _recommendationCard(row),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      FTButton(
+                        label: 'Generate Draft Policy',
+                        icon: Icons.auto_fix_high_outlined,
+                        variant: FTButtonVariant.secondary,
+                        onPressed: _autopilotBusy ? null : _generateDraftPolicy,
+                        expand: true,
+                      ),
+                      const SizedBox(height: 8),
+                      FTButton(
+                        label: 'Preview Impact',
+                        icon: Icons.analytics_outlined,
+                        variant: FTButtonVariant.ghost,
+                        onPressed: (_autopilotBusy || selectedDraftPolicyId <= 0)
+                            ? null
+                            : _previewImpact,
+                        expand: true,
+                      ),
+                      const SizedBox(height: 8),
+                      FTButton(
+                        label: 'Open Draft in Commission Engine',
+                        icon: Icons.open_in_new,
+                        variant: FTButtonVariant.ghost,
+                        onPressed: _openCommissionEngine,
+                        expand: true,
+                      ),
+                      if (_impactPreview != null) ...[
+                        const SizedBox(height: 10),
+                        FTCard(
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppTokens.s12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Projected Revenue Delta: ${(_impactPreview?['projected_revenue_delta_minor'] ?? 0)} minor',
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Projected GMV Delta: ${(_impactPreview?['projected_gmv_delta_minor'] ?? 0)} minor',
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Liquidity Δ Min Cash: ${((_impactPreview?['liquidity_effect'] is Map ? (_impactPreview?['liquidity_effect']['delta_min_cash_minor'] ?? 0) : 0)).toString()} minor',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
                   onPressed: _tick,
@@ -536,6 +941,97 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class AutopilotRecommendationCard extends StatelessWidget {
+  const AutopilotRecommendationCard({
+    super.key,
+    required this.title,
+    required this.status,
+    required this.confidence,
+    required this.riskFlags,
+    required this.explanation,
+    required this.revenueDeltaMinor,
+    required this.gmvDeltaMinor,
+    required this.onAccept,
+    required this.onDismiss,
+  });
+
+  final String title;
+  final String status;
+  final String confidence;
+  final List<String> riskFlags;
+  final List<String> explanation;
+  final int revenueDeltaMinor;
+  final int gmvDeltaMinor;
+  final VoidCallback? onAccept;
+  final VoidCallback? onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return FTCard(
+      child: Padding(
+        padding: const EdgeInsets.all(AppTokens.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FTResponsiveTitleAction(
+              title: title,
+              subtitle: 'Confidence: $confidence • Status: $status',
+            ),
+            if (riskFlags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: riskFlags
+                    .map((flag) => FTPill(text: flag))
+                    .toList(growable: false),
+              ),
+            ],
+            if (explanation.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              ...explanation
+                  .take(3)
+                  .map((line) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('• $line'),
+                      )),
+            ],
+            const SizedBox(height: 8),
+            Text('Expected revenue Δ: $revenueDeltaMinor minor'),
+            Text('Expected GMV Δ: $gmvDeltaMinor minor'),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FTButton(
+                    label: 'Accept',
+                    icon: Icons.check_circle_outline,
+                    variant: status == 'accepted'
+                        ? FTButtonVariant.primary
+                        : FTButtonVariant.secondary,
+                    onPressed: onAccept,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FTButton(
+                    label: 'Dismiss',
+                    icon: Icons.do_not_disturb_alt_outlined,
+                    variant: status == 'dismissed'
+                        ? FTButtonVariant.destructive
+                        : FTButtonVariant.ghost,
+                    onPressed: onDismiss,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

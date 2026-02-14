@@ -7,7 +7,18 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
-from app.models import User, AuditLog
+from app.models import (
+    User,
+    AuditLog,
+    AutopilotRecommendation,
+    AutopilotSnapshot,
+)
+from app.services.autopilot import (
+    run_autopilot,
+    set_recommendation_status,
+    generate_draft_policy,
+    preview_draft_impact,
+)
 from app.utils.jwt_utils import decode_token
 from app.utils.autopilot import get_settings, tick
 from app.integrations.payments.factory import payment_health
@@ -124,6 +135,18 @@ def _coerce_sla_minutes(value, default_value: int) -> int:
         parsed = 5
     if parsed > 10080:
         parsed = 10080
+    return parsed
+
+
+def _coerce_window(value) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = 30
+    if parsed < 7:
+        parsed = 7
+    if parsed > 90:
+        parsed = 90
     return parsed
 
 
@@ -291,6 +314,134 @@ def manual_tick():
         return jsonify({"message": "Forbidden"}), 403
     res = tick()
     return jsonify(res), 200
+
+
+@autopilot_bp.get("/snapshots")
+def list_autopilot_snapshots():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    try:
+        limit = int(request.args.get("limit") or 20)
+    except Exception:
+        limit = 20
+    limit = max(1, min(limit, 100))
+    rows = (
+        AutopilotSnapshot.query.order_by(
+            AutopilotSnapshot.generated_at.desc(),
+            AutopilotSnapshot.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    payload = []
+    for row in rows:
+        recommendation_count = (
+            AutopilotRecommendation.query.filter_by(snapshot_id=int(row.id)).count()
+        )
+        item = row.to_dict()
+        item["recommendations_count"] = int(recommendation_count)
+        payload.append(item)
+    return jsonify({"ok": True, "items": payload, "limit": int(limit)}), 200
+
+
+@autopilot_bp.get("/recommendations")
+def list_autopilot_recommendations():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    snapshot_id = request.args.get("snapshot_id")
+    snapshot = None
+    if snapshot_id is not None:
+        try:
+            snapshot = db.session.get(AutopilotSnapshot, int(snapshot_id))
+        except Exception:
+            snapshot = None
+    if snapshot is None:
+        snapshot = (
+            AutopilotSnapshot.query.order_by(
+                AutopilotSnapshot.generated_at.desc(),
+                AutopilotSnapshot.id.desc(),
+            ).first()
+        )
+    if snapshot is None:
+        return jsonify({"ok": True, "snapshot": None, "items": []}), 200
+
+    rows = (
+        AutopilotRecommendation.query.filter_by(snapshot_id=int(snapshot.id))
+        .order_by(AutopilotRecommendation.id.asc())
+        .all()
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "snapshot": snapshot.to_dict(),
+            "items": [row.to_dict() for row in rows],
+        }
+    ), 200
+
+
+@autopilot_bp.post("/run")
+def run_autopilot_endpoint():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    window = _coerce_window(request.args.get("window") or (request.get_json(silent=True) or {}).get("window"))
+    result = run_autopilot(window_days=window, admin_id=int(u.id))
+    return jsonify(result), 200
+
+
+@autopilot_bp.post("/recommendations/<int:recommendation_id>/status")
+def update_recommendation_status(recommendation_id: int):
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    body = request.get_json(silent=True) or {}
+    status = (body.get("status") or "").strip().lower()
+    result = set_recommendation_status(
+        recommendation_id=int(recommendation_id),
+        status=status,
+        admin_id=int(u.id),
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result), 200
+
+
+@autopilot_bp.post("/generate-draft")
+def autopilot_generate_draft():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    body = request.get_json(silent=True) or {}
+    window = _coerce_window(request.args.get("window") or body.get("window"))
+    accepted_only = bool(body.get("accepted_only", True))
+    result = generate_draft_policy(
+        window_days=window,
+        admin_id=int(u.id),
+        accepted_only=accepted_only,
+    )
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result), 200
+
+
+@autopilot_bp.post("/preview-impact")
+def autopilot_preview_impact():
+    u = _current_user()
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    body = request.get_json(silent=True) or {}
+    try:
+        draft_policy_id = int(body.get("draft_policy_id") or 0)
+    except Exception:
+        draft_policy_id = 0
+    if draft_policy_id <= 0:
+        return jsonify({"ok": False, "message": "draft_policy_id is required"}), 400
+    result = preview_draft_impact(draft_policy_id=draft_policy_id)
+    if not result.get("ok"):
+        return jsonify(result), 400
+    return jsonify(result), 200
 
 
 @payments_settings_bp.get("/payments")
