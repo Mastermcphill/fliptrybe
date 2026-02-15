@@ -129,6 +129,11 @@ class ApiClient {
     return containsMe || isAdmin || isRoleRequests;
   }
 
+  bool _requestHadAuth(RequestOptions options) {
+    final header = (options.headers['Authorization'] ?? '').toString().trim();
+    return header.isNotEmpty;
+  }
+
   late final Dio dio = Dio(
     BaseOptions(
       baseUrl: ApiConfig.baseUrl,
@@ -223,12 +228,14 @@ class ApiClient {
                 _requestIdForFailure(response, response.requestOptions);
           }
           if (response.statusCode == 401) {
-            _scheduleUnauthorized(response.requestOptions);
-            _emitGlobalErrorMessage(
-              'Session expired, please log in again',
-              requestId:
-                  _requestIdForFailure(response, response.requestOptions),
-            );
+            if (_requestHadAuth(response.requestOptions)) {
+              _scheduleUnauthorized(response.requestOptions);
+              _emitGlobalErrorMessage(
+                'Session expired, please log in again',
+                requestId:
+                    _requestIdForFailure(response, response.requestOptions),
+              );
+            }
           } else if ((response.statusCode ?? 0) >= 500) {
             _emitGlobalErrorMessage(
               'Server hiccup, try again',

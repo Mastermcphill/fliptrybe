@@ -14,8 +14,7 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
       "id": 101,
       "order_id": 505,
       "reason": "Item is a fake replica",
-      "evidence":
-          "[https://via.placeholder.com/300](https://via.placeholder.com/300)",
+      "evidence": "https://via.placeholder.com/600x300",
       "inspector": "Agent 007",
       "status": "FRAUD"
     }
@@ -23,6 +22,7 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text("Dispute Resolution")),
       body: ListView.builder(
@@ -36,7 +36,7 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
                 Container(
                   height: 200,
                   width: double.infinity,
-                  color: Colors.grey.shade300,
+                  color: scheme.surfaceContainerHighest,
                   child: Image.network(
                     d['evidence'],
                     fit: BoxFit.cover,
@@ -46,7 +46,7 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
                 ListTile(
                   title: Text("Order #${d['order_id']} - ${d['status']}"),
                   subtitle: Text(d['reason']),
-                  trailing: const Icon(Icons.warning, color: Colors.red),
+                  trailing: Icon(Icons.warning, color: scheme.error),
                 ),
                 Padding(
                   padding: const EdgeInsets.all(8.0),
@@ -56,15 +56,17 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
                       ElevatedButton(
                         onPressed: null,
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white),
+                          backgroundColor: scheme.errorContainer,
+                          foregroundColor: scheme.onErrorContainer,
+                        ),
                         child: const Text("UPHOLD (Refund Buyer)"),
                       ),
                       ElevatedButton(
                         onPressed: null,
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white),
+                          backgroundColor: scheme.primaryContainer,
+                          foregroundColor: scheme.onPrimaryContainer,
+                        ),
                         child: const Text("OVERTURN (Pay Seller)"),
                       ),
                     ],

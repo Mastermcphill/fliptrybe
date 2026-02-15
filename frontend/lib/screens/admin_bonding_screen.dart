@@ -6,27 +6,28 @@ class AdminBondingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text("Inspector Bonds")),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Card(
-            color: Colors.redAccent,
+          Card(
+            color: scheme.errorContainer,
             child: ListTile(
               title: Text(
                 "Underfunded Inspectors",
                 style:
-                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    TextStyle(color: scheme.onErrorContainer, fontWeight: FontWeight.bold),
               ),
-              trailing: Icon(Icons.priority_high, color: Colors.white),
+              trailing: Icon(Icons.priority_high, color: scheme.onErrorContainer),
             ),
           ),
           const SizedBox(height: 10),
           ListTile(
             leading: const CircleAvatar(child: Text("JD")),
             title: const Text("John Doe"),
-            subtitle: const Text("Bond Balance: ?2,000 (Min: ?50,000)"),
+            subtitle: const Text("Bond Balance: NGN 2,000 (Min: NGN 50,000)"),
             trailing:
                 ElevatedButton(onPressed: null, child: const Text("SUSPEND")),
           ),

@@ -74,6 +74,11 @@ class NotificationService {
         _cacheKey, jsonEncode(cached.map((e) => e.toJson()).toList()));
     _syncUnread(cached);
 
+    // Local/demo IDs are not persisted server-side; avoid noisy backend calls.
+    if (int.tryParse(safeId) == null) {
+      return true;
+    }
+
     try {
       final res = await ApiClient.instance.postJson(
         ApiConfig.api('/notifications/$safeId/read'),

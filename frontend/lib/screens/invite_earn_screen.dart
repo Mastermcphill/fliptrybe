@@ -183,7 +183,7 @@ class _InviteEarnScreenState extends State<InviteEarnScreen> {
                           leading: const Icon(Icons.person_add_alt_1_outlined),
                           title: name.isNotEmpty ? name : email,
                           subtitle:
-                              '${status.toUpperCase()} • ${formatNaira(rewardMinor / 100)}',
+                              '${status.toUpperCase()} - ${formatNaira(rewardMinor / 100)}',
                           badgeText: status.toLowerCase() == 'completed'
                               ? 'Paid'
                               : 'Pending',
