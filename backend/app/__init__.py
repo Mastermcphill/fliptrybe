@@ -3,6 +3,7 @@ import subprocess
 import click
 from flask import Flask, jsonify, request, g
 from sqlalchemy import text, inspect
+from werkzeug.exceptions import HTTPException
 
 from app.extensions import db, migrate, cors
 from app.models import User
@@ -455,6 +456,38 @@ def create_app():
     app.register_blueprint(role_change_bp)
 
     app.register_blueprint(recon_bp)
+
+    @app.errorhandler(HTTPException)
+    def _api_http_exception(error: HTTPException):
+        # Keep API failures JSON-only for predictable frontend handling.
+        if not request.path.startswith("/api/"):
+            return error
+        payload = {
+            "ok": False,
+            "error": error.name,
+            "message": error.description or error.name,
+            "status": int(error.code or 500),
+        }
+        rid = (getattr(g, "request_id", "") or "").strip()
+        if rid:
+            payload["trace_id"] = rid
+        return jsonify(payload), int(error.code or 500)
+
+    @app.errorhandler(Exception)
+    def _api_unhandled_exception(error: Exception):
+        app.logger.exception("unhandled_exception path=%s", request.path)
+        if not request.path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "InternalServerError", "message": "Internal server error"}), 500
+        payload = {
+            "ok": False,
+            "error": "InternalServerError",
+            "message": "Internal server error",
+            "status": 500,
+        }
+        rid = (getattr(g, "request_id", "") or "").strip()
+        if rid:
+            payload["trace_id"] = rid
+        return jsonify(payload), 500
 
     @app.cli.command("bootstrap-admin")
     def bootstrap_admin():

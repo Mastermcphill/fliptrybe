@@ -109,6 +109,20 @@ class WiringSyncEndpointsTestCase(unittest.TestCase):
         self.assertTrue(bool(row.get("is_read")))
         self.assertTrue(str(row.get("read_at") or "").strip())
 
+    def test_notification_mark_read_rejects_non_numeric_id_with_json(self):
+        with self.app.app_context():
+            user = self._create_user("buyer", "notify-bad-id")
+            token = create_token(int(user.id))
+
+        res = self.client.post(
+            "/api/notifications/local-demo-id/read",
+            headers=self._headers(token),
+        )
+        self.assertEqual(res.status_code, 404)
+        body = res.get_json(force=True) or {}
+        self.assertEqual((body.get("message") or "").lower(), "not found")
+        self.assertTrue(str(body.get("trace_id") or "").strip())
+
 
 if __name__ == "__main__":
     unittest.main()

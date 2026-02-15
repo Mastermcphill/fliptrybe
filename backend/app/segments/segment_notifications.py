@@ -56,17 +56,40 @@ def list_notifications():
     if not user:
         return jsonify({"message": "Unauthorized"}), 401
 
-    rows = Notification.query.filter_by(user_id=user.id).order_by(Notification.created_at.desc()).limit(80).all()
-    return jsonify({"ok": True, "items": [x.to_dict() for x in rows]}), 200
+    try:
+        rows = (
+            Notification.query.filter_by(user_id=user.id)
+            .order_by(Notification.created_at.desc())
+            .limit(80)
+            .all()
+        )
+        return jsonify({"ok": True, "items": [x.to_dict() for x in rows]}), 200
+    except Exception as e:
+        db.session.rollback()
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": "Failed to load notifications",
+                    "error": str(e)[:240],
+                    "items": [],
+                }
+            ),
+            500,
+        )
 
 
-@notifications_bp.post("/notifications/<int:notification_id>/read")
-def mark_notification_read(notification_id: int):
+@notifications_bp.post("/notifications/<notification_id>/read")
+def mark_notification_read(notification_id: str):
     user = _current_user()
     if not user:
         return jsonify({"message": "Unauthorized"}), 401
+    try:
+        notif_id = int(str(notification_id).strip())
+    except Exception:
+        return jsonify({"message": "Not found"}), 404
 
-    row = Notification.query.filter_by(id=int(notification_id), user_id=int(user.id)).first()
+    row = Notification.query.filter_by(id=notif_id, user_id=int(user.id)).first()
     if not row:
         return jsonify({"message": "Not found"}), 404
 
