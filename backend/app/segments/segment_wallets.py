@@ -424,3 +424,9 @@ def admin_process_payout(payout_id: int):
     # status paid + wallet debit happens there
     # easiest: set status approved then return and user can mark paid, but for demo we proceed:
     return admin_mark_paid(payout_id)
+
+
+@wallets_bp.post("/payouts/<int:payout_id>/admin/pay")
+def admin_pay_payout_alias(payout_id: int):
+    """Compatibility alias used by older admin console clients."""
+    return admin_process_payout(payout_id)

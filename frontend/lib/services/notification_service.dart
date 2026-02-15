@@ -59,9 +59,9 @@ class NotificationService {
     return rows.map((item) => item.toJson()).toList(growable: false);
   }
 
-  Future<void> markAsRead(String id) async {
+  Future<bool> markAsRead(String id) async {
     final safeId = id.trim();
-    if (safeId.isEmpty) return;
+    if (safeId.isEmpty) return false;
     final prefs = await SharedPreferences.getInstance();
     final readSet = prefs.getStringList(_readKey)?.toSet() ?? <String>{};
     readSet.add(safeId);
@@ -74,13 +74,15 @@ class NotificationService {
         _cacheKey, jsonEncode(cached.map((e) => e.toJson()).toList()));
     _syncUnread(cached);
 
-    // Best-effort server mark-read when endpoint exists.
     try {
-      await ApiClient.instance.postJson(
+      final res = await ApiClient.instance.postJson(
         ApiConfig.api('/notifications/$safeId/read'),
         <String, dynamic>{},
       );
-    } catch (_) {}
+      return res is Map && res['ok'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> markAllRead() async {

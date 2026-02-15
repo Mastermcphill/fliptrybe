@@ -60,6 +60,33 @@ def list_notifications():
     return jsonify({"ok": True, "items": [x.to_dict() for x in rows]}), 200
 
 
+@notifications_bp.post("/notifications/<int:notification_id>/read")
+def mark_notification_read(notification_id: int):
+    user = _current_user()
+    if not user:
+        return jsonify({"message": "Unauthorized"}), 401
+
+    row = Notification.query.filter_by(id=int(notification_id), user_id=int(user.id)).first()
+    if not row:
+        return jsonify({"message": "Not found"}), 404
+
+    try:
+        stamped = row.mark_read()
+        db.session.add(row)
+        db.session.commit()
+        return jsonify(
+            {
+                "ok": True,
+                "id": int(row.id),
+                "is_read": True,
+                "read_at": stamped.isoformat(),
+            }
+        ), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": "Failed", "error": str(e)}), 500
+
+
 @notifications_bp.post("/notifications/test")
 def test_notification():
     """Investor/demo: creates an in-app + sms + whatsapp notification (queued then marked sent)."""

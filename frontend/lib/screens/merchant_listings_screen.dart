@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/listing_service.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
+import '../utils/unavailable_action.dart';
 import 'create_listing_screen.dart';
 import 'listing_detail_screen.dart';
-import 'not_available_yet_screen.dart';
 
 class MerchantListingsScreen extends StatefulWidget {
   const MerchantListingsScreen({super.key});
@@ -69,14 +69,6 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
     );
     if (!mounted) return;
     _load();
-  }
-
-  void _showUnavailable(String title, String reason) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NotAvailableYetScreen(title: title, reason: reason),
-      ),
-    );
   }
 
   int _idOf(Map<String, dynamic> item) {
@@ -305,20 +297,18 @@ class _MerchantListingsScreenState extends State<MerchantListingsScreen>
                                         child: const Text('View'),
                                       ),
                                       OutlinedButton(
-                                        onPressed: () => _showUnavailable(
-                                          'Edit Listing',
-                                          'Listing edit controls are not enabled yet.',
-                                        ),
+                                        onPressed: null,
                                         child: const Text('Edit'),
                                       ),
                                       OutlinedButton(
-                                        onPressed: () => _showUnavailable(
-                                          'Bulk Actions',
-                                          'Deactivate/Mark sold bulk actions are not enabled yet.',
-                                        ),
+                                        onPressed: null,
                                         child: const Text('Bulk Action'),
                                       ),
                                     ],
+                                  ),
+                                  const UnavailableActionHint(
+                                    reason:
+                                        'Edit and Bulk Action are disabled because these controls are not enabled in this release.',
                                   ),
                                 ],
                               ),

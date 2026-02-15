@@ -6,10 +6,10 @@ import '../services/wallet_service.dart';
 import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
+import '../utils/unavailable_action.dart';
 import 'growth/growth_analytics_screen.dart';
 import 'inspector_bookings_screen.dart';
 import 'moneybox_dashboard_screen.dart';
-import 'not_available_yet_screen.dart';
 import 'support_chat_screen.dart';
 import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
 
@@ -241,19 +241,13 @@ class _InspectorHomeScreenState extends State<InspectorHomeScreen> {
                 ),
                 const SizedBox(height: 8),
                 FTSecondaryButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const NotAvailableYetScreen(
-                          title: 'Update Availability',
-                          reason:
-                              'Inspector availability updates are not enabled yet in this release.',
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: null,
                   icon: Icons.power_settings_new_outlined,
                   label: 'Update Availability',
+                ),
+                const UnavailableActionHint(
+                  reason:
+                      'Update Availability is disabled because inspector availability updates are not enabled yet in this release.',
                 ),
                 const SizedBox(height: 8),
                 FTSecondaryButton(

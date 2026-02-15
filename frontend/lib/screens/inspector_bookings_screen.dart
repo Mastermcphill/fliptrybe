@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../services/inspector_service.dart';
 import '../ui/components/ft_components.dart';
-import 'not_available_yet_screen.dart';
+import '../utils/unavailable_action.dart';
 import 'transaction/transaction_timeline_screen.dart';
 
 class InspectorBookingsScreen extends StatefulWidget {
@@ -85,18 +85,6 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
     return const Color(0xFF1D4ED8);
   }
 
-  void _openUnavailable() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const NotAvailableYetScreen(
-          title: 'Inspection Submission',
-          reason:
-              'Inspection report submission is not enabled yet for this environment.',
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final sorted = [..._items]
@@ -141,6 +129,7 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
               final title = (item['listing_title'] ?? 'Inspection').toString();
               final status = (item['status'] ?? 'assigned').toString();
               final orderId = int.tryParse((item['order_id'] ?? '').toString());
+              final hasLinkedOrder = orderId != null;
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,21 +187,12 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
                             runSpacing: 8,
                             children: [
                               OutlinedButton(
-                                onPressed: _openUnavailable,
+                                onPressed: null,
                                 child: const Text('Submit Report'),
                               ),
                               OutlinedButton(
-                                onPressed: orderId == null
-                                    ? () => Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                const NotAvailableYetScreen(
-                                              title: 'Timeline Not Linked',
-                                              reason:
-                                                  'Timeline is unavailable because this booking has no linked order ID.',
-                                            ),
-                                          ),
-                                        )
+                                onPressed: !hasLinkedOrder
+                                    ? null
                                     : () => Navigator.of(context).push(
                                           MaterialPageRoute(
                                             builder: (_) =>
@@ -225,6 +205,15 @@ class _InspectorBookingsScreenState extends State<InspectorBookingsScreen> {
                               ),
                             ],
                           ),
+                          const UnavailableActionHint(
+                            reason:
+                                'Submit Report is disabled because inspection report submission is not enabled yet for this environment.',
+                          ),
+                          if (!hasLinkedOrder)
+                            const UnavailableActionHint(
+                              reason:
+                                  'Timeline is disabled because this booking has no linked order ID.',
+                            ),
                         ],
                       ),
                     ),

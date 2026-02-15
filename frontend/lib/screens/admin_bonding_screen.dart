@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/unavailable_action.dart';
 
 class AdminBondingScreen extends StatelessWidget {
   const AdminBondingScreen({super.key});
@@ -27,7 +28,10 @@ class AdminBondingScreen extends StatelessWidget {
             title: const Text("John Doe"),
             subtitle: const Text("Bond Balance: ?2,000 (Min: ?50,000)"),
             trailing:
-                ElevatedButton(onPressed: () {}, child: const Text("SUSPEND")),
+                ElevatedButton(onPressed: null, child: const Text("SUSPEND")),
+          ),
+          const UnavailableActionHint(
+            reason: 'Inspector bond suspension actions are disabled in this release.',
           ),
         ],
       ),

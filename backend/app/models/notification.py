@@ -22,18 +22,45 @@ class Notification(db.Model):
 
     meta = db.Column(db.Text, nullable=True)  # JSON string
 
-    def meta_dict(self):
+    def _load_meta(self):
         raw = (self.meta or "").strip()
         if not raw:
             return {}
         try:
             import json
-            d = json.loads(raw)
-            return d if isinstance(d, dict) else {}
+
+            data = json.loads(raw)
+            return data if isinstance(data, dict) else {}
         except Exception:
             return {}
 
+    def _save_meta(self, meta: dict) -> None:
+        try:
+            import json
+
+            self.meta = json.dumps(meta, separators=(",", ":"))
+        except Exception:
+            self.meta = "{}"
+
+    def meta_dict(self):
+        return self._load_meta()
+
+    def mark_read(self, read_at: datetime | None = None) -> datetime:
+        stamped = read_at or datetime.utcnow()
+        meta = self._load_meta()
+        meta["is_read"] = True
+        meta["read_at"] = stamped.isoformat()
+        self._save_meta(meta)
+        return stamped
+
     def to_dict(self):
+        meta = self.meta_dict()
+        is_read = bool(meta.get("is_read"))
+        read_at = meta.get("read_at")
+        if isinstance(read_at, str):
+            read_at = read_at.strip() or None
+        else:
+            read_at = None
         return {
             "id": self.id,
             "user_id": self.user_id,
@@ -45,5 +72,7 @@ class Notification(db.Model):
             "provider_ref": self.provider_ref or "",
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "sent_at": self.sent_at.isoformat() if self.sent_at else None,
-            "meta": self.meta_dict(),
+            "is_read": is_read,
+            "read_at": read_at,
+            "meta": meta,
         }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/admin_audit_service.dart';
+import '../utils/unavailable_action.dart';
 
 class AdminDisputeScreen extends StatefulWidget {
   const AdminDisputeScreen({super.key});
@@ -8,7 +8,6 @@ class AdminDisputeScreen extends StatefulWidget {
 }
 
 class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
-  final _svc = AdminAuditService();
   // In production, fetch real disputes. Mocking structure for UI build:
   final List<Map<String, dynamic>> _disputes = [
     {
@@ -55,14 +54,14 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: null,
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white),
                         child: const Text("UPHOLD (Refund Buyer)"),
                       ),
                       ElevatedButton(
-                        onPressed: () {},
+                        onPressed: null,
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white),
@@ -70,7 +69,14 @@ class _AdminDisputeScreenState extends State<AdminDisputeScreen> {
                       ),
                     ],
                   ),
-                )
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: UnavailableActionHint(
+                    reason:
+                        'Dispute resolution actions are disabled in this release.',
+                  ),
+                ),
               ],
             ),
           );

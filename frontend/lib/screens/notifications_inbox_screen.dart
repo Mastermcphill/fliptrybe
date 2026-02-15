@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../domain/models/notification_item.dart';
 import '../services/notification_service.dart';
 import '../ui/components/ft_components.dart';
+import '../utils/ui_feedback.dart';
 
 class NotificationsInboxScreen extends StatefulWidget {
   const NotificationsInboxScreen({super.key});
@@ -48,13 +49,19 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
 
   Future<void> _markRead(NotificationItem item) async {
     if (item.isRead) return;
-    await _svc.markAsRead(item.id);
+    final synced = await _svc.markAsRead(item.id);
     if (!mounted) return;
     setState(() {
       _items = _items
           .map((row) => row.id == item.id ? row.copyWith(isRead: true) : row)
           .toList(growable: false);
     });
+    if (!synced) {
+      UIFeedback.showErrorSnack(
+        context,
+        'Marked locally. Server sync pending, please refresh later.',
+      );
+    }
   }
 
   @override

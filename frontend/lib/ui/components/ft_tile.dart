@@ -37,6 +37,7 @@ class _FTTileState extends State<FTTile> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final bool isInteractive = widget.onTap != null;
     final Widget effectiveTitle = widget.titleWidget ??
         (widget.title is Widget
             ? widget.title as Widget
@@ -54,64 +55,72 @@ class _FTTileState extends State<FTTile> {
                 style: Theme.of(context).textTheme.bodySmall,
               ));
 
+    final Widget body = Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTokens.s12,
+        vertical: AppTokens.s12,
+      ),
+      child: Row(
+        children: [
+          if (widget.leadingWidget != null || widget.leading != null) ...[
+            widget.leadingWidget ??
+                (widget.leading is Widget
+                    ? widget.leading as Widget
+                    : Icon(
+                        widget.leading as IconData,
+                        color: scheme.onSurfaceVariant,
+                      )),
+            const SizedBox(width: AppTokens.s12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                effectiveTitle,
+                if (hasSubtitle)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppTokens.s4),
+                    child: effectiveSubtitle,
+                  ),
+              ],
+            ),
+          ),
+          if (widget.badgeText != null &&
+              widget.badgeText!.trim().isNotEmpty) ...[
+            FTBadge(text: widget.badgeText!),
+            const SizedBox(width: AppTokens.s8),
+          ],
+          if (widget.trailing != null)
+            widget.trailing!
+          else if (isInteractive)
+            Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+        ],
+      ),
+    );
+
+    final Widget tileContent = isInteractive
+        ? InkWell(
+            borderRadius: BorderRadius.circular(AppTokens.r12),
+            onHighlightChanged: (value) {
+              if (!mounted) return;
+              setState(() => _highlighted = value);
+            },
+            onTap: widget.onTap,
+            child: body,
+          )
+        : body;
+
     return AnimatedContainer(
       duration: AppTokens.d150,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppTokens.r12),
         border: Border.all(
-          color: _highlighted
+          color: isInteractive && _highlighted
               ? scheme.primary.withValues(alpha: 0.35)
               : Colors.transparent,
         ),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppTokens.r12),
-        onHighlightChanged: (value) {
-          if (!mounted) return;
-          setState(() => _highlighted = value);
-        },
-        onTap: widget.onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.s12,
-            vertical: AppTokens.s12,
-          ),
-          child: Row(
-            children: [
-              if (widget.leadingWidget != null || widget.leading != null) ...[
-                widget.leadingWidget ??
-                    (widget.leading is Widget
-                        ? widget.leading as Widget
-                        : Icon(
-                            widget.leading as IconData,
-                            color: scheme.onSurfaceVariant,
-                          )),
-                const SizedBox(width: AppTokens.s12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    effectiveTitle,
-                    if (hasSubtitle)
-                      Padding(
-                        padding: const EdgeInsets.only(top: AppTokens.s4),
-                        child: effectiveSubtitle,
-                      ),
-                  ],
-                ),
-              ),
-              if (widget.badgeText != null &&
-                  widget.badgeText!.trim().isNotEmpty) ...[
-                FTBadge(text: widget.badgeText!),
-                const SizedBox(width: AppTokens.s8),
-              ],
-              widget.trailing ??
-                  Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-            ],
-          ),
-        ),
-      ),
+      child: tileContent,
     );
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/driver_service.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
-import 'not_available_yet_screen.dart';
+import '../utils/unavailable_action.dart';
 import 'order_detail_screen.dart';
 import 'transaction/transaction_timeline_screen.dart';
 
@@ -113,6 +113,7 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
               final pickup = (job['pickup'] ?? '').toString();
               final dropoff = (job['dropoff'] ?? '').toString();
               final fee = job['delivery_fee'] ?? job['fee'] ?? 0;
+              final orderLinked = orderId != null;
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -158,17 +159,8 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
                         runSpacing: 8,
                         children: [
                           OutlinedButton(
-                            onPressed: orderId == null
-                                ? () => Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const NotAvailableYetScreen(
-                                          title: 'Order Not Linked',
-                                          reason:
-                                              'This job has no linked order ID yet.',
-                                        ),
-                                      ),
-                                    )
+                            onPressed: !orderLinked
+                                ? null
                                 : () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -179,17 +171,8 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
                             child: const Text('View'),
                           ),
                           OutlinedButton(
-                            onPressed: orderId == null
-                                ? () => Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const NotAvailableYetScreen(
-                                          title: 'Timeline Not Linked',
-                                          reason:
-                                              'Timeline is unavailable because this job has no linked order ID.',
-                                        ),
-                                      ),
-                                    )
+                            onPressed: !orderLinked
+                                ? null
                                 : () => Navigator.push(
                                       context,
                                       MaterialPageRoute(
@@ -202,18 +185,19 @@ class _DriverJobsScreenState extends State<DriverJobsScreen> {
                             child: const Text('Timeline'),
                           ),
                           OutlinedButton(
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const NotAvailableYetScreen(
-                                  title: 'Navigation',
-                                  reason:
-                                      'Map navigation integration is not enabled yet.',
-                                ),
-                              ),
-                            ),
+                            onPressed: null,
                             child: const Text('Navigate'),
                           ),
                         ],
+                      ),
+                      if (!orderLinked)
+                        const UnavailableActionHint(
+                          reason:
+                              'View and Timeline are disabled because this job has no linked order yet.',
+                        ),
+                      const UnavailableActionHint(
+                        reason:
+                            'Navigate is disabled because map navigation integration is not enabled yet.',
                       ),
                     ],
                   ),

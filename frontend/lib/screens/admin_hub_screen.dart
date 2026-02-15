@@ -14,7 +14,6 @@ import 'admin_marketplace_screen.dart';
 import 'leaderboards_screen.dart';
 import 'admin_support_threads_screen.dart';
 import 'notifications_inbox_screen.dart';
-import 'not_available_yet_screen.dart';
 import 'admin_global_search_screen.dart';
 import 'admin_anomalies_screen.dart';
 import 'admin_risk_events_screen.dart';
@@ -306,25 +305,22 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
           FTTile(
             leading: const Icon(Icons.gavel_outlined),
             title: const Text('Dispute Resolution'),
-            subtitle: const Text('Not available yet'),
-            onTap: () => _open(
-              const NotAvailableYetScreen(
-                title: 'Dispute Resolution',
-                reason: 'Dispute workflows are not enabled in this release.',
-              ),
+            subtitle: const Text(
+              'Disabled: Dispute workflows are not enabled in this release.',
             ),
+            badgeText: 'Disabled',
+            trailing: const Icon(Icons.lock_outline),
+            onTap: null,
           ),
           FTTile(
             leading: const Icon(Icons.shield_outlined),
             title: const Text('Inspector Bonds'),
-            subtitle: const Text('Not available yet'),
-            onTap: () => _open(
-              const NotAvailableYetScreen(
-                title: 'Inspector Bonds',
-                reason:
-                    'Inspector bond workflows are not enabled in this release.',
-              ),
+            subtitle: const Text(
+              'Disabled: Inspector bond workflows are not enabled in this release.',
             ),
+            badgeText: 'Disabled',
+            trailing: const Icon(Icons.lock_outline),
+            onTap: null,
           ),
         ],
       ),

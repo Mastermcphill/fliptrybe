@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/admin_wallet_service.dart';
 
 class AdminPayoutConsoleScreen extends StatefulWidget {
-  const AdminPayoutConsoleScreen({super.key});
+  const AdminPayoutConsoleScreen({super.key, this.service});
+
+  final AdminWalletService? service;
 
   @override
   State<AdminPayoutConsoleScreen> createState() =>
@@ -11,10 +13,12 @@ class AdminPayoutConsoleScreen extends StatefulWidget {
 }
 
 class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
-  final _svc = AdminWalletService();
+  final AdminWalletService _defaultService = AdminWalletService();
   String _status = "pending";
   bool _loading = true;
   List<dynamic> _rows = const [];
+
+  AdminWalletService get _svc => widget.service ?? _defaultService;
 
   @override
   void initState() {
@@ -50,7 +54,7 @@ class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
 
   Future<void> _pay(int id) async {
     final ok = await _svc.pay(id);
-    _toast(ok ? "Paid via provider ✅" : "Provider pay failed");
+    _toast(ok ? "Provider payout processed." : "Provider payout failed");
     _load();
   }
 
@@ -144,7 +148,7 @@ class _AdminPayoutConsoleScreenState extends State<AdminPayoutConsoleScreen> {
                                           child: const Text('Process')),
                                       ElevatedButton(
                                           onPressed: () => _pay(id),
-                                          child: const Text("Pay (Provider)")),
+                                          child: const Text("Process Provider Payout")),
                                       ElevatedButton(
                                           onPressed: () => _markPaid(id),
                                           child: const Text("Mark Paid")),
