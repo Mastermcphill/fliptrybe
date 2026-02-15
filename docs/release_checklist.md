@@ -4,6 +4,10 @@
 - Confirm branch is `main` and working tree is clean.
 - Confirm API base URL is production-safe for release builds.
 - Confirm signing config exists (`frontend/android/key.properties`).
+- Confirm Render environment variables are set for the target mode:
+  - `SECRET_KEY`, `DATABASE_URL`
+  - payments/provider toggles and keys (if enabled)
+  - notification/media toggles and keys (if enabled)
 
 ## Quality Gates
 1. `cd frontend`
@@ -15,6 +19,11 @@
 1. `flutter build apk --release`
 2. `flutter build appbundle --release`
 3. `flutter build windows --release`
+
+## Backend Validation
+1. `cd backend`
+2. `python -m unittest discover -s tests -p "test_*.py"`
+3. `bash ./tools/ship_readiness_smoke.sh` (or run with `BASE`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` set)
 
 ## Smoke Flows
 - Login + signup (buyer, merchant, inspector pending state)
@@ -34,6 +43,18 @@
 - Build version (`pubspec.yaml`)
 - Commit SHA (`GIT_SHA`)
 - Known limitations / flags
+
+## Render Deployment Notes
+- Deploy backend first, then verify:
+  - `/api/version` reports expected `git_sha` and `alembic_head`
+  - `/api/health` is `ok: true`
+- Deploy frontend after backend verification.
+- Validate request-id propagation (`X-Request-ID`) on one failing API call.
+
+## Rollback Notes
+- Backend rollback: redeploy previous Render commit and run health/version checks.
+- Frontend rollback: re-upload previous known-good APK/AAB/Windows artifact.
+- If rollback occurs, disable risky runtime flags in admin (`/api/admin/flags`) before reopening traffic.
 
 ## Rollout
 - Upload AAB to Play Console (Internal/Closed track)
