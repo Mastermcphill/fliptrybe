@@ -79,6 +79,10 @@ def _resolve_alembic_head() -> str:
 
 
 def _resolve_git_sha() -> str:
+    for env_key in ("RENDER_GIT_COMMIT", "GIT_SHA", "SOURCE_VERSION"):
+        val = (os.getenv(env_key) or "").strip()
+        if val:
+            return val
     try:
         repo_root = Path(__file__).resolve().parents[1]
         out = subprocess.check_output(

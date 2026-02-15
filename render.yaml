@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: fliptrybe-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: flask db upgrade
+    startCommand: gunicorn -b 0.0.0.0:$PORT "app:create_app()"
+    envVars:
+      - key: FLIPTRYBE_ENV
+        value: production
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

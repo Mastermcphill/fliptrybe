@@ -14,6 +14,11 @@
 gunicorn -b 0.0.0.0:$PORT "app:create_app()"
 ```
 
+## Branch + Root Parity
+- Render service branch must be `main`.
+- Root directory must be `backend`.
+- `render.yaml` in repo root now pins these settings and enables auto-deploy.
+
 ## Release Command (Migrations)
 ```
 flask db upgrade
