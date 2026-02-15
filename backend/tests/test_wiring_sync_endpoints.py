@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime
 from uuid import uuid4
+from unittest.mock import patch
 
 from app import create_app
 from app.extensions import db
@@ -121,6 +122,29 @@ class WiringSyncEndpointsTestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 404)
         body = res.get_json(force=True) or {}
         self.assertEqual((body.get("message") or "").lower(), "not found")
+        self.assertTrue(str(body.get("trace_id") or "").strip())
+
+    def test_notifications_list_returns_json_on_forced_db_error(self):
+        with self.app.app_context():
+            user = self._create_user("buyer", "notify-list-error")
+            token = create_token(int(user.id))
+
+        class _BrokenQuery:
+            def filter_by(self, **kwargs):
+                raise RuntimeError("forced notifications failure")
+
+        with self.app.app_context():
+            with patch.object(Notification, "query", _BrokenQuery(), create=True):
+                res = self.client.get(
+                    "/api/notifications",
+                    headers=self._headers(token),
+                )
+        self.assertEqual(res.status_code, 500)
+        body = res.get_json(force=True) or {}
+        self.assertEqual(body.get("ok"), False)
+        self.assertTrue(str(body.get("message") or "").strip())
+        self.assertTrue(str(body.get("error") or "").strip())
+        self.assertIsInstance(body.get("items"), list)
         self.assertTrue(str(body.get("trace_id") or "").strip())
 
 

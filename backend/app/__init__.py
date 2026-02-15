@@ -1,6 +1,7 @@
 import os
 import subprocess
 import click
+from pathlib import Path
 from flask import Flask, jsonify, request, g
 from sqlalchemy import text, inspect
 from werkzeug.exceptions import HTTPException
@@ -62,6 +63,34 @@ from app.utils.autopilot import get_settings
 from app.utils.observability import init_sentry, init_otel, install_request_observers
 
 
+def _resolve_alembic_head() -> str:
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        migrations_dir = Path(__file__).resolve().parents[1] / "migrations"
+        cfg = Config(str(migrations_dir / "alembic.ini"))
+        cfg.set_main_option("script_location", str(migrations_dir))
+        script = ScriptDirectory.from_config(cfg)
+        heads = script.get_heads()
+        return heads[0] if heads else "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _resolve_git_sha() -> str:
+    try:
+        repo_root = Path(__file__).resolve().parents[1]
+        out = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            stderr=subprocess.DEVNULL,
+        )
+        return out.decode().strip()
+    except Exception:
+        return "unknown"
+
+
 def _ensure_referral_schema_compatibility():
     """
     Keep runtime compatibility for SQLite/dev test databases that may not have
@@ -87,6 +116,61 @@ def _ensure_referral_schema_compatibility():
             pass
     except Exception:
         # Schema compatibility best-effort only; never block startup.
+        pass
+
+
+def _ensure_notifications_schema_compatibility():
+    """
+    Keep runtime compatibility for databases where notifications table predates
+    current model columns.
+    """
+    try:
+        engine = db.engine
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+        if "notifications" not in tables:
+            return
+        cols_before = {
+            str(c.get("name", "")).lower() for c in insp.get_columns("notifications")
+        }
+        dialect = (getattr(engine.dialect, "name", "") or "").lower()
+        dt_type = "TIMESTAMP" if "postgres" in dialect else "DATETIME"
+        add_specs = {
+            "channel": "channel VARCHAR(32)",
+            "title": "title VARCHAR(160)",
+            "message": "message TEXT",
+            "status": "status VARCHAR(24)",
+            "provider": "provider VARCHAR(64)",
+            "provider_ref": "provider_ref VARCHAR(120)",
+            "created_at": f"created_at {dt_type}",
+            "sent_at": f"sent_at {dt_type}",
+            "meta": "meta TEXT",
+        }
+        with engine.begin() as conn:
+            for name, ddl in add_specs.items():
+                if name not in cols_before:
+                    conn.execute(text(f"ALTER TABLE notifications ADD COLUMN {ddl}"))
+            if "body" in cols_before:
+                conn.execute(
+                    text(
+                        "UPDATE notifications SET message = COALESCE(body, '') "
+                        "WHERE message IS NULL OR message = ''"
+                    )
+                )
+            conn.execute(
+                text("UPDATE notifications SET channel = 'in_app' WHERE channel IS NULL OR channel = ''")
+            )
+            conn.execute(
+                text("UPDATE notifications SET status = 'queued' WHERE status IS NULL OR status = ''")
+            )
+            conn.execute(
+                text("UPDATE notifications SET message = '' WHERE message IS NULL")
+            )
+            conn.execute(
+                text("UPDATE notifications SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL")
+            )
+    except Exception:
+        # Never block startup on compatibility patch-up.
         pass
 
 
@@ -146,6 +230,7 @@ def create_app():
     install_request_observers(app)
     with app.app_context():
         _ensure_referral_schema_compatibility()
+        _ensure_notifications_schema_compatibility()
         otel_env = (os.getenv("OTEL_ENABLED") or "").strip() == "1"
         otel_setting = False
         try:
@@ -153,6 +238,44 @@ def create_app():
         except Exception:
             otel_setting = False
         init_otel(app, enabled=bool(otel_env or otel_setting))
+
+    @app.errorhandler(HTTPException)
+    def _api_http_exception(error: HTTPException):
+        # Keep API failures JSON-only for predictable frontend handling.
+        if not request.path.startswith("/api/"):
+            return error
+        payload = {
+            "ok": False,
+            "error": error.name,
+            "message": error.description or error.name,
+            "status": int(error.code or 500),
+        }
+        rid = (getattr(g, "request_id", "") or "").strip()
+        if rid:
+            payload["trace_id"] = rid
+        return jsonify(payload), int(error.code or 500)
+
+    @app.errorhandler(Exception)
+    def _api_unhandled_exception(error: Exception):
+        app.logger.exception("unhandled_exception path=%s", request.path)
+        if not request.path.startswith("/api/"):
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "InternalServerError",
+                    "message": "Internal server error",
+                }
+            ), 500
+        payload = {
+            "ok": False,
+            "error": "InternalServerError",
+            "message": "Internal server error",
+            "status": 500,
+        }
+        rid = (getattr(g, "request_id", "") or "").strip()
+        if rid:
+            payload["trace_id"] = rid
+        return jsonify(payload), 500
 
     # Register API routes
     app.register_blueprint(auth_bp)
@@ -221,6 +344,8 @@ def create_app():
             "service": "fliptrybe-backend",
             "env": env,
             "db": db_state,
+            "git_sha": _resolve_git_sha(),
+            "alembic_head": _resolve_alembic_head(),
         }
         if db_error:
             payload["db_error"] = db_error
@@ -236,31 +361,10 @@ def create_app():
 
     @app.get("/api/version")
     def version():
-        def _get_alembic_head() -> str:
-            try:
-                from alembic.config import Config
-                from alembic.script import ScriptDirectory
-                migrations_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "migrations"))
-                cfg = Config(os.path.join(migrations_dir, "alembic.ini"))
-                cfg.set_main_option("script_location", migrations_dir)
-                script = ScriptDirectory.from_config(cfg)
-                heads = script.get_heads()
-                return heads[0] if heads else "unknown"
-            except Exception:
-                return "unknown"
-
-        def _get_git_sha() -> str:
-            try:
-                repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-                out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, stderr=subprocess.DEVNULL)
-                return out.decode().strip()
-            except Exception:
-                return "unknown"
-
         return jsonify({
             "ok": True,
-            "alembic_head": _get_alembic_head(),
-            "git_sha": _get_git_sha(),
+            "alembic_head": _resolve_alembic_head(),
+            "git_sha": _resolve_git_sha(),
         })
 
     @app.get("/api/debug/client-echo")
@@ -456,38 +560,6 @@ def create_app():
     app.register_blueprint(role_change_bp)
 
     app.register_blueprint(recon_bp)
-
-    @app.errorhandler(HTTPException)
-    def _api_http_exception(error: HTTPException):
-        # Keep API failures JSON-only for predictable frontend handling.
-        if not request.path.startswith("/api/"):
-            return error
-        payload = {
-            "ok": False,
-            "error": error.name,
-            "message": error.description or error.name,
-            "status": int(error.code or 500),
-        }
-        rid = (getattr(g, "request_id", "") or "").strip()
-        if rid:
-            payload["trace_id"] = rid
-        return jsonify(payload), int(error.code or 500)
-
-    @app.errorhandler(Exception)
-    def _api_unhandled_exception(error: Exception):
-        app.logger.exception("unhandled_exception path=%s", request.path)
-        if not request.path.startswith("/api/"):
-            return jsonify({"ok": False, "error": "InternalServerError", "message": "Internal server error"}), 500
-        payload = {
-            "ok": False,
-            "error": "InternalServerError",
-            "message": "Internal server error",
-            "status": 500,
-        }
-        rid = (getattr(g, "request_id", "") or "").strip()
-        if rid:
-            payload["trace_id"] = rid
-        return jsonify(payload), 500
 
     @app.cli.command("bootstrap-admin")
     def bootstrap_admin():
