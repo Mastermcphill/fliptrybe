@@ -12,9 +12,22 @@ if (-not (Test-Path $toolsScript)) {
   throw "Missing smoke script: $toolsScript"
 }
 
-powershell -NoProfile -ExecutionPolicy Bypass -File $toolsScript `
-  -Base $Base `
-  -BuyerEmail $BuyerEmail `
-  -BuyerPassword $BuyerPassword `
-  -AdminEmail $AdminEmail `
-  -AdminPassword $AdminPassword
+$invokeArgs = @(
+  "-NoProfile",
+  "-ExecutionPolicy", "Bypass",
+  "-File", $toolsScript,
+  "-Base", $Base,
+  "-BuyerPassword", $BuyerPassword
+)
+
+if (-not [string]::IsNullOrWhiteSpace($BuyerEmail)) {
+  $invokeArgs += @("-BuyerEmail", $BuyerEmail)
+}
+if (-not [string]::IsNullOrWhiteSpace($AdminEmail)) {
+  $invokeArgs += @("-AdminEmail", $AdminEmail)
+}
+if (-not [string]::IsNullOrWhiteSpace($AdminPassword)) {
+  $invokeArgs += @("-AdminPassword", $AdminPassword)
+}
+
+& powershell @invokeArgs

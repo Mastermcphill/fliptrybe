@@ -25,19 +25,25 @@ function Invoke-JsonRequest {
     [object]$Body
   )
   if ($null -eq $Headers) { $Headers = @{} }
-  $responseHeaders = $null
   try {
+    $resp = $null
     if ($null -ne $Body) {
       $json = $Body | ConvertTo-Json -Depth 8
-      $res = Invoke-RestMethod -Method $Method -Uri $Url -Headers $Headers -ContentType "application/json" -Body $json -ResponseHeadersVariable responseHeaders
+      $resp = Invoke-WebRequest -Method $Method -Uri $Url -Headers $Headers -ContentType "application/json" -Body $json -UseBasicParsing
     } else {
-      $res = Invoke-RestMethod -Method $Method -Uri $Url -Headers $Headers -ResponseHeadersVariable responseHeaders
+      $resp = Invoke-WebRequest -Method $Method -Uri $Url -Headers $Headers -UseBasicParsing
     }
-    $contentType = (($responseHeaders["Content-Type"] | Out-String).Trim()).ToLower()
+    $contentType = (($resp.Headers["Content-Type"] | Out-String).Trim()).ToLower()
     if ($Url -match "/api/" -and $contentType -notmatch "application/json") {
       throw "NON_JSON_API_RESPONSE on $Method $Url (Content-Type: $contentType)"
     }
-    return $res
+    $raw = [string]($resp.Content)
+    if ([string]::IsNullOrWhiteSpace($raw)) { return @{} }
+    try {
+      return $raw | ConvertFrom-Json
+    } catch {
+      throw "INVALID_JSON_RESPONSE on $Method $Url`n$raw"
+    }
   } catch {
     $resp = $_.Exception.Response
     if ($null -ne $resp) {
