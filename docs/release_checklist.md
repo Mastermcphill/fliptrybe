@@ -23,7 +23,8 @@
 ## Backend Validation
 1. `cd backend`
 2. `python -m unittest discover -s tests -p "test_*.py"`
-3. `bash ./tools/ship_readiness_smoke.sh` (or run with `BASE`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` set)
+3. `powershell -NoProfile -ExecutionPolicy Bypass -File .\ops\smoke_render.ps1`
+4. `bash ./ops/smoke_render.sh` (bash environments)
 
 ## Smoke Flows
 - Login + signup (buyer, merchant, inspector pending state)

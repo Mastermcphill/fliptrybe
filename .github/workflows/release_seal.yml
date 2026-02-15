@@ -1,0 +1,49 @@
+name: release-seal
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run backend tests (blocking)
+        env:
+          DATABASE_URL: sqlite:///./ci_test.db
+          FLASK_ENV: development
+        run: |
+          python -m unittest discover -s tests -p "test_*.py"
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Flutter dependencies
+        run: flutter pub get
+      - name: Flutter analyze (report-only)
+        run: flutter analyze || true
+      - name: Flutter tests (blocking)
+        run: flutter test
