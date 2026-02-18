@@ -59,4 +59,30 @@ class CategoryService {
       'models': <Map<String, dynamic>>[],
     };
   }
+
+  Future<Map<String, dynamic>> formSchema({
+    int? categoryId,
+    String category = '',
+  }) async {
+    final params = <String, String>{};
+    if (categoryId != null && categoryId > 0) {
+      params['category_id'] = '$categoryId';
+    }
+    if (category.trim().isNotEmpty) {
+      params['category'] = category.trim();
+    }
+    try {
+      final uri =
+          Uri(path: '/public/categories/form-schema', queryParameters: params);
+      final res = await _client.dio.get(ApiConfig.api(uri.toString()));
+      final data = res.data;
+      if (data is Map) {
+        return Map<String, dynamic>.from(data);
+      }
+    } catch (_) {}
+    return const <String, dynamic>{
+      'ok': false,
+      'schema': <String, dynamic>{'metadata_key': '', 'fields': <dynamic>[]},
+    };
+  }
 }

@@ -36,7 +36,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           const Text(
-              "Send a broadcast notification (demo). Admin = user id 1 or email containing 'admin'."),
+              "Send a broadcast notification. Admin access is required."),
           const SizedBox(height: 12),
           TextField(
             controller: _titleCtrl,
@@ -57,9 +57,9 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                 labelText: "Channel", border: OutlineInputBorder()),
             items: const [
               DropdownMenuItem(value: "in_app", child: Text("In-app")),
-              DropdownMenuItem(value: "sms", child: Text("SMS (stub)")),
+              DropdownMenuItem(value: "sms", child: Text("SMS")),
               DropdownMenuItem(
-                  value: "whatsapp", child: Text("WhatsApp (stub)")),
+                  value: "whatsapp", child: Text("WhatsApp")),
             ],
             onChanged: (v) => setState(() => _channel = v ?? "in_app"),
           ),
@@ -103,7 +103,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                       if (ok) {
                         ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text("Broadcast sent (demo).")));
+                                content: Text("Broadcast sent.")));
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text("Broadcast failed.")));
@@ -128,7 +128,7 @@ class _AdminBroadcastScreenState extends State<AdminBroadcastScreen> {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                                content: Text("Queue processed (stub).")));
+                                content: Text("Queue processed.")));
                       } catch (_) {
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

@@ -13,6 +13,8 @@ from app.utils.ng_locations import NIGERIA_LOCATIONS
 from app.models import (
     User,
     Listing,
+    SavedSearch,
+    AuditLog,
     ItemDictionary,
     UserSettings,
     Category,
@@ -43,6 +45,11 @@ from app.services.discovery_service import (
     queue_item_unavailable_notifications,
 )
 from app.utils.observability import get_request_id
+from app.utils.content_moderation import (
+    CONTACT_BLOCK_MESSAGE,
+    DESCRIPTION_BLOCK_MESSAGE,
+    contains_prohibited_listing_description,
+)
 
 
 market_bp = Blueprint("market_bp", __name__, url_prefix="/api")
@@ -150,15 +157,7 @@ def _is_admin(u: User | None) -> bool:
     role = (getattr(u, "role", "") or "").strip().lower()
     if role == "admin":
         return True
-    try:
-        if "admin" in (u.email or "").lower():
-            return True
-    except Exception:
-        pass
-    try:
-        return int(u.id or 0) == 1
-    except Exception:
-        return False
+    return bool(getattr(u, "is_admin", False))
 
 def _is_owner(u: User | None, listing: Listing) -> bool:
     if not u:
@@ -203,6 +202,14 @@ def _search_args():
             return False
         return None
 
+    def _to_float(raw):
+        if raw in (None, ""):
+            return None
+        try:
+            return float(str(raw).strip())
+        except Exception:
+            return None
+
     q = (request.args.get("q") or "").strip()
     category = (request.args.get("category") or "").strip()
     state = (request.args.get("state") or "").strip()
@@ -245,6 +252,18 @@ def _search_args():
         "battery_type": (request.args.get("battery_type") or "").strip(),
         "inverter_capacity": (request.args.get("inverter_capacity") or "").strip(),
         "lithium_only": _to_bool(request.args.get("lithium_only")),
+        "property_type": (request.args.get("property_type") or "").strip(),
+        "bedrooms_min": _to_int(request.args.get("bedrooms_min")),
+        "bedrooms_max": _to_int(request.args.get("bedrooms_max")),
+        "bathrooms_min": _to_int(request.args.get("bathrooms_min")),
+        "bathrooms_max": _to_int(request.args.get("bathrooms_max")),
+        "furnished": _to_bool(request.args.get("furnished")),
+        "serviced": _to_bool(request.args.get("serviced")),
+        "land_size_min": _to_float(request.args.get("land_size_min")),
+        "land_size_max": _to_float(request.args.get("land_size_max")),
+        "title_document_type": (request.args.get("title_document_type") or request.args.get("document_type") or "").strip(),
+        "city": (request.args.get("city") or "").strip(),
+        "area": (request.args.get("area") or "").strip(),
         "state": state,
         "condition": condition,
         "status": status,
@@ -299,6 +318,15 @@ def _maybe_int(value):
         return None
     try:
         return int(value)
+    except Exception:
+        return None
+
+
+def _maybe_float(value):
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
     except Exception:
         return None
 
@@ -438,6 +466,7 @@ def _apply_vertical_metadata_to_listing(
     listing_type_raw: str = "",
     vehicle_payload: dict | None = None,
     energy_payload: dict | None = None,
+    real_estate_payload: dict | None = None,
     delivery_available_raw=None,
     inspection_required_raw=None,
     is_admin: bool = False,
@@ -454,6 +483,8 @@ def _apply_vertical_metadata_to_listing(
         metadata_payload = dict(vehicle_payload or {})
     elif metadata_key == "energy_metadata":
         metadata_payload = dict(energy_payload or {})
+    elif metadata_key == "real_estate_metadata":
+        metadata_payload = dict(real_estate_payload or {})
 
     validated = validate_category_metadata(
         group_slug=group_slug,
@@ -473,7 +504,7 @@ def _apply_vertical_metadata_to_listing(
 
     listing_type_input = str(listing_type_raw or "").strip().lower()
     listing_type_hint = str(validated.get("listing_type_hint") or "declutter").strip().lower()
-    if listing_type_hint in ("vehicle", "energy"):
+    if listing_type_hint in ("vehicle", "energy", "real_estate"):
         final_listing_type = listing_type_hint
     elif listing_type_input:
         final_listing_type = listing_type_input
@@ -482,11 +513,17 @@ def _apply_vertical_metadata_to_listing(
 
     vehicle_metadata = validated.get("vehicle_metadata") or {}
     energy_metadata = validated.get("energy_metadata") or {}
+    real_estate_metadata = validated.get("real_estate_metadata") or {}
     derived = validated.get("derived") or {}
 
     listing.listing_type = final_listing_type
     listing.vehicle_metadata = json.dumps(vehicle_metadata, separators=(",", ":")) if vehicle_metadata else None
     listing.energy_metadata = json.dumps(energy_metadata, separators=(",", ":")) if energy_metadata else None
+    listing.real_estate_metadata = (
+        json.dumps(real_estate_metadata, separators=(",", ":"))
+        if real_estate_metadata
+        else None
+    )
 
     listing.vehicle_make = str(derived.get("vehicle_make") or "").strip() or None
     listing.vehicle_model = str(derived.get("vehicle_model") or "").strip() or None
@@ -495,6 +532,24 @@ def _apply_vertical_metadata_to_listing(
     listing.inverter_capacity = str(derived.get("inverter_capacity") or "").strip() or None
     listing.lithium_only = bool(derived.get("lithium_only", False))
     listing.bundle_badge = bool(derived.get("bundle_badge", False))
+    listing.property_type = str(derived.get("property_type") or "").strip() or None
+    listing.bedrooms = _maybe_int(derived.get("bedrooms"))
+    listing.bathrooms = _maybe_int(derived.get("bathrooms"))
+    listing.toilets = _maybe_int(real_estate_metadata.get("toilets"))
+    listing.parking_spaces = _maybe_int(real_estate_metadata.get("parking_spaces"))
+    furnished_value = _maybe_bool(derived.get("furnished"))
+    listing.furnished = None if furnished_value is None else bool(furnished_value)
+    serviced_value = _maybe_bool(derived.get("serviced"))
+    listing.serviced = None if serviced_value is None else bool(serviced_value)
+    try:
+        listing.land_size = (
+            float(derived.get("land_size"))
+            if derived.get("land_size") not in (None, "")
+            else None
+        )
+    except Exception:
+        listing.land_size = None
+    listing.title_document_type = str(derived.get("title_document_type") or "").strip() or None
     listing.location_verified = bool(derived.get("location_verified", False))
     listing.inspection_request_enabled = bool(derived.get("inspection_request_enabled", False))
     listing.financing_option = bool(derived.get("financing_option", False))
@@ -550,6 +605,7 @@ def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_
         "condition": str(row.get("condition") or ""),
         "vehicle_metadata": row.get("vehicle_metadata") if isinstance(row.get("vehicle_metadata"), dict) else _parse_json_map(row.get("vehicle_metadata")),
         "energy_metadata": row.get("energy_metadata") if isinstance(row.get("energy_metadata"), dict) else _parse_json_map(row.get("energy_metadata")),
+        "real_estate_metadata": row.get("real_estate_metadata") if isinstance(row.get("real_estate_metadata"), dict) else _parse_json_map(row.get("real_estate_metadata")),
         "vehicle_make": str(row.get("vehicle_make") or ""),
         "vehicle_model": str(row.get("vehicle_model") or ""),
         "vehicle_year": _maybe_int(row.get("vehicle_year")),
@@ -557,6 +613,13 @@ def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_
         "inverter_capacity": str(row.get("inverter_capacity") or ""),
         "lithium_only": bool(_maybe_bool(row.get("lithium_only"))),
         "bundle_badge": bool(_maybe_bool(row.get("bundle_badge"))),
+        "property_type": str(row.get("property_type") or ""),
+        "bedrooms": _maybe_int(row.get("bedrooms")),
+        "bathrooms": _maybe_int(row.get("bathrooms")),
+        "furnished": bool(_maybe_bool(row.get("furnished"))),
+        "serviced": bool(_maybe_bool(row.get("serviced"))),
+        "land_size": _maybe_float(row.get("land_size")),
+        "title_document_type": str(row.get("title_document_type") or ""),
         "delivery_available": bool(_maybe_bool(row.get("delivery_available"))),
         "inspection_required": bool(_maybe_bool(row.get("inspection_required"))),
         "financing_option": bool(_maybe_bool(row.get("financing_option"))),
@@ -620,6 +683,13 @@ def _normalize_search_payload(
             "battery_type": bool(supported.get("battery_type", False)),
             "inverter_capacity": bool(supported.get("inverter_capacity", False)),
             "lithium_only": bool(supported.get("lithium_only", False)),
+            "property_type": bool(supported.get("property_type", False)),
+            "bedrooms": bool(supported.get("bedrooms", False)),
+            "bathrooms": bool(supported.get("bathrooms", False)),
+            "furnished": bool(supported.get("furnished", False)),
+            "serviced": bool(supported.get("serviced", False)),
+            "land_size": bool(supported.get("land_size", False)),
+            "title_document_type": bool(supported.get("title_document_type", False)),
         },
     }
 
@@ -719,9 +789,78 @@ def _apply_pricing_for_listing(listing: Listing, *, base_price: float, seller_ro
         pass
     listing.price = float(final_price)
 
+
+def _listing_description_blocked(description: str) -> bool:
+    return contains_prohibited_listing_description(description or "")
+
+
+_CUSTOMER_PAYOUT_FIELDS = (
+    "customer_full_name",
+    "customer_address",
+    "customer_phone",
+    "bank_name",
+    "bank_account_number",
+    "bank_account_name",
+)
+
+
+def _normalize_customer_payout_profile(
+    raw_value,
+    *,
+    fallback: dict | None = None,
+    required: bool,
+) -> tuple[bool, dict | None, dict | None]:
+    payload = _parse_json_map(raw_value)
+    fallback_map = dict(fallback or {})
+    for key in _CUSTOMER_PAYOUT_FIELDS:
+        if not payload.get(key):
+            fallback_val = fallback_map.get(key)
+            if fallback_val not in (None, ""):
+                payload[key] = fallback_val
+
+    if not payload and not required:
+        return True, None, None
+
+    profile: dict[str, str] = {}
+    missing: list[str] = []
+    for key in _CUSTOMER_PAYOUT_FIELDS:
+        value = str(payload.get(key) or "").strip()
+        if not value:
+            missing.append(key)
+        else:
+            profile[key] = value
+
+    if required and missing:
+        return (
+            False,
+            None,
+            {
+                "ok": False,
+                "error": "CUSTOMER_PAYOUT_PROFILE_REQUIRED",
+                "message": "Merchant listings require complete customer payout details.",
+                "details": [f"{key} is required" for key in missing],
+            },
+        )
+
+    account_number = str(profile.get("bank_account_number") or "").strip().replace(" ", "")
+    if account_number and not account_number.isdigit():
+        return (
+            False,
+            None,
+            {
+                "ok": False,
+                "error": "CUSTOMER_PAYOUT_PROFILE_INVALID",
+                "message": "Customer bank account number must contain digits only.",
+            },
+        )
+    if account_number:
+        profile["bank_account_number"] = account_number
+
+    return True, profile, None
+
 @market_bp.get("/locations/popular")
 def popular_locations():
-    """Top locations by listing count. Used for investor demo and quick filters."""
+    """Top locations by listing count for marketplace discovery and filters."""
     try:
         rows = db.session.execute(text("""
             SELECT state, city, COUNT(*) AS c
@@ -868,6 +1007,125 @@ def public_filters():
         return jsonify({"ok": False, "error": "FILTERS_READ_FAILED", "message": str(exc), "brands": [], "models": []}), 500
 
 
+def _normalize_saved_search_vertical(value: str) -> str:
+    raw = str(value or "").strip().lower()
+    allowed = {"vehicles", "energy", "real_estate", "marketplace"}
+    return raw if raw in allowed else "marketplace"
+
+
+@market_bp.get("/saved-searches")
+def list_saved_searches():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    vertical = _normalize_saved_search_vertical(request.args.get("vertical") or "")
+    query = SavedSearch.query.filter(SavedSearch.user_id == int(u.id))
+    if vertical != "marketplace":
+        query = query.filter(SavedSearch.vertical == vertical)
+    rows = query.order_by(SavedSearch.last_used_at.desc(), SavedSearch.created_at.desc()).limit(100).all()
+    return jsonify({"ok": True, "items": [row.to_dict() for row in rows]}), 200
+
+
+@market_bp.post("/saved-searches")
+def create_saved_search():
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    payload = request.get_json(silent=True) or {}
+    query_map = payload.get("query_json")
+    if not isinstance(query_map, dict):
+        query_map = _parse_json_map(query_map)
+    if not isinstance(query_map, dict):
+        query_map = {}
+    name = str(payload.get("name") or "").strip()
+    if not name:
+        name = "Saved search"
+    vertical = _normalize_saved_search_vertical(payload.get("vertical") or query_map.get("vertical") or "")
+    count = SavedSearch.query.filter(SavedSearch.user_id == int(u.id)).count()
+    if count >= 20:
+        return jsonify({"ok": False, "error": "SAVED_SEARCH_LIMIT_REACHED", "message": "You can save up to 20 searches."}), 400
+    row = SavedSearch(
+        user_id=int(u.id),
+        vertical=vertical,
+        name=name[:120],
+        query_json=json.dumps(query_map, separators=(",", ":")),
+        last_used_at=datetime.utcnow(),
+    )
+    try:
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({"ok": True, "item": row.to_dict()}), 201
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "SAVED_SEARCH_CREATE_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.put("/saved-searches/<int:search_id>")
+def update_saved_search(search_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    row = SavedSearch.query.get(int(search_id))
+    if not row or int(row.user_id) != int(u.id):
+        return jsonify({"message": "Not found"}), 404
+    payload = request.get_json(silent=True) or {}
+    if "name" in payload:
+        row.name = str(payload.get("name") or "").strip()[:120] or row.name
+    if "vertical" in payload:
+        row.vertical = _normalize_saved_search_vertical(payload.get("vertical") or "")
+    if "query_json" in payload:
+        query_map = payload.get("query_json")
+        if not isinstance(query_map, dict):
+            query_map = _parse_json_map(query_map)
+        row.query_json = json.dumps(dict(query_map or {}), separators=(",", ":"))
+    if bool(payload.get("touch_last_used")):
+        row.last_used_at = datetime.utcnow()
+    row.updated_at = datetime.utcnow()
+    try:
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({"ok": True, "item": row.to_dict()}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "SAVED_SEARCH_UPDATE_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.post("/saved-searches/<int:search_id>/use")
+def use_saved_search(search_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    row = SavedSearch.query.get(int(search_id))
+    if not row or int(row.user_id) != int(u.id):
+        return jsonify({"message": "Not found"}), 404
+    row.last_used_at = datetime.utcnow()
+    row.updated_at = datetime.utcnow()
+    try:
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({"ok": True, "item": row.to_dict()}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "SAVED_SEARCH_USE_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.delete("/saved-searches/<int:search_id>")
+def delete_saved_search(search_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    row = SavedSearch.query.get(int(search_id))
+    if not row or int(row.user_id) != int(u.id):
+        return jsonify({"message": "Not found"}), 404
+    try:
+        db.session.delete(row)
+        db.session.commit()
+        return jsonify({"ok": True, "deleted": True, "id": int(search_id)}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "SAVED_SEARCH_DELETE_FAILED", "message": str(exc)}), 500
+
+
 @market_bp.get("/admin/images/fingerprints")
 def admin_image_fingerprints():
     u = _current_user()
@@ -940,6 +1198,18 @@ def public_listings_search():
             battery_type=args["battery_type"],
             inverter_capacity=args["inverter_capacity"],
             lithium_only=args["lithium_only"],
+            property_type=args["property_type"],
+            bedrooms_min=args["bedrooms_min"],
+            bedrooms_max=args["bedrooms_max"],
+            bathrooms_min=args["bathrooms_min"],
+            bathrooms_max=args["bathrooms_max"],
+            furnished=args["furnished"],
+            serviced=args["serviced"],
+            land_size_min=args["land_size_min"],
+            land_size_max=args["land_size_max"],
+            title_document_type=args["title_document_type"],
+            city=args["city"],
+            area=args["area"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -1011,6 +1281,18 @@ def listings_search():
             battery_type=args["battery_type"],
             inverter_capacity=args["inverter_capacity"],
             lithium_only=args["lithium_only"],
+            property_type=args["property_type"],
+            bedrooms_min=args["bedrooms_min"],
+            bedrooms_max=args["bedrooms_max"],
+            bathrooms_min=args["bathrooms_min"],
+            bathrooms_max=args["bathrooms_max"],
+            furnished=args["furnished"],
+            serviced=args["serviced"],
+            land_size_min=args["land_size_min"],
+            land_size_max=args["land_size_max"],
+            title_document_type=args["title_document_type"],
+            city=args["city"],
+            area=args["area"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -1077,6 +1359,18 @@ def admin_listings_search():
             battery_type=args["battery_type"],
             inverter_capacity=args["inverter_capacity"],
             lithium_only=args["lithium_only"],
+            property_type=args["property_type"],
+            bedrooms_min=args["bedrooms_min"],
+            bedrooms_max=args["bedrooms_max"],
+            bathrooms_min=args["bathrooms_min"],
+            bathrooms_max=args["bathrooms_max"],
+            furnished=args["furnished"],
+            serviced=args["serviced"],
+            land_size_min=args["land_size_min"],
+            land_size_max=args["land_size_max"],
+            title_document_type=args["title_document_type"],
+            city=args["city"],
+            area=args["area"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -1182,6 +1476,65 @@ def admin_flag_listing_for_inspection(listing_id: int):
     except Exception as exc:
         db.session.rollback()
         return jsonify({"ok": False, "error": "LISTING_INSPECTION_FLAG_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.get("/admin/listings/<int:listing_id>/customer-payout-profile")
+def admin_listing_customer_payout_profile(listing_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    listing = Listing.query.get(int(listing_id))
+    if not listing:
+        return jsonify({"message": "Not found"}), 404
+    profile = _parse_json_map(getattr(listing, "customer_payout_profile_json", None))
+    if not profile:
+        return jsonify({"ok": False, "error": "CUSTOMER_PAYOUT_PROFILE_NOT_FOUND", "message": "No customer payout profile found for this listing."}), 404
+    copy_text = (
+        f"Customer: {profile.get('customer_full_name', '')}\n"
+        f"Phone: {profile.get('customer_phone', '')}\n"
+        f"Bank: {profile.get('bank_name', '')}\n"
+        f"Account Number: {profile.get('bank_account_number', '')}\n"
+        f"Account Name: {profile.get('bank_account_name', '')}"
+    )
+    try:
+        db.session.add(
+            AuditLog(
+                actor_user_id=int(u.id),
+                action="admin_view_customer_payout_profile",
+                target_type="listing",
+                target_id=int(listing.id),
+                meta=json.dumps(
+                    {
+                        "listing_id": int(listing.id),
+                        "customer_full_name": str(profile.get("customer_full_name") or ""),
+                    },
+                    separators=(",", ":"),
+                ),
+            )
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+    return jsonify(
+        {
+            "ok": True,
+            "listing_id": int(listing.id),
+            "customer_payout_profile": profile,
+            "copy_text": copy_text,
+            "customer_profile_updated_at": (
+                listing.customer_profile_updated_at.isoformat()
+                if getattr(listing, "customer_profile_updated_at", None)
+                else None
+            ),
+            "customer_profile_updated_by": (
+                int(listing.customer_profile_updated_by)
+                if getattr(listing, "customer_profile_updated_by", None) is not None
+                else None
+            ),
+        }
+    ), 200
 
 
 @market_bp.get("/public/listings/recommended")
@@ -1579,7 +1932,7 @@ def merchant_listings_metrics():
 
 @market_bp.get("/heatmap")
 def heatmap_compat():
-    """Simple heatmap data (investor demo).
+    """Simple heatmap data for discovery views.
     Returns [{state, city, count}] in an 'items' wrapper.
     """
     try:
@@ -1605,7 +1958,7 @@ def heatmap_compat():
 
 @market_bp.get("/heat")
 def heat():
-    """Heat buckets for simple 'map-like' demo (state/city counts)."""
+    """Heat buckets for map-style summaries (state/city counts)."""
     try:
         rows = db.session.execute(text("""
             SELECT state, city, COUNT(*) AS c
@@ -1628,7 +1981,7 @@ def heat():
 
 @market_bp.get("/fees/quote")
 def fees_quote():
-    """Quick fee quote endpoint for investor/demo UI."""
+    """Quick fee quote endpoint for listing and marketplace UI."""
     kind = (request.args.get("kind") or "").strip()  # listing_sale, delivery, withdrawal, shortlet_booking
     raw_amount = (request.args.get("amount") or "").strip()
     try:
@@ -1817,10 +2170,12 @@ def merchant_listings():
 
 @market_bp.get("/listings/<int:listing_id>")
 def get_listing(listing_id: int):
+    u = _current_user()
     item = Listing.query.get(listing_id)
     if not item:
         return jsonify({"message": "Not found"}), 404
-    payload = item.to_dict(base_url=_base_url())
+    include_private = bool(_is_admin(u) or _is_owner(u, item))
+    payload = item.to_dict(base_url=_base_url(), include_private=include_private)
     seller_id = _maybe_int(payload.get("user_id")) or _maybe_int(payload.get("owner_id"))
     if seller_id:
         merchant = MerchantProfile.query.filter_by(user_id=int(seller_id)).first()
@@ -1846,8 +2201,6 @@ def update_listing(listing_id: int):
         return jsonify({"message": "Not found"}), 404
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
-    if not _is_admin(u) and not _is_phone_verified(u):
-        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     payload = request.get_json(silent=True) or {}
     # Listing cap enforcement on activation
@@ -1879,7 +2232,16 @@ def update_listing(listing_id: int):
         item.title = title
 
     if "description" in payload:
-        item.description = (payload.get("description") or "").strip()
+        next_description = (payload.get("description") or "").strip()
+        if _listing_description_blocked(next_description):
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "DESCRIPTION_CONTACT_BLOCKED",
+                    "message": DESCRIPTION_BLOCK_MESSAGE,
+                }
+            ), 400
+        item.description = next_description
     if "state" in payload:
         item.state = (payload.get("state") or "").strip()
     if "city" in payload:
@@ -1898,6 +2260,7 @@ def update_listing(listing_id: int):
         "listing_type" in payload
         or "vehicle_metadata" in payload
         or "energy_metadata" in payload
+        or "real_estate_metadata" in payload
         or "metadata" in payload
         or "category_id" in payload
         or "category" in payload
@@ -1906,11 +2269,14 @@ def update_listing(listing_id: int):
     ):
         vehicle_payload = _parse_json_map(payload.get("vehicle_metadata"))
         energy_payload = _parse_json_map(payload.get("energy_metadata"))
+        real_estate_payload = _parse_json_map(payload.get("real_estate_metadata"))
         shared_payload = _parse_json_map(payload.get("metadata"))
         if not vehicle_payload:
             vehicle_payload = dict(shared_payload)
         if not energy_payload:
             energy_payload = dict(shared_payload)
+        if not real_estate_payload:
+            real_estate_payload = dict(shared_payload)
         ok_meta, meta_error = _apply_vertical_metadata_to_listing(
             item,
             category_id=_maybe_int(getattr(item, "category_id", None)),
@@ -1918,6 +2284,7 @@ def update_listing(listing_id: int):
             listing_type_raw=str(payload.get("listing_type") or ""),
             vehicle_payload=vehicle_payload,
             energy_payload=energy_payload,
+            real_estate_payload=real_estate_payload,
             delivery_available_raw=payload.get("delivery_available"),
             inspection_required_raw=payload.get("inspection_required"),
             is_admin=_is_admin(u),
@@ -1925,6 +2292,20 @@ def update_listing(listing_id: int):
         )
         if not ok_meta:
             return jsonify(meta_error or {"ok": False, "error": "VALIDATION_FAILED"}), 400
+    customer_profile_keys_present = any((key in payload) for key in _CUSTOMER_PAYOUT_FIELDS)
+    if "customer_payout_profile" in payload or customer_profile_keys_present:
+        is_merchant_owner = _account_role(_maybe_int(getattr(item, "user_id", None))) == "merchant"
+        ok_profile, customer_profile, profile_error = _normalize_customer_payout_profile(
+            payload.get("customer_payout_profile"),
+            fallback=payload,
+            required=bool(is_merchant_owner and not _is_admin(u)),
+        )
+        if not ok_profile:
+            return jsonify(profile_error or {"ok": False, "error": "CUSTOMER_PAYOUT_PROFILE_INVALID"}), 400
+        if customer_profile is not None:
+            item.customer_payout_profile_json = json.dumps(customer_profile, separators=(",", ":"))
+            item.customer_profile_updated_at = datetime.utcnow()
+            item.customer_profile_updated_by = int(u.id)
     if "price" in payload:
         try:
             base_price = float(payload.get("price") or 0.0)
@@ -1996,8 +2377,6 @@ def delete_listing(listing_id: int):
         return jsonify({"message": "Not found"}), 404
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
-    if not _is_admin(u) and not _is_phone_verified(u):
-        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     try:
         try:
@@ -2038,7 +2417,10 @@ def create_listing():
     listing_type_raw = ""
     vehicle_payload: dict = {}
     energy_payload: dict = {}
+    real_estate_payload: dict = {}
     shared_metadata_payload: dict = {}
+    customer_payout_payload: dict = {}
+    customer_payout_fallback: dict = {}
     delivery_available_raw = None
     inspection_required_raw = None
     approval_status_raw = ""
@@ -2060,7 +2442,14 @@ def create_listing():
         listing_type_raw = (request.form.get("listing_type") or "").strip().lower()
         vehicle_payload = _parse_json_map(request.form.get("vehicle_metadata"))
         energy_payload = _parse_json_map(request.form.get("energy_metadata"))
+        real_estate_payload = _parse_json_map(request.form.get("real_estate_metadata"))
         shared_metadata_payload = _parse_json_map(request.form.get("metadata"))
+        customer_payout_payload = _parse_json_map(request.form.get("customer_payout_profile"))
+        customer_payout_fallback = {
+            key: request.form.get(key)
+            for key in _CUSTOMER_PAYOUT_FIELDS
+            if request.form.get(key) not in (None, "")
+        }
         delivery_available_raw = request.form.get("delivery_available")
         inspection_required_raw = request.form.get("inspection_required")
         approval_status_raw = (request.form.get("approval_status") or "").strip().lower()
@@ -2106,7 +2495,14 @@ def create_listing():
         listing_type_raw = (payload.get("listing_type") or "").strip().lower()
         vehicle_payload = _parse_json_map(payload.get("vehicle_metadata"))
         energy_payload = _parse_json_map(payload.get("energy_metadata"))
+        real_estate_payload = _parse_json_map(payload.get("real_estate_metadata"))
         shared_metadata_payload = _parse_json_map(payload.get("metadata"))
+        customer_payout_payload = _parse_json_map(payload.get("customer_payout_profile"))
+        customer_payout_fallback = {
+            key: payload.get(key)
+            for key in _CUSTOMER_PAYOUT_FIELDS
+            if payload.get(key) not in (None, "")
+        }
         delivery_available_raw = payload.get("delivery_available")
         inspection_required_raw = payload.get("inspection_required")
         approval_status_raw = (payload.get("approval_status") or "").strip().lower()
@@ -2126,6 +2522,14 @@ def create_listing():
 
     if not title:
         return jsonify({"message": "title is required"}), 400
+    if _listing_description_blocked(description):
+        return jsonify(
+            {
+                "ok": False,
+                "error": "DESCRIPTION_CONTACT_BLOCKED",
+                "message": DESCRIPTION_BLOCK_MESSAGE,
+            }
+        ), 400
 
     # Best-effort: attach listing to authenticated user
     user_id = None
@@ -2146,8 +2550,15 @@ def create_listing():
     rl = _rate_limit_response("listing_create", user=owner_user, limit=40, window_seconds=300)
     if rl is not None:
         return rl
-    if not _is_phone_verified(owner_user):
-        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
+    seller_role = _seller_role(user_id)
+    requires_customer_profile = _account_role(user_id) == "merchant"
+    ok_profile, customer_profile, profile_error = _normalize_customer_payout_profile(
+        customer_payout_payload,
+        fallback=customer_payout_fallback,
+        required=requires_customer_profile,
+    )
+    if not ok_profile:
+        return jsonify(profile_error or {"ok": False, "error": "CUSTOMER_PAYOUT_PROFILE_INVALID"}), 400
 
     listing = Listing(
         user_id=user_id,
@@ -2164,11 +2575,17 @@ def create_listing():
         price=price,
         image_path=stored_image_path,
     )
+    if customer_profile is not None:
+        listing.customer_payout_profile_json = json.dumps(customer_profile, separators=(",", ":"))
+        listing.customer_profile_updated_at = datetime.utcnow()
+        listing.customer_profile_updated_by = int(user_id)
 
     if not vehicle_payload and shared_metadata_payload:
         vehicle_payload = dict(shared_metadata_payload)
     if not energy_payload and shared_metadata_payload:
         energy_payload = dict(shared_metadata_payload)
+    if not real_estate_payload and shared_metadata_payload:
+        real_estate_payload = dict(shared_metadata_payload)
     ok_meta, meta_error = _apply_vertical_metadata_to_listing(
         listing,
         category_id=category_id,
@@ -2176,6 +2593,7 @@ def create_listing():
         listing_type_raw=listing_type_raw,
         vehicle_payload=vehicle_payload,
         energy_payload=energy_payload,
+        real_estate_payload=real_estate_payload,
         delivery_available_raw=delivery_available_raw,
         inspection_required_raw=inspection_required_raw,
         is_admin=_is_admin(owner_user),
@@ -2193,10 +2611,6 @@ def create_listing():
     if not ok:
         return jsonify(info), 403
 
-    try:
-        seller_role = _seller_role(user_id)
-    except Exception:
-        seller_role = "guest"
     _apply_pricing_for_listing(listing, base_price=price, seller_role=seller_role)
 
     try:

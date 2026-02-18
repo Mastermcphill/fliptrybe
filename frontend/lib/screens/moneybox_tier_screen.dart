@@ -6,7 +6,7 @@ import '../services/moneybox_service.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/ft_routes.dart';
 import '../widgets/phone_verification_dialog.dart';
-import 'kyc_demo_screen.dart';
+import 'kyc_screen.dart';
 
 class MoneyBoxTierScreen extends StatefulWidget {
   const MoneyBoxTierScreen({super.key});
@@ -101,7 +101,7 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  FTPageRoute.slideUp(child: const KycDemoScreen()),
+                  FTPageRoute.slideUp(child: const KycScreen()),
                 );
               },
             ),
@@ -196,3 +196,4 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
     );
   }
 }
+

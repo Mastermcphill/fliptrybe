@@ -48,7 +48,7 @@ class ImageFingerprintDedupeTestCase(unittest.TestCase):
                 name="Image Tester",
                 email=f"img-{suffix}@fliptrybe.test",
                 phone=f"090{suffix[-8:]}",
-                role="merchant",
+                role="buyer",
                 is_verified=True,
             )
             user.set_password("Passw0rd!")

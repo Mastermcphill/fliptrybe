@@ -12,7 +12,6 @@ import '../ui/admin/admin_metric_card.dart';
 import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
-import 'not_available_yet_screen.dart';
 
 class AdminOverviewScreen extends StatefulWidget {
   const AdminOverviewScreen({super.key, this.autoLoad = true});
@@ -107,38 +106,6 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
       return (mapped['status'] ?? '').toString().toLowerCase() ==
           status.toLowerCase();
     }).length;
-  }
-
-  Future<void> _seed(String path, String label) async {
-    try {
-      final res = await ApiClient.instance.postJson(ApiConfig.api(path), {});
-      if (!mounted) return;
-      final ok =
-          (res is Map && (res['ok'] == true || (res['created'] != null)));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(ok ? '$label completed.' : '$label response received.')),
-      );
-      await _reload();
-    } catch (e) {
-      if (!mounted) return;
-      final text = e.toString().toLowerCase();
-      if (text.contains('404')) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => NotAvailableYetScreen(
-              title: label,
-              reason: '$label is not available on this backend deployment.',
-            ),
-          ),
-        );
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$label failed: $e')),
-      );
-    }
   }
 
   Future<void> _toggleAutopilot() async {
@@ -307,7 +274,7 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
             const SizedBox(height: 16),
             const FTSectionHeader(
               title: 'Quick Admin Actions',
-              subtitle: 'Seed data and automation control shortcuts',
+              subtitle: 'Automation and operations shortcuts',
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -315,25 +282,11 @@ class _AdminOverviewScreenState extends State<AdminOverviewScreen> {
               runSpacing: 8,
               children: [
                 FTButton(
-                  label: 'Seed Nationwide',
-                  icon: Icons.public_outlined,
-                  variant: FTButtonVariant.ghost,
-                  onPressed: () =>
-                      _seed('/admin/demo/seed-nationwide', 'Seed Nationwide'),
-                ),
-                FTButton(
-                  label: 'Seed Leaderboards',
-                  icon: Icons.emoji_events_outlined,
-                  variant: FTButtonVariant.ghost,
-                  onPressed: () => _seed(
-                      '/admin/demo/seed-leaderboards', 'Seed Leaderboards'),
-                ),
-                FTButton(
-                  label: 'Run Notify Queue Demo',
+                  label: 'Run Notify Queue',
                   icon: Icons.notifications_active_outlined,
                   variant: FTButtonVariant.secondary,
                   onPressed: () =>
-                      _seed('/admin/autopilot/tick', 'Run Notify Queue Demo'),
+                      ApiClient.instance.postJson(ApiConfig.api('/admin/autopilot/tick'), {}),
                 ),
                 FTButton(
                   label: 'Toggle Autopilot',

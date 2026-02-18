@@ -1,14 +1,12 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../constants/ng_states.dart';
 import '../../models/marketplace_query_state.dart';
-import '../../models/saved_search_record.dart';
 import '../../services/category_service.dart';
 import '../../services/auth_gate_service.dart';
 import '../../services/marketplace_catalog_service.dart';
 import '../../services/marketplace_prefs_service.dart';
+import '../../services/saved_search_service.dart';
 import '../../ui/components/ft_components.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/listing/listing_card.dart';
@@ -17,6 +15,7 @@ import '../listing_detail_screen.dart';
 class MarketplaceSearchResultsScreen extends StatefulWidget {
   const MarketplaceSearchResultsScreen({
     super.key,
+    this.initialQueryState,
     this.initialQuery = '',
     this.initialCategory = 'All',
     this.initialState = allNigeriaLabel,
@@ -26,6 +25,7 @@ class MarketplaceSearchResultsScreen extends StatefulWidget {
     this.initialConditions = const [],
   });
 
+  final MarketplaceQueryState? initialQueryState;
   final String initialQuery;
   final String initialCategory;
   final String initialState;
@@ -43,6 +43,7 @@ class _MarketplaceSearchResultsScreenState
     extends State<MarketplaceSearchResultsScreen> {
   final _catalog = MarketplaceCatalogService();
   final _prefs = MarketplacePrefsService();
+  final _savedSearches = SavedSearchService();
   final _categorySvc = CategoryService();
   final _queryCtrl = TextEditingController();
 
@@ -61,15 +62,7 @@ class _MarketplaceSearchResultsScreenState
   List<Map<String, dynamic>> _brandOptions = const <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _modelOptions = const <Map<String, dynamic>>[];
 
-  static const _categories = [
-    'All',
-    'Phones',
-    'Fashion',
-    'Furniture',
-    'Electronics',
-    'Home',
-    'Sports',
-  ];
+  static const _categories = ['All'];
 
   static const _sortOptions = {
     'relevance': 'Relevance',
@@ -89,15 +82,16 @@ class _MarketplaceSearchResultsScreenState
   @override
   void initState() {
     super.initState();
-    _queryState = MarketplaceQueryState(
-      query: widget.initialQuery,
-      category: widget.initialCategory,
-      state: widget.initialState,
-      sort: widget.initialSort,
-      minPrice: widget.initialMinPrice,
-      maxPrice: widget.initialMaxPrice,
-      conditions: widget.initialConditions,
-    );
+    _queryState = widget.initialQueryState ??
+        MarketplaceQueryState(
+          query: widget.initialQuery,
+          category: widget.initialCategory,
+          state: widget.initialState,
+          sort: widget.initialSort,
+          minPrice: widget.initialMinPrice,
+          maxPrice: widget.initialMaxPrice,
+          conditions: widget.initialConditions,
+        );
     _queryCtrl.text = _queryState.query;
     _boot();
   }
@@ -143,6 +137,16 @@ class _MarketplaceSearchResultsScreenState
         .toList(growable: false);
   }
 
+  List<Map<String, dynamic>> _categorySuggestionsForQuery(String rawQuery) {
+    final q = rawQuery.trim().toLowerCase();
+    if (q.length < 2) return const <Map<String, dynamic>>[];
+    return _taxonomy
+        .where((row) => (row['name'] ?? '').toString().toLowerCase().contains(q))
+        .take(8)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+  }
+
   Future<void> _reloadTaxonomyFilters() async {
     final data = await _categorySvc.filters(
       categoryId: _queryState.categoryId ?? _queryState.parentCategoryId,
@@ -166,6 +170,7 @@ class _MarketplaceSearchResultsScreenState
         _prefs.loadFavorites(),
         _catalog.searchV2Mode(),
         _categorySvc.categoriesTree(),
+        _prefs.loadLastCategoryContext(),
       ]);
       if (!mounted) return;
       _all = values[0] as List<Map<String, dynamic>>;
@@ -174,6 +179,22 @@ class _MarketplaceSearchResultsScreenState
       _taxonomy = _flattenCategories(
         (values[3] as List<Map<String, dynamic>>),
       );
+      final lastCategory = (values[4] is Map)
+          ? Map<String, dynamic>.from(values[4] as Map)
+          : const <String, dynamic>{};
+      if ((_queryState.category == 'All' || _queryState.category.trim().isEmpty) &&
+          _queryState.categoryId == null &&
+          lastCategory.isNotEmpty) {
+        _queryState = _queryState.copyWith(
+          category: (lastCategory['category'] ?? 'All').toString(),
+          categoryId: lastCategory['categoryId'] is num
+              ? (lastCategory['categoryId'] as num).toInt()
+              : int.tryParse((lastCategory['categoryId'] ?? '').toString()),
+          parentCategoryId: lastCategory['parentCategoryId'] is num
+              ? (lastCategory['parentCategoryId'] as num).toInt()
+              : int.tryParse((lastCategory['parentCategoryId'] ?? '').toString()),
+        );
+      }
       _apply();
       setState(() => _loading = false);
       _reloadTaxonomyFilters();
@@ -195,6 +216,25 @@ class _MarketplaceSearchResultsScreenState
       parentCategoryId: _queryState.parentCategoryId,
       brandId: _queryState.brandId,
       modelId: _queryState.modelId,
+      listingType: _queryState.listingType,
+      make: _queryState.vehicleMake,
+      model: _queryState.vehicleModel,
+      year: _queryState.vehicleYear,
+      batteryType: _queryState.batteryType,
+      inverterCapacity: _queryState.inverterCapacity,
+      lithiumOnly: _queryState.lithiumOnly,
+      propertyType: _queryState.propertyType,
+      bedroomsMin: _queryState.bedroomsMin,
+      bedroomsMax: _queryState.bedroomsMax,
+      bathroomsMin: _queryState.bathroomsMin,
+      bathroomsMax: _queryState.bathroomsMax,
+      furnishedOnly: _queryState.furnishedOnly,
+      servicedOnly: _queryState.servicedOnly,
+      landSizeMin: _queryState.landSizeMin,
+      landSizeMax: _queryState.landSizeMax,
+      titleDocumentType: _queryState.titleDocumentType,
+      city: _queryState.city,
+      area: _queryState.area,
       state: _queryState.state,
       minPrice: _queryState.minPrice,
       maxPrice: _queryState.maxPrice,
@@ -218,6 +258,25 @@ class _MarketplaceSearchResultsScreenState
         parentCategoryId: _queryState.parentCategoryId,
         brandId: _queryState.brandId,
         modelId: _queryState.modelId,
+        listingType: _queryState.listingType,
+        make: _queryState.vehicleMake,
+        model: _queryState.vehicleModel,
+        year: _queryState.vehicleYear,
+        batteryType: _queryState.batteryType,
+        inverterCapacity: _queryState.inverterCapacity,
+        lithiumOnly: _queryState.lithiumOnly ? true : null,
+        propertyType: _queryState.propertyType,
+        bedroomsMin: _queryState.bedroomsMin,
+        bedroomsMax: _queryState.bedroomsMax,
+        bathroomsMin: _queryState.bathroomsMin,
+        bathroomsMax: _queryState.bathroomsMax,
+        furnished: _queryState.furnishedOnly ? true : null,
+        serviced: _queryState.servicedOnly ? true : null,
+        landSizeMin: _queryState.landSizeMin,
+        landSizeMax: _queryState.landSizeMax,
+        titleDocumentType: _queryState.titleDocumentType,
+        city: _queryState.city,
+        area: _queryState.area,
         state: _queryState.state,
         minPrice: _queryState.minPrice,
         maxPrice: _queryState.maxPrice,
@@ -283,20 +342,49 @@ class _MarketplaceSearchResultsScreenState
   Future<void> _saveCurrentSearch() async {
     final state = _queryState.copyWith(query: _queryCtrl.text.trim());
     final payload = state.toMap();
-    final key = base64Encode(utf8.encode(jsonEncode(payload)));
-    final now = DateTime.now().toUtc();
-    await _prefs.upsertSearch(
-      SavedSearchRecord(
-        key: key,
-        state: state,
-        createdAt: now,
-        updatedAt: now,
-      ).toMap(),
+    final vertical = _inferVertical(state);
+    payload['vertical'] = vertical;
+    final create = await _savedSearches.create(
+      name: state.query.trim().isEmpty ? 'Saved search' : state.query.trim(),
+      vertical: vertical,
+      queryJson: payload,
     );
+    if (create['ok'] != true) {
+      if (!mounted) return;
+      final msg = (create['message'] ?? 'Unable to save search').toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Search saved.')),
     );
+  }
+
+  String _inferVertical(MarketplaceQueryState state) {
+    final listingType = state.listingType.trim().toLowerCase();
+    if (listingType == 'vehicle') return 'vehicles';
+    if (listingType == 'energy') return 'energy';
+    if (listingType == 'real_estate') return 'real_estate';
+    final category = state.category.toLowerCase();
+    if (category.contains('car') ||
+        category.contains('truck') ||
+        category.contains('motorcycle') ||
+        category.contains('vehicle')) {
+      return 'vehicles';
+    }
+    if (category.contains('solar') ||
+        category.contains('inverter') ||
+        category.contains('battery') ||
+        category.contains('energy')) {
+      return 'energy';
+    }
+    if (category.contains('house') ||
+        category.contains('land') ||
+        category.contains('real estate')) {
+      return 'real_estate';
+    }
+    return 'marketplace';
   }
 
   Future<void> _openFilters() async {
@@ -309,6 +397,42 @@ class _MarketplaceSearchResultsScreenState
     int? draftCategoryId = _queryState.categoryId;
     int? draftBrandId = _queryState.brandId;
     int? draftModelId = _queryState.modelId;
+    String draftListingType = _queryState.listingType;
+    final draftMakeCtrl = TextEditingController(text: _queryState.vehicleMake);
+    final draftVehicleModelCtrl =
+        TextEditingController(text: _queryState.vehicleModel);
+    final draftVehicleYearCtrl = TextEditingController(
+        text: _queryState.vehicleYear?.toString() ?? '');
+    final draftBatteryTypeCtrl =
+        TextEditingController(text: _queryState.batteryType);
+    final draftInverterCapacityCtrl =
+        TextEditingController(text: _queryState.inverterCapacity);
+    bool draftLithiumOnly = _queryState.lithiumOnly;
+    String draftPropertyType = _queryState.propertyType;
+    final draftBedroomsMinCtrl = TextEditingController(
+      text: _queryState.bedroomsMin?.toString() ?? '',
+    );
+    final draftBedroomsMaxCtrl = TextEditingController(
+      text: _queryState.bedroomsMax?.toString() ?? '',
+    );
+    final draftBathroomsMinCtrl = TextEditingController(
+      text: _queryState.bathroomsMin?.toString() ?? '',
+    );
+    final draftBathroomsMaxCtrl = TextEditingController(
+      text: _queryState.bathroomsMax?.toString() ?? '',
+    );
+    bool draftFurnishedOnly = _queryState.furnishedOnly;
+    bool draftServicedOnly = _queryState.servicedOnly;
+    final draftLandSizeMinCtrl = TextEditingController(
+      text: _queryState.landSizeMin?.toStringAsFixed(0) ?? '',
+    );
+    final draftLandSizeMaxCtrl = TextEditingController(
+      text: _queryState.landSizeMax?.toStringAsFixed(0) ?? '',
+    );
+    final draftTitleDocCtrl =
+        TextEditingController(text: _queryState.titleDocumentType);
+    final draftCityCtrl = TextEditingController(text: _queryState.city);
+    final draftAreaCtrl = TextEditingController(text: _queryState.area);
     String draftState = _queryState.state;
     final draftConditions = <String>{..._queryState.conditions};
     bool draftDelivery = _queryState.deliveryAvailable;
@@ -503,6 +627,206 @@ class _MarketplaceSearchResultsScreenState
                       ],
                     ),
                     const SizedBox(height: 14),
+                    const Text('Vertical filters',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: draftListingType.isEmpty ? null : draftListingType,
+                      items: const [
+                        DropdownMenuItem(value: 'vehicle', child: Text('Vehicle')),
+                        DropdownMenuItem(value: 'energy', child: Text('Power & Energy')),
+                        DropdownMenuItem(
+                            value: 'real_estate', child: Text('Real Estate')),
+                      ],
+                      onChanged: (value) =>
+                          setModal(() => draftListingType = value ?? ''),
+                      decoration: const InputDecoration(
+                        labelText: 'Listing type',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: draftMakeCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Make',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: draftVehicleModelCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Model',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: draftVehicleYearCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Year',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: draftBatteryTypeCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Battery type',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: draftInverterCapacityCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Inverter capacity',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile.adaptive(
+                      value: draftLithiumOnly,
+                      onChanged: (next) =>
+                          setModal(() => draftLithiumOnly = next),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Lithium only'),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('Real estate filters',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    DropdownButtonFormField<String>(
+                      value: draftPropertyType.isEmpty ? null : draftPropertyType,
+                      items: const [
+                        DropdownMenuItem(value: 'Rent', child: Text('Rent')),
+                        DropdownMenuItem(value: 'Sale', child: Text('Sale')),
+                        DropdownMenuItem(value: 'Land', child: Text('Land')),
+                      ],
+                      onChanged: (value) =>
+                          setModal(() => draftPropertyType = value ?? ''),
+                      decoration:
+                          const InputDecoration(labelText: 'Property type'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: draftBedroomsMinCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Bedrooms min',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: draftBedroomsMaxCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Bedrooms max',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: draftBathroomsMinCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Bathrooms min',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: draftBathroomsMaxCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Bathrooms max',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile.adaptive(
+                      value: draftFurnishedOnly,
+                      onChanged: (next) =>
+                          setModal(() => draftFurnishedOnly = next),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Furnished only'),
+                    ),
+                    SwitchListTile.adaptive(
+                      value: draftServicedOnly,
+                      onChanged: (next) =>
+                          setModal(() => draftServicedOnly = next),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Serviced only'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: draftLandSizeMinCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Land size min',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: draftLandSizeMaxCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Land size max',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: draftTitleDocCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Title document type',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: draftCityCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'City',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: draftAreaCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Area',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     const Text('Condition',
                         style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 6),
@@ -582,8 +906,27 @@ class _MarketplaceSearchResultsScreenState
                                 draftConditions.clear();
                                 draftDelivery = false;
                                 draftInspection = false;
+                                draftListingType = '';
+                                draftLithiumOnly = false;
+                                draftPropertyType = '';
+                                draftFurnishedOnly = false;
+                                draftServicedOnly = false;
                                 minCtrl.clear();
                                 maxCtrl.clear();
+                                draftMakeCtrl.clear();
+                                draftVehicleModelCtrl.clear();
+                                draftVehicleYearCtrl.clear();
+                                draftBatteryTypeCtrl.clear();
+                                draftInverterCapacityCtrl.clear();
+                                draftBedroomsMinCtrl.clear();
+                                draftBedroomsMaxCtrl.clear();
+                                draftBathroomsMinCtrl.clear();
+                                draftBathroomsMaxCtrl.clear();
+                                draftLandSizeMinCtrl.clear();
+                                draftLandSizeMaxCtrl.clear();
+                                draftTitleDocCtrl.clear();
+                                draftCityCtrl.clear();
+                                draftAreaCtrl.clear();
                               });
                             },
                           ),
@@ -601,6 +944,36 @@ class _MarketplaceSearchResultsScreenState
                                   categoryId: draftCategoryId,
                                   brandId: draftBrandId,
                                   modelId: draftModelId,
+                                  listingType: draftListingType,
+                                  vehicleMake: draftMakeCtrl.text.trim(),
+                                  vehicleModel:
+                                      draftVehicleModelCtrl.text.trim(),
+                                  vehicleYear:
+                                      int.tryParse(draftVehicleYearCtrl.text),
+                                  batteryType:
+                                      draftBatteryTypeCtrl.text.trim(),
+                                  inverterCapacity:
+                                      draftInverterCapacityCtrl.text.trim(),
+                                  lithiumOnly: draftLithiumOnly,
+                                  propertyType: draftPropertyType,
+                                  bedroomsMin:
+                                      int.tryParse(draftBedroomsMinCtrl.text),
+                                  bedroomsMax:
+                                      int.tryParse(draftBedroomsMaxCtrl.text),
+                                  bathroomsMin:
+                                      int.tryParse(draftBathroomsMinCtrl.text),
+                                  bathroomsMax:
+                                      int.tryParse(draftBathroomsMaxCtrl.text),
+                                  furnishedOnly: draftFurnishedOnly,
+                                  servicedOnly: draftServicedOnly,
+                                  landSizeMin:
+                                      double.tryParse(draftLandSizeMinCtrl.text),
+                                  landSizeMax:
+                                      double.tryParse(draftLandSizeMaxCtrl.text),
+                                  titleDocumentType:
+                                      draftTitleDocCtrl.text.trim(),
+                                  city: draftCityCtrl.text.trim(),
+                                  area: draftAreaCtrl.text.trim(),
                                   state: draftState,
                                   conditions: draftConditions.toList(),
                                   minPrice:
@@ -612,6 +985,11 @@ class _MarketplaceSearchResultsScreenState
                                 );
                                 _apply();
                               });
+                              _prefs.saveLastCategoryContext(
+                                category: draftCategory,
+                                categoryId: draftCategoryId,
+                                parentCategoryId: draftParentCategoryId,
+                              );
                               Navigator.of(ctx).pop();
                             },
                           ),
@@ -668,6 +1046,194 @@ class _MarketplaceSearchResultsScreenState
           onTap: () {
             setState(() {
               _queryState = _queryState.copyWith(clearModelId: true);
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.listingType.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Type: ${_queryState.listingType}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(listingType: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.vehicleMake.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Make: ${_queryState.vehicleMake}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(vehicleMake: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.vehicleModel.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Vehicle model: ${_queryState.vehicleModel}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(vehicleModel: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.vehicleYear != null) {
+      chips.add(FTChip(
+          label: 'Year: ${_queryState.vehicleYear}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(clearVehicleYear: true);
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.batteryType.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Battery: ${_queryState.batteryType}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(batteryType: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.inverterCapacity.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Inverter: ${_queryState.inverterCapacity}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(inverterCapacity: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.lithiumOnly) {
+      chips.add(FTChip(
+          label: 'Lithium only',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(lithiumOnly: false);
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.propertyType.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Property: ${_queryState.propertyType}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(propertyType: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.bedroomsMin != null || _queryState.bedroomsMax != null) {
+      chips.add(FTChip(
+          label:
+              'Beds: ${_queryState.bedroomsMin ?? '-'} to ${_queryState.bedroomsMax ?? '-'}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(
+                clearBedroomsMin: true,
+                clearBedroomsMax: true,
+              );
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.bathroomsMin != null || _queryState.bathroomsMax != null) {
+      chips.add(FTChip(
+          label:
+              'Baths: ${_queryState.bathroomsMin ?? '-'} to ${_queryState.bathroomsMax ?? '-'}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(
+                clearBathroomsMin: true,
+                clearBathroomsMax: true,
+              );
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.furnishedOnly) {
+      chips.add(FTChip(
+          label: 'Furnished',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(furnishedOnly: false);
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.servicedOnly) {
+      chips.add(FTChip(
+          label: 'Serviced',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(servicedOnly: false);
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.landSizeMin != null || _queryState.landSizeMax != null) {
+      chips.add(FTChip(
+          label:
+              'Land: ${_queryState.landSizeMin ?? '-'} to ${_queryState.landSizeMax ?? '-'}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(
+                clearLandSizeMin: true,
+                clearLandSizeMax: true,
+              );
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.titleDocumentType.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Doc: ${_queryState.titleDocumentType}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(titleDocumentType: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.city.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'City: ${_queryState.city}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(city: '');
+              _apply();
+            });
+          }));
+    }
+    if (_queryState.area.trim().isNotEmpty) {
+      chips.add(FTChip(
+          label: 'Area: ${_queryState.area}',
+          selected: true,
+          onTap: () {
+            setState(() {
+              _queryState = _queryState.copyWith(area: '');
               _apply();
             });
           }));
@@ -741,6 +1307,7 @@ class _MarketplaceSearchResultsScreenState
   @override
   Widget build(BuildContext context) {
     final chips = _activeFilterChips();
+    final categorySuggestions = _categorySuggestionsForQuery(_queryCtrl.text);
     return FTScaffold(
       title: 'Search Results',
       actions: [
@@ -776,8 +1343,42 @@ class _MarketplaceSearchResultsScreenState
                                 },
                               ),
                             ),
+                            onChanged: (_) => setState(() {}),
                             onSubmitted: (_) => setState(_apply),
                           ),
+                          if (categorySuggestions.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: categorySuggestions.map((row) {
+                                  final label = (row['name'] ?? '').toString();
+                                  return ActionChip(
+                                    label: Text(label),
+                                    onPressed: () {
+                                      setState(() {
+                                        _queryState = _queryState.copyWith(
+                                          category: label,
+                                          categoryId: int.tryParse('${row['id'] ?? ''}'),
+                                          parentCategoryId:
+                                              int.tryParse('${row['parent_id'] ?? ''}'),
+                                        );
+                                        _apply();
+                                      });
+                                      _prefs.saveLastCategoryContext(
+                                        category: label,
+                                        categoryId: int.tryParse('${row['id'] ?? ''}'),
+                                        parentCategoryId:
+                                            int.tryParse('${row['parent_id'] ?? ''}'),
+                                      );
+                                    },
+                                  );
+                                }).toList(growable: false),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -874,9 +1475,32 @@ class _MarketplaceSearchResultsScreenState
                                 setState(() {
                                   _queryState = _queryState.copyWith(
                                     category: 'All',
+                                    clearCategoryId: true,
+                                    clearParentCategoryId: true,
+                                    clearBrandId: true,
+                                    clearModelId: true,
                                     state: allNigeriaLabel,
                                     conditions: const <String>[],
                                     sort: 'relevance',
+                                    listingType: '',
+                                    vehicleMake: '',
+                                    vehicleModel: '',
+                                    clearVehicleYear: true,
+                                    batteryType: '',
+                                    inverterCapacity: '',
+                                    lithiumOnly: false,
+                                    propertyType: '',
+                                    clearBedroomsMin: true,
+                                    clearBedroomsMax: true,
+                                    clearBathroomsMin: true,
+                                    clearBathroomsMax: true,
+                                    furnishedOnly: false,
+                                    servicedOnly: false,
+                                    clearLandSizeMin: true,
+                                    clearLandSizeMax: true,
+                                    titleDocumentType: '',
+                                    city: '',
+                                    area: '',
                                     clearMinPrice: true,
                                     clearMaxPrice: true,
                                   );

@@ -155,7 +155,7 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
         cacheExtent: 720,
         children: [
           const Text(
-            'Admin tools (demo-ready).',
+            'Admin tools.',
             style: TextStyle(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 12),

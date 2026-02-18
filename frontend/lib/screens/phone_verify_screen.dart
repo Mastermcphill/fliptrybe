@@ -58,14 +58,8 @@ class _PhoneVerifyScreenState extends State<PhoneVerifyScreen> {
     }
     setState(() => _loading = true);
     try {
-      final res = await ApiService.requestPhoneOtp(phone: phone);
-      final demoOtp = (res['demo_otp'] ?? '').toString().trim();
-      if (demoOtp.isNotEmpty) {
-        _codeCtrl.text = demoOtp;
-        _toast('OTP generated (dev mode).');
-      } else {
-        _toast('OTP sent to your phone.');
-      }
+      await ApiService.requestPhoneOtp(phone: phone);
+      _toast('OTP sent to your phone.');
     } catch (e) {
       _toast('OTP request failed: $e');
     } finally {

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../screens/login_screen.dart';
 import '../screens/marketplace_screen.dart';
 import '../screens/role_signup_screen.dart';
-import '../screens/settings_demo_screen.dart';
+import '../screens/settings_screen.dart';
 import '../screens/shortlet_screen.dart';
 import '../utils/ft_routes.dart';
 
@@ -249,7 +249,7 @@ class _GuestAccountTab extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: () => Navigator.of(context).push(
                           FTRoutes.page(
-                            child: const SettingsDemoScreen(),
+                            child: const SettingsScreen(),
                           ),
                         ),
                         icon: const Icon(Icons.palette_outlined),
@@ -286,3 +286,4 @@ class _GuestAccountTab extends StatelessWidget {
     );
   }
 }
+

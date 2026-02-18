@@ -1,4 +1,5 @@
 import unittest
+import io
 
 from app import create_app
 from app.extensions import db
@@ -36,7 +37,7 @@ class MerchantProfilePhotoTestCase(unittest.TestCase):
         cls.client = cls.app.test_client()
 
     def test_upload_and_read_profile_photo(self):
-        image_url = "https://res.cloudinary.com/demo/image/upload/v1/merchant-photo-test.jpg"
+        image_url = "https://res.cloudinary.com/fliptrybe/image/upload/v1/merchant-photo-test.jpg"
         res = self.client.post(
             "/api/me/profile/photo",
             headers={"Authorization": f"Bearer {self.token}"},
@@ -54,6 +55,24 @@ class MerchantProfilePhotoTestCase(unittest.TestCase):
         merchant = public_body.get("merchant") or {}
         self.assertEqual(int(merchant.get("id") or 0), self.user_id)
         self.assertEqual((merchant.get("profile_image_url") or ""), image_url)
+
+    def test_upload_profile_photo_via_multipart(self):
+        response = self.client.post(
+            "/api/me/profile/photo",
+            headers={"Authorization": f"Bearer {self.token}"},
+            data={"image": (io.BytesIO(b"fake-image-bytes"), "merchant.png")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertTrue(body.get("ok"))
+        uploaded_url = (body.get("profile_image_url") or "").strip()
+        self.assertIn("/api/uploads/", uploaded_url)
+
+        public_res = self.client.get(f"/api/public/merchants/{self.user_id}")
+        self.assertEqual(public_res.status_code, 200)
+        merchant = (public_res.get_json() or {}).get("merchant") or {}
+        self.assertEqual((merchant.get("profile_image_url") or ""), uploaded_url)
 
 
 if __name__ == "__main__":

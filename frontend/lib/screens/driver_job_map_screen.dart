@@ -135,7 +135,7 @@ class _DriverJobMapScreenState extends State<DriverJobMapScreen> {
                       ),
                       const SizedBox(height: 10),
                       const Text(
-                        'Map preview is stubbed for demo; real maps can be added with Google Maps later.',
+                        'Map preview is placeholder-only; Google Maps integration can be added later.',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ],

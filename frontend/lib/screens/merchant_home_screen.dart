@@ -170,7 +170,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     if (ApiService.isPhoneNotVerified(res)) {
       await showPhoneVerificationRequiredDialog(
         context,
-        message: (res['message'] ?? 'Verify your email to continue').toString(),
+        message: (res['message'] ?? 'Verify your phone to continue').toString(),
       );
       return;
     }

@@ -24,9 +24,6 @@ try {
     $health = Invoke-Api -State $state -Method "GET" -Path "/api/health"
     Add-Result -State $state -Phase "BOOT" -Test "health" -Pass ($health.StatusCode -eq 200) -Status ($health.StatusCode.ToString()) -Detail "GET /api/health"
 
-    $seed = Invoke-Api -State $state -Method "POST" -Path "/api/demo/seed"
-    Add-Result -State $state -Phase "BOOT" -Test "seed" -Pass ($seed.StatusCode -eq 201) -Status ($seed.StatusCode.ToString()) -Detail "POST /api/demo/seed"
-
     $pw = "Password123!"
     $buyerEmail = New-UniqueEmail -Prefix "qa_run_buyer"
     $driverEmail = New-UniqueEmail -Prefix "qa_run_driver"
@@ -46,7 +43,8 @@ try {
     $buyerLogin = Login-User -State $state -Email $buyerEmail -Password $pw
     $driverLogin = Login-User -State $state -Email $driverEmail -Password $pw
     $merchantLogin = Login-User -State $state -Email $merchantEmail -Password $pw
-    $adminLogin = Login-User -State $state -Email "admin@fliptrybe.com" -Password "demo12345"
+    $adminPassword = if ([string]::IsNullOrWhiteSpace($env:ADMIN_PASSWORD)) { "Password123!" } else { $env:ADMIN_PASSWORD }
+    $adminLogin = Login-User -State $state -Email "admin@fliptrybe.com" -Password $adminPassword
 
     $buyerToken = [string]$buyerLogin.Json.token
     $driverToken = [string]$driverLogin.Json.token
@@ -198,7 +196,6 @@ try {
     $ledgerDriver = Invoke-Api -State $state -Method "GET" -Path "/api/wallet/ledger" -Headers $ctx.Headers.Driver
     $ledgerMerchant = Invoke-Api -State $state -Method "GET" -Path "/api/wallet/ledger" -Headers $ctx.Headers.Merchant
     $ledgerAdmin = Invoke-Api -State $state -Method "GET" -Path "/api/wallet/ledger" -Headers $ctx.Headers.Admin
-    $demoSummary = Invoke-Api -State $state -Method "GET" -Path ("/api/demo/ledger_summary?email={0}" -f $ctx.Users.Merchant.email)
     $recon = Invoke-Api -State $state -Method "POST" -Path "/api/admin/reconcile" -Headers $ctx.Headers.Admin -BodyObj @{ limit = 300 }
 
     $ref = "order:{0}" -f $orderH
@@ -217,8 +214,8 @@ try {
     $hasDeliveryFee = $kinds -contains "delivery_fee"
     $hasPlatform = ($kinds -contains "platform_fee") -or ($kinds -contains "user_listing_commission")
 
-    $ledgerPass = ($ledgerBuyer.StatusCode -eq 200) -and ($ledgerDriver.StatusCode -eq 200) -and ($ledgerMerchant.StatusCode -eq 200) -and ($ledgerAdmin.StatusCode -eq 200) -and ($demoSummary.StatusCode -eq 200) -and ($recon.StatusCode -eq 200) -and ($recon.Json.ok -eq $true) -and $hasOrderSale -and $hasDeliveryFee -and $hasPlatform
-    Add-Result -State $state -Phase "REGRESSION" -Test "ledger_reconcile" -Pass $ledgerPass -Status ("ledger={0}/{1}/{2}/{3}, demo={4}, recon={5}" -f $ledgerBuyer.StatusCode,$ledgerDriver.StatusCode,$ledgerMerchant.StatusCode,$ledgerAdmin.StatusCode,$demoSummary.StatusCode,$recon.StatusCode) -Detail ("order_ref={0}, kinds={1}" -f $ref,($kinds -join ','))
+    $ledgerPass = ($ledgerBuyer.StatusCode -eq 200) -and ($ledgerDriver.StatusCode -eq 200) -and ($ledgerMerchant.StatusCode -eq 200) -and ($ledgerAdmin.StatusCode -eq 200) -and ($recon.StatusCode -eq 200) -and ($recon.Json.ok -eq $true) -and $hasOrderSale -and $hasDeliveryFee -and $hasPlatform
+    Add-Result -State $state -Phase "REGRESSION" -Test "ledger_reconcile" -Pass $ledgerPass -Status ("ledger={0}/{1}/{2}/{3}, recon={4}" -f $ledgerBuyer.StatusCode,$ledgerDriver.StatusCode,$ledgerMerchant.StatusCode,$ledgerAdmin.StatusCode,$recon.StatusCode) -Detail ("order_ref={0}, kinds={1}" -f $ref,($kinds -join ','))
 
     Write-Log -State $state -Message ("reconcile={0}" -f ($recon.Body -replace "`r?`n", ""))
 

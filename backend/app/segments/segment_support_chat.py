@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request, current_app
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 
 from app.extensions import db
 from app.models import User, SupportMessage
@@ -11,9 +11,30 @@ from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.rate_limit import check_limit
 from app.services.risk_engine_service import record_event
+from app.utils.content_moderation import CONTACT_BLOCK_MESSAGE, contains_contact_details
 
 support_bp = Blueprint("support_chat_bp", __name__, url_prefix="/api/support")
 support_admin_bp = Blueprint("support_admin_bp", __name__, url_prefix="/api/admin/support")
+
+_SUPPORT_SCHEMA_INIT = False
+
+
+@support_bp.before_app_request
+def _ensure_support_schema_once():
+    global _SUPPORT_SCHEMA_INIT
+    if _SUPPORT_SCHEMA_INIT:
+        return
+    try:
+        db.create_all()
+        cols = {str(c.get("name", "")).lower() for c in db.inspect(db.engine).get_columns("support_messages")}
+        with db.engine.begin() as conn:
+            if "recipient_id" not in cols:
+                conn.execute(text("ALTER TABLE support_messages ADD COLUMN recipient_id INTEGER"))
+            if "listing_id" not in cols:
+                conn.execute(text("ALTER TABLE support_messages ADD COLUMN listing_id INTEGER"))
+    except Exception:
+        pass
+    _SUPPORT_SCHEMA_INIT = True
 
 
 def _bearer_token() -> str | None:
@@ -64,6 +85,12 @@ def _is_admin(u: User | None) -> bool:
     return _role(u) == "admin"
 
 
+def _is_merchant(u: User | None) -> bool:
+    if not u:
+        return False
+    return _role(u) == "merchant"
+
+
 def _resolve_thread_user(thread_id: int) -> User | None:
     try:
         target = User.query.get(int(thread_id))
@@ -96,6 +123,7 @@ def _admin_send_to_thread(*, admin_user: User, thread_id: int, body: str):
         user_id=int(thread_id),
         sender_role="admin",
         sender_id=int(admin_user.id),
+        recipient_id=int(thread_id),
         body=body[:2000],
         created_at=datetime.utcnow(),
     )
@@ -136,7 +164,8 @@ def _spam_body_response(user: User, body: str):
     now = datetime.utcnow()
     rows = (
         SupportMessage.query
-        .filter_by(user_id=int(user.id), sender_role="user")
+        .filter(SupportMessage.sender_id == int(user.id))
+        .filter(db.func.lower(SupportMessage.sender_role) != "admin")
         .filter(SupportMessage.created_at >= now - timedelta(minutes=1))
         .order_by(SupportMessage.created_at.desc())
         .limit(10)
@@ -157,14 +186,29 @@ def _spam_body_response(user: User, body: str):
     return None
 
 
+def _contact_block_response():
+    return jsonify({"ok": False, "error": "CONTACT_BLOCKED", "message": CONTACT_BLOCK_MESSAGE}), 400
+
+
 @support_bp.get("/messages")
 def my_messages():
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
 
-    # Users can only see their own thread with admin
-    rows = SupportMessage.query.filter_by(user_id=int(u.id)).order_by(SupportMessage.created_at.asc()).limit(500).all()
+    rows = (
+        SupportMessage.query
+        .filter(
+            or_(
+                SupportMessage.user_id == int(u.id),
+                SupportMessage.sender_id == int(u.id),
+                SupportMessage.recipient_id == int(u.id),
+            )
+        )
+        .order_by(SupportMessage.created_at.asc())
+        .limit(500)
+        .all()
+    )
     return jsonify({"ok": True, "items": [r.to_dict() for r in rows]}), 200
 
 
@@ -180,35 +224,17 @@ def send_to_admin():
     payload = request.get_json(silent=True) or {}
     body = (payload.get("body") or "").strip()
     target_raw = payload.get("user_id") or payload.get("recipient_id") or payload.get("target_user_id")
+    listing_id_raw = payload.get("listing_id")
     if not body:
         return jsonify({"message": "body required"}), 400
+    if contains_contact_details(body):
+        return _contact_block_response()
     spam = _spam_body_response(u, body)
     if spam is not None:
         return spam
-
-    # Non-admins can only chat with admin.
-    if target_raw is not None and not _is_admin(u):
-        try:
-            target_id = int(target_raw)
-        except Exception:
-            return jsonify({"message": "Invalid user_id"}), 400
-        try:
-            target = User.query.get(int(target_id))
-        except Exception:
-            try:
-                db.session.rollback()
-            except Exception:
-                pass
-            target = None
-        if not target:
-            return jsonify({"message": "Not found"}), 404
-        if not _is_admin(target):
-            return jsonify({
-                "error": "CHAT_NOT_ALLOWED",
-                "message": "Direct messaging between users is not allowed",
-            }), 403
-
-    if target_raw is not None and _is_admin(u):
+    target = None
+    target_id = None
+    if target_raw is not None:
         try:
             target_id = int(target_raw)
         except Exception:
@@ -217,27 +243,61 @@ def send_to_admin():
         if not target:
             return jsonify({"message": "Not found"}), 404
 
-        msg = SupportMessage(
-            user_id=int(target_id),
-            sender_role="admin",
-            sender_id=int(u.id),
-            body=body[:2000],
-            created_at=datetime.utcnow(),
-        )
+    if target is None and not _is_admin(u):
+        target = User.query.filter(db.func.lower(User.role) == "admin").order_by(User.id.asc()).first()
+        target_id = int(target.id) if target is not None else None
 
+    if target_id is not None and int(target_id) == int(u.id):
+        return jsonify({"error": "CHAT_NOT_ALLOWED", "message": "Messaging yourself is not allowed"}), 403
+
+    sender_role = "buyer"
+    if _is_admin(u):
+        sender_role = "admin"
+    elif _is_merchant(u):
+        sender_role = "merchant"
+
+    if not _is_admin(u):
+        if target is None:
+            return jsonify({"error": "CHAT_NOT_ALLOWED", "message": "Direct messaging target not available"}), 403
+        target_role = _role(target)
+        if _is_admin(target):
+            pass
+        elif _role(u) == "buyer" and target_role == "merchant":
+            pass
+        elif _role(u) == "merchant" and target_role == "buyer":
+            has_prior_buyer_message = (
+                SupportMessage.query
+                .filter(
+                    SupportMessage.sender_id == int(target.id),
+                    SupportMessage.recipient_id == int(u.id),
+                )
+                .count()
+                > 0
+            )
+            if not has_prior_buyer_message:
+                return jsonify({"error": "CHAT_NOT_ALLOWED", "message": "Reply is allowed after a buyer enquiry."}), 403
+        else:
+            return jsonify(
+                {
+                    "error": "CHAT_NOT_ALLOWED",
+                    "message": "Buyer enquiries can only be sent to merchants or admin before payment.",
+                }
+            ), 403
+
+    listing_id = None
+    if listing_id_raw not in (None, ""):
         try:
-            db.session.add(msg)
-            db.session.commit()
-            return jsonify({"ok": True, "message": msg.to_dict()}), 201
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({"message": "Failed", "error": str(e)}), 500
+            listing_id = int(listing_id_raw)
+        except Exception:
+            return jsonify({"message": "Invalid listing_id"}), 400
 
-    # Users can only message admin (support). Never other users.
+    thread_user_id = int(target_id) if _is_admin(u) and target_id is not None else int(u.id)
     msg = SupportMessage(
-        user_id=int(u.id),
-        sender_role="user",
+        user_id=thread_user_id,
+        sender_role=sender_role,
         sender_id=int(u.id),
+        recipient_id=int(target_id) if target_id is not None else None,
+        listing_id=listing_id,
         body=body[:2000],
         created_at=datetime.utcnow(),
     )

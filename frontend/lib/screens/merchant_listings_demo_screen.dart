@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 import '../services/listing_service.dart';
 import 'listing_detail_screen.dart';
 
-class MerchantListingsDemoScreen extends StatefulWidget {
-  const MerchantListingsDemoScreen({super.key});
+class MerchantListingsScreen extends StatefulWidget {
+  const MerchantListingsScreen({super.key});
 
   @override
-  State<MerchantListingsDemoScreen> createState() =>
-      _MerchantListingsDemoScreenState();
+  State<MerchantListingsScreen> createState() =>
+      _MerchantListingsScreenState();
 }
 
-class _MerchantListingsDemoScreenState
-    extends State<MerchantListingsDemoScreen> {
+class _MerchantListingsScreenState
+    extends State<MerchantListingsScreen> {
   final _svc = ListingService();
   late Future<List<dynamic>> _items;
 
@@ -101,7 +101,7 @@ class _MerchantListingsDemoScreenState
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                             content: Text(
-                                'Delete demo: endpoint will be added in next pass.')),
+                                'Delete will be enabled when listing archive endpoint is available.')),
                       );
                     },
                   ),
@@ -113,4 +113,9 @@ class _MerchantListingsDemoScreenState
       ),
     );
   }
+}
+
+@Deprecated('Use MerchantListingsScreen instead.')
+class MerchantListingsDemoScreen extends MerchantListingsScreen {
+  const MerchantListingsDemoScreen({super.key});
 }

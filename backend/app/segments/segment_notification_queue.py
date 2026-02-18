@@ -157,35 +157,3 @@ def requeue_dead():
     db.session.commit()
     return jsonify({"ok": True, "requeued": int(count)}), 200
 
-
-@notifq_bp.post("/demo/enqueue")
-def demo_enqueue():
-    u = _current_user()
-    if not _is_admin(u):
-        return jsonify({"message": "Forbidden"}), 403
-    payload = request.get_json(silent=True) or {}
-    channel = (payload.get("channel") or "sms").strip().lower()
-    if channel not in ("sms", "whatsapp", "in_app"):
-        return jsonify({"message": "channel must be sms|whatsapp|in_app"}), 400
-    target = (payload.get("to") or "").strip()
-    if channel == "in_app":
-        target = target or str(int(u.id))
-    if not target:
-        return jsonify({"message": "to required"}), 400
-    message = (payload.get("message") or "").strip()
-    if not message:
-        return jsonify({"message": "message required"}), 400
-
-    row = NotificationQueue(
-        channel=channel,
-        to=target,
-        message=message,
-        status="queued",
-        reference=(payload.get("reference") or "").strip() or None,
-        attempt_count=0,
-        max_attempts=max(1, min(10, int(payload.get("max_attempts") or 5))),
-        next_attempt_at=datetime.utcnow(),
-    )
-    db.session.add(row)
-    db.session.commit()
-    return jsonify({"ok": True, "row": row.to_dict()}), 201

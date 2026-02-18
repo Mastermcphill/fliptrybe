@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../constants/ng_states.dart';
 import '../services/api_client.dart';
@@ -94,7 +95,104 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
     }
   }
 
+  Future<void> _approveListing(int listingId) async {
+    try {
+      await ApiClient.instance.postJson(
+        ApiConfig.api('/admin/listings/$listingId/approve'),
+        const <String, dynamic>{'approved': true},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Listing approved.')),
+      );
+      _load(showLoading: false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(UIFeedback.mapDioErrorToMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _flagInspection(int listingId) async {
+    try {
+      await ApiClient.instance.postJson(
+        ApiConfig.api('/admin/listings/$listingId/inspection-flag'),
+        const <String, dynamic>{'flagged': true},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Listing flagged for inspection.')),
+      );
+      _load(showLoading: false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(UIFeedback.mapDioErrorToMessage(e))),
+      );
+    }
+  }
+
+  Future<void> _showCustomerPayoutProfile(int listingId) async {
+    try {
+      final payload = await ApiClient.instance
+          .getJson(ApiConfig.api('/admin/listings/$listingId/customer-payout-profile'));
+      if (!mounted) return;
+      final profile = payload['customer_payout_profile'] is Map
+          ? Map<String, dynamic>.from(payload['customer_payout_profile'] as Map)
+          : const <String, dynamic>{};
+      final copyText = (payload['copy_text'] ?? '').toString().trim();
+      await showDialog<void>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Customer payout profile'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Full name: ${(profile['customer_full_name'] ?? '').toString()}'),
+                Text('Address: ${(profile['customer_address'] ?? '').toString()}'),
+                Text('Phone: ${(profile['customer_phone'] ?? '').toString()}'),
+                const SizedBox(height: 8),
+                Text('Bank name: ${(profile['bank_name'] ?? '').toString()}'),
+                Text('Account number: ${(profile['bank_account_number'] ?? '').toString()}'),
+                Text('Account name: ${(profile['bank_account_name'] ?? '').toString()}'),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: copyText.isEmpty
+                  ? null
+                  : () async {
+                      await Clipboard.setData(ClipboardData(text: copyText));
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Customer payout profile copied.'),
+                        ),
+                      );
+                    },
+              child: const Text('Copy details'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(UIFeedback.mapDioErrorToMessage(e))),
+      );
+    }
+  }
+
   void _showDetails(Map<String, dynamic> item) {
+    final listingId = int.tryParse('${item['id'] ?? ''}') ?? 0;
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
@@ -121,6 +219,30 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
           ),
         ),
         actions: [
+          if (listingId > 0)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _showCustomerPayoutProfile(listingId);
+              },
+              child: const Text('Customer payout profile'),
+            ),
+          if (listingId > 0)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _approveListing(listingId);
+              },
+              child: const Text('Approve'),
+            ),
+          if (listingId > 0)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _flagInspection(listingId);
+              },
+              child: const Text('Flag Inspection'),
+            ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
@@ -294,7 +416,7 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
                         'admin_listing_${item['id'] ?? itemIndex}'),
                     title: Text(title),
                     subtitle: Text(
-                      '$price • ${location.isEmpty ? "Location not set" : location}\nSeller: $merchantName',
+                      '$price - ${location.isEmpty ? "Location not set" : location}\nSeller: $merchantName',
                     ),
                     isThreeLine: true,
                     trailing: const Icon(Icons.open_in_new_outlined),
@@ -309,3 +431,4 @@ class _AdminMarketplaceScreenState extends State<AdminMarketplaceScreen> {
     );
   }
 }
+

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../services/wallet_service.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
-import '../utils/ui_feedback.dart';
 import 'merchant_withdraw_screen.dart';
 import 'topup_screen.dart';
 
@@ -16,7 +15,6 @@ class WalletScreen extends StatefulWidget {
 
 class _WalletScreenState extends State<WalletScreen> {
   final WalletService _svc = WalletService();
-  final TextEditingController _topupCtrl = TextEditingController(text: '5000');
 
   bool _loading = true;
   Map<String, dynamic>? _wallet;
@@ -29,10 +27,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   @override
-  void dispose() {
-    _topupCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() => super.dispose();
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -44,18 +39,6 @@ class _WalletScreenState extends State<WalletScreen> {
       _ledger = ledger;
       _loading = false;
     });
-  }
-
-  Future<void> _demoTopup() async {
-    final amount = double.tryParse(_topupCtrl.text.trim()) ?? 0;
-    if (amount <= 0) {
-      UIFeedback.showErrorSnack(context, 'Enter a valid top-up amount.');
-      return;
-    }
-    await _svc.demoTopup(amount);
-    if (!mounted) return;
-    UIFeedback.showSuccessSnack(context, 'Demo top-up credited.');
-    await _load();
   }
 
   @override
@@ -116,20 +99,6 @@ class _WalletScreenState extends State<WalletScreen> {
                       if (!mounted) return;
                       _load();
                     },
-                  ),
-                  const SizedBox(height: 10),
-                  FTTextField(
-                    controller: _topupCtrl,
-                    keyboardType: TextInputType.number,
-                    labelText: 'Demo top-up amount',
-                    prefixIcon: Icons.science_outlined,
-                  ),
-                  const SizedBox(height: 8),
-                  FTButton(
-                    label: 'Apply demo top-up',
-                    variant: FTButtonVariant.ghost,
-                    expand: true,
-                    onPressed: _demoTopup,
                   ),
                 ],
               ),

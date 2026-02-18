@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
@@ -99,26 +97,3 @@ def inbox():
         return jsonify([]), 200
     rows = Notification.query.filter_by(user_id=u.id).order_by(Notification.created_at.desc()).limit(200).all()
     return jsonify([x.to_dict() for x in rows]), 200
-
-
-@notify_bp.post("/flush-demo")
-def flush_demo():
-    """Demo sender: marks queued as sent (no external providers)."""
-    u = _current_user()
-    if not _is_admin(u):
-        return jsonify({"message": "Forbidden"}), 403
-
-    rows = Notification.query.filter_by(status="queued").limit(500).all()
-    count = 0
-    for n in rows:
-        n.status = "sent"
-        n.sent_at = datetime.utcnow()
-        count += 1
-        db.session.add(n)
-
-    try:
-        db.session.commit()
-        return jsonify({"ok": True, "sent": count}), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"message": "Failed", "error": str(e)}), 500

@@ -7,6 +7,7 @@ import '../models/saved_search_record.dart';
 class MarketplacePrefsService {
   static const _favoritesKey = 'marketplace_favorites';
   static const _savedSearchesKey = 'marketplace_saved_searches';
+  static const _lastCategoryKey = 'marketplace_last_category_context_v1';
 
   Future<Set<int>> loadFavorites() async {
     final prefs = await SharedPreferences.getInstance();
@@ -98,5 +99,35 @@ class MarketplacePrefsService {
     final existing = await loadSavedSearchRecords();
     existing.removeWhere((record) => record.key == key);
     await saveSavedSearchesRecords(existing);
+  }
+
+  Future<void> saveLastCategoryContext({
+    required String category,
+    int? categoryId,
+    int? parentCategoryId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = <String, dynamic>{
+      'category': category,
+      'categoryId': categoryId,
+      'parentCategoryId': parentCategoryId,
+      'updatedAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    await prefs.setString(_lastCategoryKey, jsonEncode(payload));
+  }
+
+  Future<Map<String, dynamic>> loadLastCategoryContext() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_lastCategoryKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return const <String, dynamic>{};
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+    return const <String, dynamic>{};
   }
 }

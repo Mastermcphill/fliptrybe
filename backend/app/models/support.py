@@ -36,6 +36,8 @@ class SupportMessage(db.Model):
     user_id = db.Column(db.Integer, nullable=False, index=True)      # the non-admin user
     sender_role = db.Column(db.String(16), nullable=False)           # user/admin
     sender_id = db.Column(db.Integer, nullable=False)                # who sent
+    recipient_id = db.Column(db.Integer, nullable=True, index=True)  # target user for direct inquiries
+    listing_id = db.Column(db.Integer, nullable=True, index=True)    # optional listing context
 
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -48,6 +50,8 @@ class SupportMessage(db.Model):
             "sender_role": self.sender_role,
             "sender_user_id": int(self.sender_id),
             "sender_id": int(self.sender_id),
+            "recipient_id": int(self.recipient_id) if self.recipient_id is not None else None,
+            "listing_id": int(self.listing_id) if self.listing_id is not None else None,
             "body": self.body,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

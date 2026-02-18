@@ -310,6 +310,28 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     return double.tryParse(v?.toString() ?? '') ?? 0;
   }
 
+  bool? _asBool(dynamic v) {
+    if (v == null) return null;
+    if (v is bool) return v;
+    final text = v.toString().trim().toLowerCase();
+    if (text == 'true' || text == '1' || text == 'yes') return true;
+    if (text == 'false' || text == '0' || text == 'no') return false;
+    return null;
+  }
+
+  String _yesNo(dynamic v) {
+    final parsed = _asBool(v);
+    if (parsed == null) return '';
+    return parsed ? 'Yes' : 'No';
+  }
+
+  String _maskVin(String value) {
+    final vin = value.trim();
+    if (vin.length <= 4) return vin;
+    final tail = vin.substring(vin.length - 4);
+    return '*************$tail';
+  }
+
   String _money(dynamic value) => formatNaira(_asDouble(value));
 
   void _toast(String msg) {
@@ -510,10 +532,166 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     );
   }
 
+  Widget _specTableCard({
+    required String title,
+    required List<MapEntry<String, String>> rows,
+  }) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return FTSectionContainer(
+      title: title,
+      child: Column(
+        children: rows.map((entry) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 130,
+                  child: Text(
+                    entry.key,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    entry.value,
+                    softWrap: true,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(growable: false),
+      ),
+    );
+  }
+
+  List<MapEntry<String, String>> _vehicleSpecRows(Map<String, dynamic> detail) {
+    final meta = detail['vehicle_metadata'] is Map
+        ? Map<String, dynamic>.from(detail['vehicle_metadata'] as Map)
+        : <String, dynamic>{};
+    String read(String key, [String fallback = '']) {
+      final direct = (detail[key] ?? '').toString().trim();
+      if (direct.isNotEmpty) return direct;
+      final nested = (meta[key] ?? fallback).toString().trim();
+      return nested;
+    }
+
+    final rows = <MapEntry<String, String>>[
+      MapEntry('Make', read('vehicle_make', read('make'))),
+      MapEntry('Model', read('vehicle_model', read('model'))),
+      MapEntry('Year', read('vehicle_year', read('year_of_manufacture'))),
+      MapEntry('Mileage', read('mileage')),
+      MapEntry('Transmission', read('transmission')),
+      MapEntry('Fuel', read('fuel_type')),
+      MapEntry('Drivetrain', read('drivetrain')),
+      MapEntry('Engine', read('engine_size')),
+      MapEntry('Cylinders', read('number_of_cylinders')),
+      MapEntry('Color', read('color')),
+      MapEntry('Interior', read('interior_color')),
+      MapEntry('Condition', read('condition')),
+      MapEntry('Registered', _yesNo(meta['registered_car'])),
+      MapEntry(
+          'VIN',
+          read('vin').trim().isEmpty
+              ? ''
+              : _maskVin(read('vin'))),
+    ];
+    return rows
+        .where((entry) => entry.value.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Widget _solarBundleSummaryCard(Map<String, dynamic> detail) {
+    final category = (detail['category'] ?? '').toString().toLowerCase();
+    final meta = detail['energy_metadata'] is Map
+        ? Map<String, dynamic>.from(detail['energy_metadata'] as Map)
+        : <String, dynamic>{};
+    if (!category.contains('solar bundle')) {
+      return const SizedBox.shrink();
+    }
+    String read(String key, [String fallback = '']) =>
+        (meta[key] ?? detail[key] ?? fallback).toString().trim();
+
+    final accessoryText = read('included_accessories');
+    return FTSectionContainer(
+      title: 'Solar Bundle Summary',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _metaChip(Icons.electrical_services_outlined,
+                  read('inverter_brand_capacity', detail['inverter_capacity']?.toString() ?? 'N/A')),
+              _metaChip(Icons.battery_charging_full_outlined,
+                  '${read('battery_type')} ${read('battery_capacity_ah').isEmpty ? '' : '(${read('battery_capacity_ah')}Ah)'}'),
+              _metaChip(Icons.solar_power_outlined,
+                  '${read('solar_panel_wattage')}W x ${read('number_of_panels').isEmpty ? '-' : read('number_of_panels')}'),
+              _metaChip(Icons.build_outlined,
+                  'Install: ${_yesNo(meta['installation_included'])}'),
+              _metaChip(Icons.verified_outlined,
+                  read('warranty_length', 'Warranty not specified')),
+            ],
+          ),
+          if (accessoryText.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Included components',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(accessoryText),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<MapEntry<String, String>> _realEstateSpecRows(Map<String, dynamic> detail) {
+    final meta = detail['real_estate_metadata'] is Map
+        ? Map<String, dynamic>.from(detail['real_estate_metadata'] as Map)
+        : <String, dynamic>{};
+    String read(String key, [String fallback = '']) {
+      final direct = (detail[key] ?? '').toString().trim();
+      if (direct.isNotEmpty) return direct;
+      final nested = (meta[key] ?? fallback).toString().trim();
+      return nested;
+    }
+
+    final rows = <MapEntry<String, String>>[
+      MapEntry('Property Type', read('property_type')),
+      MapEntry('Bedrooms', read('bedrooms')),
+      MapEntry('Bathrooms', read('bathrooms')),
+      MapEntry('Toilets', read('toilets')),
+      MapEntry('Parking', read('parking_spaces')),
+      MapEntry('Furnished', _yesNo(meta['furnished'] ?? detail['furnished'])),
+      MapEntry('Serviced', _yesNo(meta['serviced'] ?? detail['serviced'])),
+      MapEntry('Land Size', read('land_size')),
+      MapEntry('Title Document', read('title_document_type')),
+      MapEntry('Topography', read('topography')),
+      MapEntry('Access Road', _yesNo(meta['access_road'])),
+      MapEntry('Area', read('area', read('locality'))),
+      MapEntry('City', read('city')),
+      MapEntry('State', read('state')),
+    ];
+    return rows
+        .where((entry) => entry.value.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = (_detail['title'] ?? 'Listing').toString();
     final description = (_detail['description'] ?? '').toString();
+    final listingType = (_detail['listing_type'] ?? '').toString().toLowerCase();
+    final categoryText = (_detail['category'] ?? '').toString().toLowerCase();
     final condition = (_detail['condition'] ?? 'Used').toString();
     final location = [
       (_detail['city'] ?? '').toString(),
@@ -550,6 +728,11 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
         _viewerId != null && merchantId != null && merchantId == _viewerId;
     final heroTag =
         'listing-image-${_detail['id'] ?? widget.listing['id'] ?? title}';
+    final vehicleRows = _vehicleSpecRows(_detail);
+    final realEstateRows = _realEstateSpecRows(_detail);
+    final showVehicleSpecs = listingType == 'vehicle' || vehicleRows.isNotEmpty;
+    final showRealEstateSpecs =
+        listingType == 'real_estate' || categoryText.contains('house') || categoryText.contains('land');
 
     return FTScaffold(
       title: 'Listing Details',
@@ -682,6 +865,18 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   : description,
             ),
           ),
+          if (showVehicleSpecs) ...[
+            const SizedBox(height: 10),
+            _specTableCard(title: 'Vehicle Specifications', rows: vehicleRows),
+          ],
+          if (listingType == 'energy' || categoryText.contains('solar bundle')) ...[
+            const SizedBox(height: 10),
+            _solarBundleSummaryCard(_detail),
+          ],
+          if (showRealEstateSpecs) ...[
+            const SizedBox(height: 10),
+            _specTableCard(title: 'Property Specifications', rows: realEstateRows),
+          ],
           const SizedBox(height: 10),
           FTSectionContainer(
             title: 'Delivery and inspection',
@@ -799,6 +994,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () async {
                     final listingId = _asInt(_detail['id']) ?? 0;
+                    final recipientId = _merchantId() > 0 ? _merchantId() : null;
                     if (listingId > 0) {
                       await AnalyticsHooks.instance
                           .listingContact(listingId: listingId);
@@ -806,11 +1002,21 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                     if (!mounted) return;
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                          builder: (_) => const SupportChatScreen()),
+                        builder: (_) => SupportChatScreen(
+                          recipientUserId: recipientId,
+                          listingId: listingId > 0 ? listingId : null,
+                          title: recipientId != null
+                              ? 'Enquire About Listing'
+                              : 'Support',
+                          initialHint: recipientId != null
+                              ? 'Ask a question before payment'
+                              : 'Message support',
+                        ),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.support_agent_outlined),
-                  label: const Text('Support'),
+                  label: const Text('Enquire'),
                 ),
               ),
               const SizedBox(width: 8),

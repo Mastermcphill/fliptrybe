@@ -496,7 +496,7 @@ def merchant_dashboard():
     mp = _ensure_merchant_profile(uid)
 
     listings_count = Listing.query.count()
-    # Placeholder: you can wire orders later. For demo, provide consistent fields.
+    # Placeholder until full merchant order analytics are wired.
     orders_count = 0
     revenue = 0.0
 
@@ -698,8 +698,8 @@ def orders_mark_paid(order_id: int):
     try:
         job = DriverJob(
             order_id=order.id,
-            pickup="Seller pickup (demo)",
-            dropoff="Buyer dropoff (demo)",
+            pickup="Seller pickup address",
+            dropoff="Buyer dropoff address",
             price=1500.0,
             status="open",
         )
@@ -709,8 +709,3 @@ def orders_mark_paid(order_id: int):
 
     db.session.commit()
     return jsonify({"ok": True, "order": order.to_dict()}), 200
-
-
-
-# NOTE: Demo seed endpoint lives in segment_demo.py under /api/demo/seed.
-# This module previously defined a duplicate /api/demo/seed route; it was removed to prevent route shadowing.

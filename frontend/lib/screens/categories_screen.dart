@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'search_demo_screen.dart';
 import 'shortlet_screen.dart';
+import 'marketplace/marketplace_search_results_screen.dart';
 
 class CategoriesScreen extends StatelessWidget {
   const CategoriesScreen({super.key});
@@ -41,7 +41,8 @@ class CategoriesScreen extends StatelessWidget {
               Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => SearchDemoScreen(initialQuery: c)));
+                      builder: (_) =>
+                          MarketplaceSearchResultsScreen(initialQuery: c)));
             },
           );
         },

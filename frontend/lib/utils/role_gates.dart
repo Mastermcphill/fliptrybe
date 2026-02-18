@@ -24,14 +24,8 @@ class RoleGates {
   }
 
   static bool canPostListing(Map<String, dynamic>? user) {
-    final role = (user?['role'] ?? '').toString().toLowerCase();
-    final status =
-        (user?['role_status'] ?? user?['role_request_status'] ?? 'approved')
-            .toString()
-            .toLowerCase();
-    return (role == 'merchant' || role == 'admin') &&
-        status == 'approved' &&
-        !requiresPhoneVerified(user);
+    if (user == null || user.isEmpty) return false;
+    return true;
   }
 
   static bool canWithdraw(Map<String, dynamic>? user) {
@@ -65,21 +59,6 @@ class RoleGates {
         title: 'Sign in required',
         message: 'Create an account to post listings in Marketplace.',
         primaryCta: 'Log in',
-      );
-    }
-    if (requiresPhoneVerified(user)) {
-      return const RoleGateBlock(
-        title: 'Phone verification required',
-        message: 'Verify your phone before posting listings.',
-        primaryCta: 'Verify phone',
-      );
-    }
-    if (!canPostListing(user)) {
-      return const RoleGateBlock(
-        title: 'Merchant approval required',
-        message:
-            'Your merchant role is pending. Complete approval to post listings.',
-        primaryCta: 'Open Role Status',
       );
     }
     return null;

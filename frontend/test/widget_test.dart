@@ -266,9 +266,8 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -900));
     await tester.pumpAndSettle();
-    expect(find.text('Seed Nationwide'), findsOneWidget);
-    expect(find.text('Seed Leaderboards'), findsOneWidget);
-    expect(find.text('Run Notify Queue Demo'), findsOneWidget);
+    expect(find.text('Quick Admin Actions'), findsOneWidget);
+    expect(find.text('Run Notify Queue'), findsOneWidget);
     expect(find.text('Toggle Autopilot'), findsOneWidget);
   });
 

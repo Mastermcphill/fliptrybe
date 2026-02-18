@@ -181,6 +181,28 @@ class ApiService {
     return false;
   }
 
+  static bool isContactBlocked(dynamic data) {
+    if (data is Map) {
+      final err = (data['error'] ?? '').toString().toLowerCase();
+      if (err == 'contact_blocked' || err == 'description_contact_blocked') {
+        return true;
+      }
+      final msg = (data['message'] ?? '').toString().toLowerCase();
+      if (msg.contains('contact details cannot be shared') ||
+          msg.contains('remove phone numbers/emails/addresses')) {
+        return true;
+      }
+    }
+    if (data is String) {
+      final msg = data.toLowerCase();
+      if (msg.contains('contact details cannot be shared') ||
+          msg.contains('remove phone numbers/emails/addresses')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   static bool isSellerCannotBuyOwnListing(dynamic data) {
     if (data is Map) {
       final err = (data['error'] ?? '').toString().toLowerCase();

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
-
 from flask import Blueprint, jsonify, request
 
 from app.extensions import db
 from app.models import User, Notification
 from app.utils.jwt_utils import decode_token
-from app.utils.notify import queue_in_app, queue_sms, queue_whatsapp, mark_sent
 
 notifications_bp = Blueprint("notifications_bp", __name__, url_prefix="/api")
 
@@ -105,34 +102,6 @@ def mark_notification_read(notification_id: str):
                 "read_at": stamped.isoformat(),
             }
         ), 200
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"message": "Failed", "error": str(e)}), 500
-
-
-@notifications_bp.post("/notifications/test")
-def test_notification():
-    """Investor/demo: creates an in-app + sms + whatsapp notification (queued then marked sent)."""
-    user = _current_user()
-    if not user:
-        return jsonify({"message": "Unauthorized"}), 401
-
-    payload = request.get_json(silent=True) or {}
-    title = (payload.get("title") or "FlipTrybe").strip()
-    message = (payload.get("message") or "Test notification").strip()
-
-    n1 = queue_in_app(user.id, title, message, meta={"demo": True})
-    n2 = queue_sms(user.id, title, message, provider="stub", meta={"demo": True})
-    n3 = queue_whatsapp(user.id, title, message, provider="stub", meta={"demo": True})
-
-    # For demo: mark them as sent immediately (no external provider)
-    mark_sent(n1, provider_ref="local:sent")
-    mark_sent(n2, provider_ref="stub:sms")
-    mark_sent(n3, provider_ref="stub:whatsapp")
-
-    try:
-        db.session.commit()
-        return jsonify({"ok": True, "items": [n1.to_dict(), n2.to_dict(), n3.to_dict()]}), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500

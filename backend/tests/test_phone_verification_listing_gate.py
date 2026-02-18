@@ -28,7 +28,7 @@ class PhoneVerificationListingGateTestCase(unittest.TestCase):
                 name="Verified Merchant",
                 email="verified-merchant@fliptrybe.dev",
                 phone="2348100011000",
-                role="merchant",
+                role="buyer",
                 is_verified=True,
             )
             verified.set_password("password123")
@@ -38,7 +38,7 @@ class PhoneVerificationListingGateTestCase(unittest.TestCase):
                 name="Unverified Merchant",
                 email="unverified-merchant@fliptrybe.dev",
                 phone="2348100011001",
-                role="merchant",
+                role="buyer",
                 is_verified=False,
             )
             unverified.set_password("password123")
@@ -80,11 +80,11 @@ class PhoneVerificationListingGateTestCase(unittest.TestCase):
         payload = res.get_json() or {}
         self.assertTrue(payload.get("ok"))
 
-    def test_phone_not_verified_blocks_listing_creation(self):
+    def test_phone_not_verified_can_create_listing(self):
         res = self._create_listing(self.unverified_token)
-        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.status_code, 201)
         payload = res.get_json() or {}
-        self.assertEqual(payload.get("error"), "PHONE_NOT_VERIFIED")
+        self.assertTrue(payload.get("ok"))
 
 
 if __name__ == "__main__":

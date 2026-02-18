@@ -46,10 +46,16 @@ class ListingCard extends StatelessWidget {
     final heatLevel =
         (item['heat_level'] ?? '').toString().toLowerCase().trim();
     final boosted = item['is_boosted'] == true;
-    final deliveryEnabled = item['delivery_enabled'] == true ||
+    final deliveryEnabled = item['delivery_available'] == true ||
+        item['delivery_enabled'] == true ||
+        item['delivery_available']?.toString().toLowerCase() == 'true' ||
         item['delivery_enabled']?.toString().toLowerCase() == 'true';
-    final inspectionEnabled = item['inspection_enabled'] == true ||
+    final inspectionEnabled = item['inspection_required'] == true ||
+        item['inspection_enabled'] == true ||
+        item['inspection_required']?.toString().toLowerCase() == 'true' ||
         item['inspection_enabled']?.toString().toLowerCase() == 'true';
+    final bundleBadge = item['bundle_badge'] == true ||
+        (item['category'] ?? '').toString().toLowerCase().contains('bundle');
     final heroTag = 'listing-image-${item['id'] ?? title}';
 
     return InkWell(
@@ -177,6 +183,11 @@ class ListingCard extends StatelessWidget {
                         const FTPill(
                           text: 'Inspection',
                           bgColor: Color(0xFFFFF7ED),
+                        ),
+                      if (bundleBadge)
+                        const FTPill(
+                          text: 'Bundle',
+                          bgColor: Color(0xFFE8F5E9),
                         ),
                     ],
                   ),

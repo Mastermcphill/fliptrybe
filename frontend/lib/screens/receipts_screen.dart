@@ -15,8 +15,6 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
   final _svc = ReceiptService();
   late Future<List<dynamic>> _future;
 
-  bool _busy = false;
-
   @override
   void initState() {
     super.initState();
@@ -25,35 +23,10 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
   void _reload() => setState(() => _future = _svc.listReceipts());
 
-  Future<void> _createDemo() async {
-    setState(() => _busy = true);
-    final ok = await _svc.createDemoReceipt(
-        kind: 'listing_sale', amount: 10000, reference: 'demo-receipt');
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Receipt created (demo)')));
-      _reload();
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Failed.')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Receipts'),
-        actions: [
-          IconButton(
-            tooltip: 'Create demo receipt',
-            onPressed: _busy ? null : _createDemo,
-            icon: const Icon(Icons.receipt_long_outlined),
-          )
-        ],
-      ),
+      appBar: AppBar(title: const Text('Receipts')),
       body: RefreshIndicator(
         onRefresh: () async => _reload(),
         child: FutureBuilder<List<dynamic>>(

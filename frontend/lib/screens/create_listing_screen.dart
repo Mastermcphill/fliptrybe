@@ -18,8 +18,6 @@ import '../services/pricing_service.dart';
 import '../services/analytics_hooks.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
-import '../utils/role_gates.dart';
-import '../widgets/phone_verification_dialog.dart';
 
 class CreateListingScreen extends StatefulWidget {
   const CreateListingScreen({super.key});
@@ -47,6 +45,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _localityCtrl = TextEditingController();
   final _lgaCtrl = TextEditingController();
   final _categorySearchCtrl = TextEditingController();
+  final _customerFullNameCtrl = TextEditingController();
+  final _customerAddressCtrl = TextEditingController();
+  final _customerPhoneCtrl = TextEditingController();
+  final _customerBankNameCtrl = TextEditingController();
+  final _customerBankAccountNumberCtrl = TextEditingController();
+  final _customerBankAccountNameCtrl = TextEditingController();
 
   int _step = 0;
   bool _loading = false;
@@ -78,6 +82,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   String _metadataKey = '';
   String _listingTypeHint = 'declutter';
   bool _loadingSchema = false;
+  bool _isMerchantAccount = false;
   final Map<String, TextEditingController> _metaTextCtrls =
       <String, TextEditingController>{};
   final Map<String, String> _metaSelectValues = <String, String>{};
@@ -88,6 +93,23 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   String? _selectedImagePath;
   Timer? _titleDebounce;
   List<String> _titleSuggestions = const <String>[];
+
+  static final RegExp _phonePattern = RegExp(
+    r'(?:\+?\d[\d\-\s\(\)]{6,}\d)',
+    caseSensitive: false,
+  );
+  static final RegExp _emailPattern = RegExp(
+    r'[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}',
+    caseSensitive: false,
+  );
+  static final RegExp _contactPhrasePattern = RegExp(
+    r'(?:wa\.me|whatsapp(?:\s+me)?|call\s+me\s+on|dm\s+me\s+on|text\s+me\s+on)',
+    caseSensitive: false,
+  );
+  static final RegExp _addressPattern = RegExp(
+    r'(?:\b\d{1,4}\b.{0,24}\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|close|cl\.?|lane|ln\.?|drive|dr\.?|way|estate|phase)\b)',
+    caseSensitive: false,
+  );
 
   @override
   void initState() {
@@ -101,6 +123,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       if (!granted && mounted) {
         Navigator.of(context).maybePop();
       }
+      await _loadRoleContext();
     });
     _attachDraftListeners();
     _titleCtrl.addListener(_onTitleChanged);
@@ -120,6 +143,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _localityCtrl.dispose();
     _lgaCtrl.dispose();
     _categorySearchCtrl.dispose();
+    _customerFullNameCtrl.dispose();
+    _customerAddressCtrl.dispose();
+    _customerPhoneCtrl.dispose();
+    _customerBankNameCtrl.dispose();
+    _customerBankAccountNumberCtrl.dispose();
+    _customerBankAccountNameCtrl.dispose();
     for (final ctrl in _metaTextCtrls.values) {
       ctrl.dispose();
     }
@@ -134,6 +163,24 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _cityCtrl.addListener(_saveDraft);
     _localityCtrl.addListener(_saveDraft);
     _lgaCtrl.addListener(_saveDraft);
+    _customerFullNameCtrl.addListener(_saveDraft);
+    _customerAddressCtrl.addListener(_saveDraft);
+    _customerPhoneCtrl.addListener(_saveDraft);
+    _customerBankNameCtrl.addListener(_saveDraft);
+    _customerBankAccountNumberCtrl.addListener(_saveDraft);
+    _customerBankAccountNameCtrl.addListener(_saveDraft);
+  }
+
+  Future<void> _loadRoleContext() async {
+    try {
+      final profile = await ApiService.getProfile();
+      if (!mounted) return;
+      final role = (profile['role'] ?? '').toString().trim().toLowerCase();
+      setState(() => _isMerchantAccount = role == 'merchant');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isMerchantAccount = false);
+    }
   }
 
   void _onTitleChanged() {
@@ -538,6 +585,14 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _cityCtrl.text = (draft['city'] ?? '').toString();
     _localityCtrl.text = (draft['locality'] ?? '').toString();
     _lgaCtrl.text = (draft['lga'] ?? '').toString();
+    _customerFullNameCtrl.text = (draft['customer_full_name'] ?? '').toString();
+    _customerAddressCtrl.text = (draft['customer_address'] ?? '').toString();
+    _customerPhoneCtrl.text = (draft['customer_phone'] ?? '').toString();
+    _customerBankNameCtrl.text = (draft['bank_name'] ?? '').toString();
+    _customerBankAccountNumberCtrl.text =
+        (draft['bank_account_number'] ?? '').toString();
+    _customerBankAccountNameCtrl.text =
+        (draft['bank_account_name'] ?? '').toString();
     _category = (draft['category'] ?? _category).toString();
     _parentCategoryId =
         int.tryParse((draft['parent_category_id'] ?? '').toString());
@@ -584,6 +639,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       'city': _cityCtrl.text.trim(),
       'locality': _localityCtrl.text.trim(),
       'lga': _lgaCtrl.text.trim(),
+      'customer_full_name': _customerFullNameCtrl.text.trim(),
+      'customer_address': _customerAddressCtrl.text.trim(),
+      'customer_phone': _customerPhoneCtrl.text.trim(),
+      'bank_name': _customerBankNameCtrl.text.trim(),
+      'bank_account_number': _customerBankAccountNumberCtrl.text.trim(),
+      'bank_account_name': _customerBankAccountNameCtrl.text.trim(),
       'category': _category,
       'parent_category_id': _parentCategoryId,
       'category_id': _categoryId,
@@ -801,6 +862,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       case 1:
         final title = _titleCtrl.text.trim();
         final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
+        final description = _descCtrl.text.trim();
         final missingDynamic = _missingRequiredDynamicFields();
         if (title.isEmpty) {
           _showSnack('Listing title is required.');
@@ -814,6 +876,16 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         }
         if (missingDynamic.isNotEmpty) {
           _showSnack('Complete required category fields.');
+          setState(() => _showValidation = true);
+          return false;
+        }
+        if (_descriptionContainsRestrictedContent(description)) {
+          _showSnack('Please remove phone numbers/emails/addresses from description.');
+          setState(() => _showValidation = true);
+          return false;
+        }
+        if (_isMerchantAccount && !_hasCompleteCustomerPayoutProfile()) {
+          _showSnack('Customer payout details are required for merchant listings.');
           setState(() => _showValidation = true);
           return false;
         }
@@ -840,7 +912,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       case 1:
         return _titleCtrl.text.trim().isNotEmpty &&
             (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0 &&
-            _missingRequiredDynamicFields().isEmpty;
+            _missingRequiredDynamicFields().isEmpty &&
+            !_descriptionContainsRestrictedContent(_descCtrl.text) &&
+            (!_isMerchantAccount || _hasCompleteCustomerPayoutProfile());
       case 2:
         return _selectedImage != null;
       case 3:
@@ -849,7 +923,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         return _titleCtrl.text.trim().isNotEmpty &&
             (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0 &&
             _selectedImage != null &&
-            _missingRequiredDynamicFields().isEmpty;
+            _missingRequiredDynamicFields().isEmpty &&
+            (!_isMerchantAccount || _hasCompleteCustomerPayoutProfile());
       default:
         return false;
     }
@@ -858,6 +933,34 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  bool _descriptionContainsRestrictedContent(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return false;
+    if (_emailPattern.hasMatch(text)) return true;
+    if (_contactPhrasePattern.hasMatch(text)) return true;
+    if (_phonePattern.hasMatch(text)) return true;
+    if (_addressPattern.hasMatch(text)) return true;
+    return false;
+  }
+
+  Map<String, dynamic> _customerPayoutProfilePayload() {
+    return <String, dynamic>{
+      'customer_full_name': _customerFullNameCtrl.text.trim(),
+      'customer_address': _customerAddressCtrl.text.trim(),
+      'customer_phone': _customerPhoneCtrl.text.trim(),
+      'bank_name': _customerBankNameCtrl.text.trim(),
+      'bank_account_number': _customerBankAccountNumberCtrl.text.trim(),
+      'bank_account_name': _customerBankAccountNameCtrl.text.trim(),
+    };
+  }
+
+  bool _hasCompleteCustomerPayoutProfile() {
+    final profile = _customerPayoutProfilePayload();
+    return profile.values.every(
+      (value) => value.toString().trim().isNotEmpty,
+    );
   }
 
   int _priceMinorFromInput() {
@@ -1019,16 +1122,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   Future<void> _submitListing() async {
     if (_loading) return;
-    final profile = await ApiService.getProfile();
-    if (!mounted) return;
-    final block = RoleGates.forPostListing(profile);
-    final allowed = await guardRestrictedAction(
+    final allowed = await requireAuthForAction(
       context,
-      block: block,
-      authAction: 'create a listing',
-      onAllowed: () async {},
+      action: 'create a listing',
+      onAuthorized: () async {},
     );
-    if (!allowed) return;
+    if (!allowed || !mounted) return;
     if (!_validateCurrentStep()) return;
 
     final title = _titleCtrl.text.trim();
@@ -1039,34 +1138,43 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       _showSnack('Complete all required fields before publishing.');
       return;
     }
+    if (_descriptionContainsRestrictedContent(desc)) {
+      _showSnack('Please remove phone numbers/emails/addresses from description.');
+      return;
+    }
+    if (_isMerchantAccount && !_hasCompleteCustomerPayoutProfile()) {
+      _showSnack('Customer payout details are required for merchant listings.');
+      return;
+    }
 
     final metadataPayload = _buildMetadataPayload();
     Map<String, dynamic>? vehicleMetadata;
     Map<String, dynamic>? energyMetadata;
+    Map<String, dynamic>? realEstateMetadata;
     if (_metadataKey == 'vehicle_metadata' && metadataPayload.isNotEmpty) {
       vehicleMetadata = metadataPayload;
     }
     if (_metadataKey == 'energy_metadata' && metadataPayload.isNotEmpty) {
       energyMetadata = metadataPayload;
     }
+    if (_metadataKey == 'real_estate_metadata' && metadataPayload.isNotEmpty) {
+      realEstateMetadata = metadataPayload;
+    }
+    Map<String, dynamic>? customerPayoutProfile;
+    if (_isMerchantAccount) {
+      customerPayoutProfile = _customerPayoutProfilePayload();
+    }
 
     setState(() => _loading = true);
     final res = await _listingService.createListing(
       title: title,
-      description: [
-        desc,
-        'Category: $_category',
-        'Condition: $_condition',
-        'State: $_state',
-        if (_cityCtrl.text.trim().isNotEmpty) 'City: ${_cityCtrl.text.trim()}',
-        if (_localityCtrl.text.trim().isNotEmpty)
-          'Locality: ${_localityCtrl.text.trim()}',
-        if (_lgaCtrl.text.trim().isNotEmpty) 'LGA: ${_lgaCtrl.text.trim()}',
-      ].where((line) => line.trim().isNotEmpty).join('\n'),
+      description: desc,
       price: price,
       listingType: _listingTypeHint,
       vehicleMetadata: vehicleMetadata,
       energyMetadata: energyMetadata,
+      realEstateMetadata: realEstateMetadata,
+      customerPayoutProfile: customerPayoutProfile,
       category: _category,
       categoryId: _categoryId,
       brandId: _brandId,
@@ -1086,15 +1194,6 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     final code = (res['code'] ?? '').toString().trim().toUpperCase();
     final msg = (res['message'] ?? res['error'] ?? 'Failed to publish listing')
         .toString();
-
-    if (!ok && ApiService.isPhoneNotVerified(res)) {
-      await showPhoneVerificationRequiredDialog(
-        context,
-        message: msg,
-        onRetry: _submitListing,
-      );
-      return;
-    }
 
     if (ok) {
       await AnalyticsHooks.instance.track(
@@ -1150,6 +1249,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       _cityCtrl.clear();
                       _localityCtrl.clear();
                       _lgaCtrl.clear();
+                      _customerFullNameCtrl.clear();
+                      _customerAddressCtrl.clear();
+                      _customerPhoneCtrl.clear();
+                      _customerBankNameCtrl.clear();
+                      _customerBankAccountNumberCtrl.clear();
+                      _customerBankAccountNameCtrl.clear();
                       _categorySearchCtrl.clear();
                       _selectedImage = null;
                       _selectedImagePath = null;
@@ -1574,6 +1679,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                           ? 'Vehicle details'
                           : _metadataKey == 'energy_metadata'
                               ? 'Power & energy details'
+                              : _metadataKey == 'real_estate_metadata'
+                                  ? 'Real estate details'
                               : 'Category details',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
@@ -1585,6 +1692,90 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       child: _buildDynamicField(field),
                     );
                   }).toList(growable: false),
+                ],
+                if (_isMerchantAccount) ...[
+                  const SizedBox(height: 12),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Customer payout details (required for merchants)',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _customerFullNameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Customer full name *',
+                      border: const OutlineInputBorder(),
+                      errorText: _showValidation &&
+                              _customerFullNameCtrl.text.trim().isEmpty
+                          ? 'Required'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _customerAddressCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Customer full address *',
+                      border: const OutlineInputBorder(),
+                      errorText: _showValidation &&
+                              _customerAddressCtrl.text.trim().isEmpty
+                          ? 'Required'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _customerPhoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Customer WhatsApp/mobile *',
+                      border: const OutlineInputBorder(),
+                      errorText: _showValidation &&
+                              _customerPhoneCtrl.text.trim().isEmpty
+                          ? 'Required'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _customerBankNameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Bank name *',
+                      border: const OutlineInputBorder(),
+                      errorText: _showValidation &&
+                              _customerBankNameCtrl.text.trim().isEmpty
+                          ? 'Required'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _customerBankAccountNumberCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Bank account number *',
+                      border: const OutlineInputBorder(),
+                      errorText: _showValidation &&
+                              _customerBankAccountNumberCtrl.text.trim().isEmpty
+                          ? 'Required'
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _customerBankAccountNameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Bank account name *',
+                      border: const OutlineInputBorder(),
+                      errorText: _showValidation &&
+                              _customerBankAccountNameCtrl.text.trim().isEmpty
+                          ? 'Required'
+                          : null,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -1750,6 +1941,27 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                           .map((entry) => Text('${entry.key}: ${entry.value}'))
                           .toList(growable: false),
                     ],
+                    if (_isMerchantAccount) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Customer payout profile',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Text('Name: ${_customerFullNameCtrl.text.trim()}'),
+                      Text('Phone: ${_customerPhoneCtrl.text.trim()}'),
+                      Text('Bank: ${_customerBankNameCtrl.text.trim()}'),
+                      Text(
+                          'Account No: ${_customerBankAccountNumberCtrl.text.trim()}'),
+                      Text('Account Name: ${_customerBankAccountNameCtrl.text.trim()}'),
+                    ],
+                    if (_descriptionContainsRestrictedContent(_descCtrl.text))
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Description contains contact details. Remove phone numbers, emails, and addresses.',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                      ),
                     const SizedBox(height: 10),
                     const Text(
                       'Publishing will submit your listing for marketplace visibility. Draft remains saved until publish succeeds.',

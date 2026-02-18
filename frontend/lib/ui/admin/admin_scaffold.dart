@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../screens/settings_demo_screen.dart';
+import '../../screens/settings_screen.dart';
 import '../../utils/auth_navigation.dart';
 import '../../utils/ft_routes.dart';
 import '../components/ft_app_bar.dart';
@@ -36,7 +36,7 @@ class AdminScaffold extends StatelessWidget {
     switch (action) {
       case _AdminMenuAction.appearance:
         await Navigator.of(context).push(
-          FTPageRoute.slideUp(child: const SettingsDemoScreen()),
+          FTPageRoute.slideUp(child: const SettingsScreen()),
         );
         return;
       case _AdminMenuAction.signOut:
@@ -108,3 +108,4 @@ class AdminScaffold extends StatelessWidget {
 }
 
 enum _AdminMenuAction { appearance, signOut }
+

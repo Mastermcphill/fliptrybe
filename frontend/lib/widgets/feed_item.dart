@@ -58,7 +58,7 @@ class FeedItem extends StatelessWidget {
       deliveryFee: deliveryFee,
       pickup: 'Merchant pickup',
       dropoff: 'Customer dropoff',
-      paymentReference: 'demo',
+      paymentReference: '',
     );
 
     if (order == null) {

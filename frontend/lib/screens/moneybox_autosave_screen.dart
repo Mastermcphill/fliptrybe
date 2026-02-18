@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
 import '../widgets/phone_verification_dialog.dart';
-import 'kyc_demo_screen.dart';
+import 'kyc_screen.dart';
 
 class MoneyBoxAutosaveScreen extends StatefulWidget {
   const MoneyBoxAutosaveScreen({super.key});
@@ -45,7 +45,7 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
               label: 'Verify ID',
               onPressed: () {
                 Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const KycDemoScreen()));
+                    MaterialPageRoute(builder: (_) => const KycScreen()));
               },
             ),
           ),
@@ -98,3 +98,4 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
     );
   }
 }
+

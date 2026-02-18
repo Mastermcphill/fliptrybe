@@ -6,7 +6,7 @@ Run:
 What it does:
 - Runs DB upgrade
 - Starts server (flask run, no reload)
-- Seeds demo
+- Validates health and base API readiness
 - Creates fresh users, approves roles
 - Creates orders in multiple states
 - Runs autopilot tick(s) and validates idempotency

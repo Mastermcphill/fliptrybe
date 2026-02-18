@@ -41,7 +41,6 @@ from app.segments.segment_notification_dispatcher import dispatcher_bp
 from app.segments.segment_support import support_bp
 from app.segments.segment_support_chat import support_bp as support_chat_bp, support_admin_bp as support_chat_admin_bp
 from app.segments.segment_inspector_requests import inspector_req_bp, inspector_req_admin_bp
-from app.segments.segment_demo import demo_bp
 from app.segments.segment_orders_api import orders_bp
 from app.segments.segment_inspections_api import inspections_bp
 from app.segments.segment_settings import settings_bp, preferences_bp
@@ -178,6 +177,118 @@ def _ensure_notifications_schema_compatibility():
         pass
 
 
+def _ensure_listings_schema_compatibility():
+    """
+    Keep runtime compatibility for databases that predate listing metadata
+    columns used by vehicles, power/energy, and real estate verticals.
+    """
+    try:
+        engine = db.engine
+        insp = inspect(engine)
+        tables = set(insp.get_table_names())
+        if "listings" not in tables:
+            return
+        dialect = (getattr(engine.dialect, "name", "") or "").lower()
+        dt_type = "TIMESTAMP" if "postgres" in dialect else "DATETIME"
+        cols_before = {str(c.get("name", "")).lower() for c in insp.get_columns("listings")}
+        add_specs = {
+            "listing_type": "listing_type VARCHAR(32) NOT NULL DEFAULT 'declutter'",
+            "vehicle_metadata": "vehicle_metadata TEXT",
+            "energy_metadata": "energy_metadata TEXT",
+            "real_estate_metadata": "real_estate_metadata TEXT",
+            "vehicle_make": "vehicle_make VARCHAR(80)",
+            "vehicle_model": "vehicle_model VARCHAR(80)",
+            "vehicle_year": "vehicle_year INTEGER",
+            "battery_type": "battery_type VARCHAR(64)",
+            "inverter_capacity": "inverter_capacity VARCHAR(64)",
+            "lithium_only": "lithium_only BOOLEAN NOT NULL DEFAULT 0",
+            "bundle_badge": "bundle_badge BOOLEAN NOT NULL DEFAULT 0",
+            "property_type": "property_type VARCHAR(24)",
+            "bedrooms": "bedrooms INTEGER",
+            "bathrooms": "bathrooms INTEGER",
+            "toilets": "toilets INTEGER",
+            "parking_spaces": "parking_spaces INTEGER",
+            "furnished": "furnished BOOLEAN",
+            "serviced": "serviced BOOLEAN",
+            "land_size": "land_size DOUBLE PRECISION",
+            "title_document_type": "title_document_type VARCHAR(64)",
+            "delivery_available": "delivery_available BOOLEAN",
+            "inspection_required": "inspection_required BOOLEAN",
+            "location_verified": "location_verified BOOLEAN NOT NULL DEFAULT 0",
+            "inspection_request_enabled": "inspection_request_enabled BOOLEAN NOT NULL DEFAULT 0",
+            "financing_option": "financing_option BOOLEAN NOT NULL DEFAULT 0",
+            "approval_status": "approval_status VARCHAR(24) NOT NULL DEFAULT 'approved'",
+            "inspection_flagged": "inspection_flagged BOOLEAN NOT NULL DEFAULT 0",
+            "customer_payout_profile_json": "customer_payout_profile_json TEXT",
+            "customer_profile_updated_at": f"customer_profile_updated_at {dt_type}",
+            "customer_profile_updated_by": "customer_profile_updated_by INTEGER",
+        }
+        with engine.begin() as conn:
+            for name, ddl in add_specs.items():
+                if name not in cols_before:
+                    conn.execute(text(f"ALTER TABLE listings ADD COLUMN {ddl}"))
+            conn.execute(
+                text(
+                    "UPDATE listings SET listing_type='declutter' "
+                    "WHERE listing_type IS NULL OR listing_type=''"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE listings SET approval_status='approved' "
+                    "WHERE approval_status IS NULL OR approval_status=''"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_listings_make_model_year "
+                    "ON listings (vehicle_make, vehicle_model, vehicle_year)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_listings_energy_filter_triplet "
+                    "ON listings (battery_type, inverter_capacity, lithium_only)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_listings_real_estate_core "
+                    "ON listings (property_type, bedrooms, bathrooms, furnished, serviced)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_listings_land_filters "
+                    "ON listings (land_size, title_document_type)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_listings_listing_type "
+                    "ON listings (listing_type)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_listings_approval_status "
+                    "ON listings (approval_status)"
+                )
+            )
+    except Exception:
+        # Never block startup on compatibility patch-up.
+        pass
+
+
+def _ensure_saved_searches_schema_compatibility():
+    try:
+        from app.models import SavedSearch
+
+        SavedSearch.__table__.create(bind=db.engine, checkfirst=True)
+    except Exception:
+        pass
+
+
 def create_app():
     app = Flask(__name__)
     init_sentry(app)
@@ -235,6 +346,8 @@ def create_app():
     with app.app_context():
         _ensure_referral_schema_compatibility()
         _ensure_notifications_schema_compatibility()
+        _ensure_listings_schema_compatibility()
+        _ensure_saved_searches_schema_compatibility()
         otel_env = (os.getenv("OTEL_ENABLED") or "").strip() == "1"
         otel_setting = False
         try:
@@ -318,7 +431,6 @@ def create_app():
     app.register_blueprint(preferences_bp)
     app.register_blueprint(drivers_list_bp)
     app.register_blueprint(merchant_follow_bp)
-    app.register_blueprint(demo_bp)
     app.register_blueprint(moneybox_bp)
     app.register_blueprint(moneybox_system_bp)
     app.register_blueprint(public_bp)

@@ -28,129 +28,7 @@ class MarketplaceCatalogService {
       <Map<String, dynamic>>[];
   static DateTime? _cachedAt;
 
-  final List<Map<String, dynamic>> _fallback = [
-    {
-      'id': 1001,
-      'title': 'iPhone 12 128GB',
-      'price': 450000,
-      'condition': 'Used - Like New',
-      'category': 'Phones',
-      'description': 'Clean device, battery health 92%.',
-      'state': 'Lagos',
-      'city': 'Ikeja',
-      'is_demo': true,
-      'is_boosted': true,
-      'created_at': '2026-01-25T10:00:00Z',
-    },
-    {
-      'id': 1002,
-      'title': 'Samsung Galaxy S21',
-      'price': 380000,
-      'condition': 'Used - Good',
-      'category': 'Phones',
-      'description': 'Very clean with charger included.',
-      'state': 'Lagos',
-      'city': 'Lekki',
-      'is_demo': true,
-      'created_at': '2026-01-27T09:00:00Z',
-    },
-    {
-      'id': 1003,
-      'title': 'Leather Sofa Set',
-      'price': 250000,
-      'condition': 'Used - Good',
-      'category': 'Furniture',
-      'description': '3-seater + 2 chairs.',
-      'state': 'Rivers',
-      'city': 'Port Harcourt',
-      'is_demo': true,
-      'created_at': '2026-01-28T11:00:00Z',
-    },
-    {
-      'id': 1004,
-      'title': 'Wooden Dining Table',
-      'price': 180000,
-      'condition': 'Used - Fair',
-      'category': 'Furniture',
-      'description': 'Solid wood with 6 chairs.',
-      'state': 'Oyo',
-      'city': 'Ibadan',
-      'is_demo': true,
-      'created_at': '2026-01-29T12:00:00Z',
-    },
-    {
-      'id': 1005,
-      'title': 'Nike Air Max',
-      'price': 65000,
-      'condition': 'Used - Like New',
-      'category': 'Fashion',
-      'description': 'Size 42, worn twice.',
-      'state': 'Federal Capital Territory',
-      'city': 'Abuja',
-      'is_demo': true,
-      'created_at': '2026-01-31T10:00:00Z',
-    },
-    {
-      'id': 1006,
-      'title': 'LG 55-inch Smart TV',
-      'price': 320000,
-      'condition': 'Used - Good',
-      'category': 'Electronics',
-      'description': '4K UHD with HDR support.',
-      'state': 'Ogun',
-      'city': 'Abeokuta',
-      'is_demo': true,
-      'created_at': '2026-02-01T13:00:00Z',
-    },
-    {
-      'id': 1007,
-      'title': 'PlayStation 5',
-      'price': 520000,
-      'condition': 'Used - Like New',
-      'category': 'Electronics',
-      'description': 'Includes one controller and two games.',
-      'state': 'Lagos',
-      'city': 'Yaba',
-      'is_demo': true,
-      'created_at': '2026-02-02T14:00:00Z',
-    },
-    {
-      'id': 1008,
-      'title': 'Mountain Bike',
-      'price': 95000,
-      'condition': 'Used - Good',
-      'category': 'Sports',
-      'description': '26-inch wheels, recently serviced.',
-      'state': 'Kaduna',
-      'city': 'Kaduna',
-      'is_demo': true,
-      'created_at': '2026-02-03T15:00:00Z',
-    },
-    {
-      'id': 1009,
-      'title': 'Inverter 1.5kVA',
-      'price': 140000,
-      'condition': 'Used - Good',
-      'category': 'Home',
-      'description': 'Works with two batteries.',
-      'state': 'Anambra',
-      'city': 'Awka',
-      'is_demo': true,
-      'created_at': '2026-02-04T09:15:00Z',
-    },
-    {
-      'id': 1010,
-      'title': 'Office Chair Ergonomic',
-      'price': 55000,
-      'condition': 'Used - Good',
-      'category': 'Home',
-      'description': 'Hydraulic support intact.',
-      'state': 'Kano',
-      'city': 'Kano',
-      'is_demo': true,
-      'created_at': '2026-02-04T16:00:00Z',
-    },
-  ];
+  final List<Map<String, dynamic>> _fallback = const <Map<String, dynamic>>[];
   String? _searchModeCache;
   Map<String, dynamic>? _featuresCache;
 
@@ -390,6 +268,25 @@ class MarketplaceCatalogService {
     int? parentCategoryId,
     int? brandId,
     int? modelId,
+    String listingType = '',
+    String make = '',
+    String model = '',
+    int? year,
+    String batteryType = '',
+    String inverterCapacity = '',
+    bool? lithiumOnly,
+    String propertyType = '',
+    int? bedroomsMin,
+    int? bedroomsMax,
+    int? bathroomsMin,
+    int? bathroomsMax,
+    bool? furnished,
+    bool? serviced,
+    double? landSizeMin,
+    double? landSizeMax,
+    String titleDocumentType = '',
+    String city = '',
+    String area = '',
     String state = '',
     double? minPrice,
     double? maxPrice,
@@ -409,6 +306,25 @@ class MarketplaceCatalogService {
       parentCategoryId: parentCategoryId,
       brandId: brandId,
       modelId: modelId,
+      listingType: listingType,
+      make: make,
+      model: model,
+      year: year,
+      batteryType: batteryType,
+      inverterCapacity: inverterCapacity,
+      lithiumOnly: lithiumOnly,
+      propertyType: propertyType,
+      bedroomsMin: bedroomsMin,
+      bedroomsMax: bedroomsMax,
+      bathroomsMin: bathroomsMin,
+      bathroomsMax: bathroomsMax,
+      furnished: furnished,
+      serviced: serviced,
+      landSizeMin: landSizeMin,
+      landSizeMax: landSizeMax,
+      titleDocumentType: titleDocumentType,
+      city: city,
+      area: area,
       state: state,
       minPrice: minPrice,
       maxPrice: maxPrice,
@@ -431,6 +347,25 @@ class MarketplaceCatalogService {
     int? parentCategoryId,
     int? brandId,
     int? modelId,
+    String listingType = '',
+    String make = '',
+    String model = '',
+    int? year,
+    String batteryType = '',
+    String inverterCapacity = '',
+    bool? lithiumOnly,
+    String propertyType = '',
+    int? bedroomsMin,
+    int? bedroomsMax,
+    int? bathroomsMin,
+    int? bathroomsMax,
+    bool? furnished,
+    bool? serviced,
+    double? landSizeMin,
+    double? landSizeMax,
+    String titleDocumentType = '',
+    String city = '',
+    String area = '',
     String state = '',
     double? minPrice,
     double? maxPrice,
@@ -464,6 +399,63 @@ class MarketplaceCatalogService {
     if (modelId != null && modelId > 0) {
       qp['model_id'] = '$modelId';
     }
+    if (listingType.trim().isNotEmpty) {
+      qp['listing_type'] = listingType.trim();
+    }
+    if (make.trim().isNotEmpty) {
+      qp['make'] = make.trim();
+    }
+    if (model.trim().isNotEmpty) {
+      qp['model'] = model.trim();
+    }
+    if (year != null && year > 0) {
+      qp['year'] = '$year';
+    }
+    if (batteryType.trim().isNotEmpty) {
+      qp['battery_type'] = batteryType.trim();
+    }
+    if (inverterCapacity.trim().isNotEmpty) {
+      qp['inverter_capacity'] = inverterCapacity.trim();
+    }
+    if (lithiumOnly != null) {
+      qp['lithium_only'] = lithiumOnly ? '1' : '0';
+    }
+    if (propertyType.trim().isNotEmpty) {
+      qp['property_type'] = propertyType.trim();
+    }
+    if (bedroomsMin != null) {
+      qp['bedrooms_min'] = '$bedroomsMin';
+    }
+    if (bedroomsMax != null) {
+      qp['bedrooms_max'] = '$bedroomsMax';
+    }
+    if (bathroomsMin != null) {
+      qp['bathrooms_min'] = '$bathroomsMin';
+    }
+    if (bathroomsMax != null) {
+      qp['bathrooms_max'] = '$bathroomsMax';
+    }
+    if (furnished != null) {
+      qp['furnished'] = furnished ? '1' : '0';
+    }
+    if (serviced != null) {
+      qp['serviced'] = serviced ? '1' : '0';
+    }
+    if (landSizeMin != null) {
+      qp['land_size_min'] = landSizeMin.toStringAsFixed(2);
+    }
+    if (landSizeMax != null) {
+      qp['land_size_max'] = landSizeMax.toStringAsFixed(2);
+    }
+    if (titleDocumentType.trim().isNotEmpty) {
+      qp['title_document_type'] = titleDocumentType.trim();
+    }
+    if (city.trim().isNotEmpty) {
+      qp['city'] = city.trim();
+    }
+    if (area.trim().isNotEmpty) {
+      qp['area'] = area.trim();
+    }
     if (state.trim().isNotEmpty &&
         state.trim().toLowerCase() != 'all nigeria') {
       qp['state'] = state.trim();
@@ -485,6 +477,22 @@ class MarketplaceCatalogService {
     final defaultFilters = <String, bool>{
       'delivery_available': false,
       'inspection_required': false,
+      'listing_type': false,
+      'make': false,
+      'model': false,
+      'year': false,
+      'battery_type': false,
+      'inverter_capacity': false,
+      'lithium_only': false,
+      'property_type': false,
+      'bedrooms': false,
+      'bathrooms': false,
+      'furnished': false,
+      'serviced': false,
+      'land_size': false,
+      'title_document_type': false,
+      'city': false,
+      'area': false,
     };
     try {
       final data =
@@ -570,6 +578,25 @@ class MarketplaceCatalogService {
     int? parentCategoryId,
     int? brandId,
     int? modelId,
+    String listingType = '',
+    String make = '',
+    String model = '',
+    int? year,
+    String batteryType = '',
+    String inverterCapacity = '',
+    bool lithiumOnly = false,
+    String propertyType = '',
+    int? bedroomsMin,
+    int? bedroomsMax,
+    int? bathroomsMin,
+    int? bathroomsMax,
+    bool furnishedOnly = false,
+    bool servicedOnly = false,
+    double? landSizeMin,
+    double? landSizeMax,
+    String titleDocumentType = '',
+    String city = '',
+    String area = '',
     String state = 'All Nigeria',
     double? minPrice,
     double? maxPrice,
@@ -593,8 +620,38 @@ class MarketplaceCatalogService {
       final itemModelId = item['model_id'] is int
           ? item['model_id'] as int
           : int.tryParse('${item['model_id'] ?? ''}');
+      final itemListingType = (item['listing_type'] ?? '').toString().toLowerCase();
+      final itemMake = (item['vehicle_make'] ?? '').toString().toLowerCase();
+      final itemModel = (item['vehicle_model'] ?? '').toString().toLowerCase();
+      final itemYear = item['vehicle_year'] is int
+          ? item['vehicle_year'] as int
+          : int.tryParse('${item['vehicle_year'] ?? ''}');
+      final itemBatteryType = (item['battery_type'] ?? '').toString().toLowerCase();
+      final itemInverterCapacity =
+          (item['inverter_capacity'] ?? '').toString().toLowerCase();
+      final itemLithiumOnly = item['lithium_only'] == true ||
+          '${item['lithium_only']}'.toLowerCase() == 'true' ||
+          '${item['lithium_only']}' == '1';
       final itemState = (item['state'] ?? '').toString();
+      final itemCity = (item['city'] ?? '').toString();
+      final itemArea = (item['locality'] ?? item['area'] ?? '').toString();
       final price = _asNum(item['price']);
+      final itemPropertyType = (item['property_type'] ?? '').toString().toLowerCase();
+      final itemBedrooms = item['bedrooms'] is int
+          ? item['bedrooms'] as int
+          : int.tryParse('${item['bedrooms'] ?? ''}');
+      final itemBathrooms = item['bathrooms'] is int
+          ? item['bathrooms'] as int
+          : int.tryParse('${item['bathrooms'] ?? ''}');
+      final itemFurnished = item['furnished'] == true ||
+          '${item['furnished']}'.toLowerCase() == 'true' ||
+          '${item['furnished']}' == '1';
+      final itemServiced = item['serviced'] == true ||
+          '${item['serviced']}'.toLowerCase() == 'true' ||
+          '${item['serviced']}' == '1';
+      final itemLandSize = _asNum(item['land_size']);
+      final itemTitleDoc =
+          (item['title_document_type'] ?? '').toString().toLowerCase();
 
       final matchesQuery =
           q.isEmpty || title.contains(q) || description.contains(q);
@@ -606,6 +663,38 @@ class MarketplaceCatalogService {
           itemCategory.toLowerCase().contains(category.toLowerCase());
       final matchesBrand = brandId == null || itemBrandId == brandId;
       final matchesModel = modelId == null || itemModelId == modelId;
+      final matchesListingType = listingType.trim().isEmpty ||
+          itemListingType == listingType.trim().toLowerCase();
+      final matchesMake = make.trim().isEmpty ||
+          itemMake == make.trim().toLowerCase();
+      final matchesVehicleModel = model.trim().isEmpty ||
+          itemModel == model.trim().toLowerCase();
+      final matchesYear = year == null || itemYear == year;
+      final matchesBatteryType = batteryType.trim().isEmpty ||
+          itemBatteryType == batteryType.trim().toLowerCase();
+      final matchesInverterCapacity = inverterCapacity.trim().isEmpty ||
+          itemInverterCapacity == inverterCapacity.trim().toLowerCase();
+      final matchesLithiumOnly = !lithiumOnly || itemLithiumOnly;
+      final matchesPropertyType = propertyType.trim().isEmpty ||
+          itemPropertyType == propertyType.trim().toLowerCase();
+      final matchesBedroomsMin =
+          bedroomsMin == null || (itemBedrooms != null && itemBedrooms >= bedroomsMin);
+      final matchesBedroomsMax =
+          bedroomsMax == null || (itemBedrooms != null && itemBedrooms <= bedroomsMax);
+      final matchesBathroomsMin = bathroomsMin == null ||
+          (itemBathrooms != null && itemBathrooms >= bathroomsMin);
+      final matchesBathroomsMax = bathroomsMax == null ||
+          (itemBathrooms != null && itemBathrooms <= bathroomsMax);
+      final matchesFurnished = !furnishedOnly || itemFurnished;
+      final matchesServiced = !servicedOnly || itemServiced;
+      final matchesLandSizeMin = landSizeMin == null || itemLandSize >= landSizeMin;
+      final matchesLandSizeMax = landSizeMax == null || itemLandSize <= landSizeMax;
+      final matchesTitleDocumentType = titleDocumentType.trim().isEmpty ||
+          itemTitleDoc == titleDocumentType.trim().toLowerCase();
+      final matchesCity = city.trim().isEmpty ||
+          itemCity.toLowerCase() == city.trim().toLowerCase();
+      final matchesArea = area.trim().isEmpty ||
+          itemArea.toLowerCase().contains(area.trim().toLowerCase());
       final matchesState = state == 'All Nigeria' || state == itemState;
       final matchesMin = minPrice == null || price >= minPrice;
       final matchesMax = maxPrice == null || price <= maxPrice;
@@ -618,6 +707,25 @@ class MarketplaceCatalogService {
           matchesParentCategory &&
           matchesBrand &&
           matchesModel &&
+          matchesListingType &&
+          matchesMake &&
+          matchesVehicleModel &&
+          matchesYear &&
+          matchesBatteryType &&
+          matchesInverterCapacity &&
+          matchesLithiumOnly &&
+          matchesPropertyType &&
+          matchesBedroomsMin &&
+          matchesBedroomsMax &&
+          matchesBathroomsMin &&
+          matchesBathroomsMax &&
+          matchesFurnished &&
+          matchesServiced &&
+          matchesLandSizeMin &&
+          matchesLandSizeMax &&
+          matchesTitleDocumentType &&
+          matchesCity &&
+          matchesArea &&
           matchesState &&
           matchesMin &&
           matchesMax &&
@@ -661,12 +769,33 @@ class MarketplaceCatalogService {
       'category_id': int.tryParse('${raw['category_id'] ?? ''}'),
       'brand_id': int.tryParse('${raw['brand_id'] ?? ''}'),
       'model_id': int.tryParse('${raw['model_id'] ?? ''}'),
+      'listing_type': (raw['listing_type'] ?? '').toString(),
+      'vehicle_make': (raw['vehicle_make'] ?? '').toString(),
+      'vehicle_model': (raw['vehicle_model'] ?? '').toString(),
+      'vehicle_year': int.tryParse('${raw['vehicle_year'] ?? ''}'),
+      'battery_type': (raw['battery_type'] ?? '').toString(),
+      'inverter_capacity': (raw['inverter_capacity'] ?? '').toString(),
+      'lithium_only': raw['lithium_only'] == true ||
+          (raw['lithium_only'] ?? '').toString().toLowerCase() == 'true' ||
+          (raw['lithium_only'] ?? '').toString() == '1',
+      'bundle_badge': raw['bundle_badge'] == true,
+      'property_type': (raw['property_type'] ?? '').toString(),
+      'bedrooms': int.tryParse('${raw['bedrooms'] ?? ''}'),
+      'bathrooms': int.tryParse('${raw['bathrooms'] ?? ''}'),
+      'furnished': raw['furnished'] == true ||
+          (raw['furnished'] ?? '').toString().toLowerCase() == 'true' ||
+          (raw['furnished'] ?? '').toString() == '1',
+      'serviced': raw['serviced'] == true ||
+          (raw['serviced'] ?? '').toString().toLowerCase() == 'true' ||
+          (raw['serviced'] ?? '').toString() == '1',
+      'land_size': _asNum(raw['land_size']),
+      'title_document_type': (raw['title_document_type'] ?? '').toString(),
+      'area': (raw['area'] ?? raw['locality'] ?? '').toString(),
       'state': (raw['state'] ?? '').toString(),
       'city': (raw['city'] ?? '').toString(),
       'locality': (raw['locality'] ?? '').toString(),
       'image': (raw['image'] ?? raw['image_path'] ?? '').toString(),
       'image_path': (raw['image_path'] ?? raw['image'] ?? '').toString(),
-      'is_demo': raw['is_demo'] == true,
       'is_boosted': raw['is_boosted'] == true,
       'views_count': int.tryParse('${raw['views_count'] ?? 0}') ?? 0,
       'favorites_count': int.tryParse('${raw['favorites_count'] ?? 0}') ?? 0,

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import 'api_client.dart';
@@ -45,6 +47,11 @@ class ListingService {
     String description = '',
     double price = 0,
     String? imagePath,
+    String listingType = 'declutter',
+    Map<String, dynamic>? vehicleMetadata,
+    Map<String, dynamic>? energyMetadata,
+    Map<String, dynamic>? realEstateMetadata,
+    Map<String, dynamic>? customerPayoutProfile,
     String category = 'declutter',
     int? categoryId,
     int? brandId,
@@ -52,6 +59,8 @@ class ListingService {
     String state = '',
     String city = '',
     String locality = '',
+    bool? deliveryAvailable,
+    bool? inspectionRequired,
   }) async {
     try {
       final url = ApiConfig.api('/listings');
@@ -62,13 +71,26 @@ class ListingService {
           'title': title,
           'description': description,
           'price': price.toString(),
+          'listing_type': listingType,
           'category': category,
           if (categoryId != null) 'category_id': '$categoryId',
           if (brandId != null) 'brand_id': '$brandId',
           if (modelId != null) 'model_id': '$modelId',
+          if (vehicleMetadata != null && vehicleMetadata.isNotEmpty)
+            'vehicle_metadata': jsonEncode(vehicleMetadata),
+          if (energyMetadata != null && energyMetadata.isNotEmpty)
+            'energy_metadata': jsonEncode(energyMetadata),
+          if (realEstateMetadata != null && realEstateMetadata.isNotEmpty)
+            'real_estate_metadata': jsonEncode(realEstateMetadata),
+          if (customerPayoutProfile != null && customerPayoutProfile.isNotEmpty)
+            'customer_payout_profile': jsonEncode(customerPayoutProfile),
           if (state.trim().isNotEmpty) 'state': state.trim(),
           if (city.trim().isNotEmpty) 'city': city.trim(),
           if (locality.trim().isNotEmpty) 'locality': locality.trim(),
+          if (deliveryAvailable != null)
+            'delivery_available': deliveryAvailable ? '1' : '0',
+          if (inspectionRequired != null)
+            'inspection_required': inspectionRequired ? '1' : '0',
           'image': await MultipartFile.fromFile(imagePath, filename: filename),
         });
         final res = await _client.dio.post(url, data: form);
@@ -86,13 +108,25 @@ class ListingService {
         'title': title,
         'description': description,
         'price': price,
+        'listing_type': listingType,
         'category': category,
         if (categoryId != null) 'category_id': categoryId,
         if (brandId != null) 'brand_id': brandId,
         if (modelId != null) 'model_id': modelId,
+        if (vehicleMetadata != null && vehicleMetadata.isNotEmpty)
+          'vehicle_metadata': vehicleMetadata,
+        if (energyMetadata != null && energyMetadata.isNotEmpty)
+          'energy_metadata': energyMetadata,
+        if (realEstateMetadata != null && realEstateMetadata.isNotEmpty)
+          'real_estate_metadata': realEstateMetadata,
+        if (customerPayoutProfile != null && customerPayoutProfile.isNotEmpty)
+          'customer_payout_profile': customerPayoutProfile,
         if (state.trim().isNotEmpty) 'state': state.trim(),
         if (city.trim().isNotEmpty) 'city': city.trim(),
         if (locality.trim().isNotEmpty) 'locality': locality.trim(),
+        if (deliveryAvailable != null) 'delivery_available': deliveryAvailable,
+        if (inspectionRequired != null)
+          'inspection_required': inspectionRequired,
       });
       final data = _asMap(res.data);
       final status = res.statusCode ?? 0;

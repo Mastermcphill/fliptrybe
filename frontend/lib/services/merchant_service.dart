@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import 'api_client.dart';
 import 'api_config.dart';
 
@@ -182,19 +184,6 @@ class MerchantService {
     }
   }
 
-  Future<bool> simulateSale(
-      {required int userId, required double amount}) async {
-    try {
-      final res = await _client.dio.post(
-          ApiConfig.api('/merchants/$userId/simulate-sale'),
-          data: {'amount': amount});
-      final code = res.statusCode ?? 0;
-      return code == 200;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<Map<String, dynamic>> addReview(
       {required int userId,
       required int rating,
@@ -254,5 +243,112 @@ class MerchantService {
     } catch (_) {
       return <String, dynamic>{'ok': false};
     }
+  }
+
+  Future<Map<String, dynamic>> cloudinaryConfig() async {
+    try {
+      final res = await _client.dio.get(ApiConfig.api('/media/cloudinary/config'));
+      if (res.data is Map) {
+        return Map<String, dynamic>.from(res.data as Map);
+      }
+    } catch (_) {}
+    return <String, dynamic>{'ok': false};
+  }
+
+  Future<Map<String, dynamic>> cloudinarySign({
+    required int timestamp,
+    String folder = '',
+    String publicId = '',
+  }) async {
+    final payload = <String, dynamic>{
+      'timestamp': timestamp,
+      'resource_type': 'image',
+    };
+    if (folder.trim().isNotEmpty) {
+      payload['folder'] = folder.trim();
+    }
+    if (publicId.trim().isNotEmpty) {
+      payload['public_id'] = publicId.trim();
+    }
+    try {
+      final res =
+          await _client.dio.post(ApiConfig.api('/media/cloudinary/sign'), data: payload);
+      if (res.data is Map) {
+        return Map<String, dynamic>.from(res.data as Map);
+      }
+    } catch (_) {}
+    return <String, dynamic>{'ok': false};
+  }
+
+  Future<Map<String, dynamic>> updateProfilePhotoFromFile(String filePath) async {
+    try {
+      final nowTs = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final cfg = await cloudinaryConfig();
+      final cloudName = (cfg['cloud_name'] ?? '').toString().trim();
+      final folder = (cfg['folder'] ?? 'fliptrybe/merchant_profiles').toString();
+      if (cloudName.isNotEmpty) {
+        final sign = await cloudinarySign(
+          timestamp: nowTs,
+          folder: folder,
+          publicId: 'merchant_${DateTime.now().millisecondsSinceEpoch}',
+        );
+        final signature = (sign['signature'] ?? '').toString().trim();
+        final apiKey = (sign['api_key'] ?? '').toString().trim();
+        final signedCloudName = (sign['cloud_name'] ?? cloudName).toString().trim();
+        final signedFolder = (sign['folder'] ?? folder).toString().trim();
+        final signedPublicId = (sign['public_id'] ?? '').toString().trim();
+        if (signature.isNotEmpty &&
+            apiKey.isNotEmpty &&
+            signedCloudName.isNotEmpty &&
+            signedPublicId.isNotEmpty) {
+          final form = FormData.fromMap({
+            'file': await MultipartFile.fromFile(filePath),
+            'api_key': apiKey,
+            'timestamp': nowTs.toString(),
+            'signature': signature,
+            'folder': signedFolder,
+            'public_id': signedPublicId,
+          });
+          final uploadRes = await _client.dio.post(
+            'https://api.cloudinary.com/v1_1/$signedCloudName/image/upload',
+            data: form,
+            options: Options(contentType: 'multipart/form-data'),
+          );
+          final uploadData = uploadRes.data;
+          if (uploadData is Map) {
+            final secureUrl = (uploadData['secure_url'] ?? '').toString().trim();
+            if (secureUrl.isNotEmpty) {
+              final saved = await updateProfilePhoto(secureUrl);
+              if (saved['ok'] == true) {
+                return <String, dynamic>{
+                  ...saved,
+                  'source': 'cloudinary',
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final normalized = filePath.replaceAll('\\', '/');
+      final filename = normalized.split('/').last;
+      final form = FormData.fromMap({
+        'image': await MultipartFile.fromFile(filePath, filename: filename),
+      });
+      final res = await _client.dio.post(
+        ApiConfig.api('/me/profile/photo'),
+        data: form,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      if (res.data is Map) {
+        return Map<String, dynamic>.from(res.data as Map);
+      }
+    } catch (_) {}
+    return <String, dynamic>{
+      'ok': false,
+      'message': 'Unable to upload merchant photo.',
+    };
   }
 }

@@ -13,17 +13,17 @@ import '../utils/ui_feedback.dart';
 import 'following_merchants_screen.dart';
 import 'investor_metrics_screen.dart';
 import 'invite_earn_screen.dart';
-import 'kyc_demo_screen.dart';
+import 'kyc_screen.dart';
 import 'marketplace/favorites_screen.dart';
 import 'marketplace/saved_searches_screen.dart';
-import 'merchant_listings_demo_screen.dart';
+import 'merchant_listings_screen.dart';
 import 'notifications_inbox_screen.dart';
 import 'orders_screen.dart';
 import 'personal_analytics_screen.dart';
 import 'phone_verify_screen.dart';
 import 'receipts_screen.dart';
 import 'report_problem_screen.dart';
-import 'settings_demo_screen.dart';
+import 'settings_screen.dart';
 import 'support_chat_screen.dart';
 import 'support_tickets_screen.dart';
 import 'wallet_screen.dart';
@@ -101,7 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsDemoScreen()),
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
     if (!mounted) return;
     _loadProfile();
@@ -273,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       subtitle: 'Manage your marketplace inventory.',
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const MerchantListingsDemoScreen(),
+                          builder: (_) => const MerchantListingsScreen(),
                         ),
                       ),
                     ),
@@ -374,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: 'KYC verification',
                     subtitle: 'Increase limits and tier eligibility.',
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const KycDemoScreen()),
+                      MaterialPageRoute(builder: (_) => const KycScreen()),
                     ),
                   ),
                   Semantics(
@@ -585,3 +585,5 @@ class _AuthDebugScreenState extends State<AuthDebugScreen> {
     );
   }
 }
+
+

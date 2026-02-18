@@ -202,7 +202,7 @@ def _receipt_once(*, user_id: int, kind: str, reference: str, amount: float, des
 
 
 def _notify_user(user_id: int, title: str, body: str, channel: str = "in_app"):
-    """Queue a notification respecting user settings (demo sender later flushes)."""
+    """Queue a notification respecting user settings."""
     try:
         settings = UserSettings.query.filter_by(user_id=user_id).first()
         if settings:
@@ -1785,14 +1785,14 @@ def admin_orders():
                 "merchant_id": int(o.merchant_id) if o.merchant_id is not None else None,
                 "created_at": o.created_at.isoformat() if o.created_at else None,
             })
-        return jsonify({"ok": True, "items": items, "seed_endpoint_present": True}), 200
+        return jsonify({"ok": True, "items": items}), 200
     except Exception:
         db.session.rollback()
         try:
             current_app.logger.exception("admin_orders_list_failed")
         except Exception:
             pass
-        return jsonify({"ok": True, "items": [], "seed_endpoint_present": True}), 200
+        return jsonify({"ok": True, "items": []}), 200
 
 
 @orders_bp.get("/admin/users")
@@ -1955,23 +1955,6 @@ def merchant_accept(order_id: int):
 
     o.status = "merchant_accepted"
     o.updated_at = datetime.utcnow()
-
-    # Demo auto-assign driver for demo listings (keeps role checks intact)
-    # Skip if already assigned (e.g., smoke test wants a fresh accept).
-    try:
-        if o.driver_id is None and o.listing_id:
-            listing = Listing.query.get(int(o.listing_id))
-            if listing:
-                title = (listing.title or "")
-                desc = (listing.description or "")
-                if (title.startswith("Demo Listing #") or ("investor demo" in desc.lower())) and os.getenv("DEMO_AUTO_ASSIGN_DRIVER", "0") == "1":
-                    demo_driver = User.query.filter_by(email="driver@fliptrybe.com").first()
-                    if demo_driver:
-                        o.driver_id = int(demo_driver.id)
-                        o.status = "driver_assigned"
-                        _issue_pickup_unlock(o)
-    except Exception:
-        pass
 
     try:
         db.session.add(o)

@@ -478,6 +478,52 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: FTDesignTokens.sm),
+                                  FTCard(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Explore verticals',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: [
+                                            FTButton(
+                                              label: 'Vehicles',
+                                              icon: Icons.directions_car_outlined,
+                                              variant: FTButtonVariant.ghost,
+                                              onPressed: () => _openResults(
+                                                query: 'Vehicles',
+                                              ),
+                                            ),
+                                            FTButton(
+                                              label: 'Power & Energy',
+                                              icon: Icons.bolt_outlined,
+                                              variant: FTButtonVariant.ghost,
+                                              onPressed: () => _openResults(
+                                                query: 'Solar Bundle',
+                                              ),
+                                            ),
+                                            FTButton(
+                                              label: 'Real Estate',
+                                              icon: Icons.home_work_outlined,
+                                              variant: FTButtonVariant.ghost,
+                                              onPressed: () => _openResults(
+                                                query: 'House for Rent',
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                   const SizedBox(height: FTDesignTokens.md),
                                   if (_error != null) ...[
                                     FTCard(

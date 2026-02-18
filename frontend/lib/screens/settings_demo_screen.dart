@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
 import '../ui/theme/theme_controller.dart';
 
-class SettingsDemoScreen extends StatefulWidget {
-  const SettingsDemoScreen({super.key, this.settingsService});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key, this.settingsService});
 
   final SettingsService? settingsService;
 
   @override
-  State<SettingsDemoScreen> createState() => _SettingsDemoScreenState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
+class _SettingsScreenState extends State<SettingsScreen> {
   late final SettingsService _svc;
 
   bool notifInApp = true;
@@ -100,16 +100,16 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
                   onChanged: (v) => _toggle(() => notifInApp = v),
                 ),
                 SwitchListTile(
-                  title: const Text('SMS alerts (demo-ready)'),
+                  title: const Text('SMS alerts'),
                   subtitle: const Text(
-                      'Persisted to backend. Add Termii/NG SMS later.'),
+                      'Persisted to backend notification preferences.'),
                   value: notifSms,
                   onChanged: (v) => _toggle(() => notifSms = v),
                 ),
                 SwitchListTile(
-                  title: const Text('WhatsApp alerts (demo-ready)'),
+                  title: const Text('WhatsApp alerts'),
                   subtitle: const Text(
-                      'Persisted to backend. Add WhatsApp Cloud later.'),
+                      'Persisted to backend notification preferences.'),
                   value: notifWhatsapp,
                   onChanged: (v) => _toggle(() => notifWhatsapp = v),
                 ),
@@ -182,4 +182,9 @@ class _SettingsDemoScreenState extends State<SettingsDemoScreen> {
             ),
     );
   }
+}
+
+@Deprecated('Use SettingsScreen instead.')
+class SettingsDemoScreen extends SettingsScreen {
+  const SettingsDemoScreen({super.key, super.settingsService});
 }

@@ -9,7 +9,7 @@ import '../utils/ft_routes.dart';
 import '../utils/role_gates.dart';
 import '../utils/ui_feedback.dart';
 import '../widgets/phone_verification_dialog.dart';
-import 'kyc_demo_screen.dart';
+import 'kyc_screen.dart';
 import 'money_action_receipt_screen.dart';
 
 class MoneyBoxWithdrawScreen extends StatefulWidget {
@@ -111,7 +111,7 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  FTPageRoute.slideUp(child: const KycDemoScreen()),
+                  FTPageRoute.slideUp(child: const KycScreen()),
                 );
               },
             ),
@@ -194,3 +194,4 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
     );
   }
 }
+

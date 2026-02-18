@@ -7,7 +7,7 @@ import '../ui/foundation/app_tokens.dart';
 import '../utils/ui_feedback.dart';
 import 'admin_manual_payments_screen.dart';
 import 'admin_commission_engine_screen.dart';
-import 'settings_demo_screen.dart';
+import 'settings_screen.dart';
 import '../utils/auth_navigation.dart';
 
 class AdminAutopilotScreen extends StatefulWidget {
@@ -422,7 +422,7 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
 
   Future<void> _openAppearance() async {
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SettingsDemoScreen()),
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
     );
   }
 
@@ -1035,3 +1035,4 @@ class AutopilotRecommendationCard extends StatelessWidget {
     );
   }
 }
+

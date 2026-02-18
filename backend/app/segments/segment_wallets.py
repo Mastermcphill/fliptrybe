@@ -125,26 +125,6 @@ def my_ledger():
     return jsonify([t.to_dict() for t in rows]), 200
 
 
-@wallets_bp.post("/topup-demo")
-def topup_demo():
-    """Investor demo credit wallet without Paystack."""
-    u = _current_user()
-    if not u:
-        return jsonify({"message": "Unauthorized"}), 401
-    payload = request.get_json(silent=True) or {}
-    try:
-        amount = float(payload.get("amount") or 0.0)
-    except Exception:
-        amount = 0.0
-    if amount <= 0:
-        return jsonify({"message": "amount required"}), 400
-
-    ref = f"demo_topup:{int(datetime.utcnow().timestamp())}"
-    post_txn(user_id=int(u.id), direction="credit", amount=amount, kind="topup", reference=ref, note="Demo topup")
-    w = get_or_create_wallet(int(u.id))
-    return jsonify({"ok": True, "wallet": w.to_dict()}), 200
-
-
 @wallets_bp.post("/payouts")
 def request_payout():
     u = _current_user()

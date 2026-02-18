@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/kyc_service.dart';
 
-class KycDemoScreen extends StatefulWidget {
-  const KycDemoScreen({super.key});
+class KycScreen extends StatefulWidget {
+  const KycScreen({super.key});
 
   @override
-  State<KycDemoScreen> createState() => _KycDemoScreenState();
+  State<KycScreen> createState() => _KycScreenState();
 }
 
-class _KycDemoScreenState extends State<KycDemoScreen> {
+class _KycScreenState extends State<KycScreen> {
   final _svc = KycService();
   late Future<Map<String, dynamic>> _kyc;
 
@@ -142,4 +142,9 @@ class _KycDemoScreenState extends State<KycDemoScreen> {
       ),
     );
   }
+}
+
+@Deprecated('Use KycScreen instead.')
+class KycDemoScreen extends KycScreen {
+  const KycDemoScreen({super.key});
 }

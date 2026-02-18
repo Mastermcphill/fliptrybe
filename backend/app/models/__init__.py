@@ -77,3 +77,4 @@ from .discovery import (
 from .economics import PricingBenchmark, CommissionPolicy, CommissionPolicyRule  # noqa: F401
 from .autopilot_recommendation import AutopilotSnapshot, AutopilotRecommendation, AutopilotEvent  # noqa: F401
 from .strategic_intelligence import ElasticitySnapshot, FraudFlag  # noqa: F401
+from .saved_search import SavedSearch  # noqa: F401

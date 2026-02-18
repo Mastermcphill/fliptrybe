@@ -33,16 +33,6 @@ class WalletService {
     return ledger();
   }
 
-  Future<bool> demoTopup(double amount) async {
-    try {
-      final data = await ApiClient.instance
-          .postJson(ApiConfig.api('/wallet/topup-demo'), {'amount': amount});
-      return data is Map && data['ok'] == true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<List<dynamic>> payouts() async {
     try {
       final data =

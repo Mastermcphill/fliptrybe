@@ -9,6 +9,7 @@
 ## Buyer
 - Signup -> login -> logout -> login again.
 - Browse marketplace, use search, open listing detail.
+- Create a listing immediately after registration (no verify prompts in flow).
 - Open notifications inbox and mark one item read.
 - Create support ticket.
 
@@ -21,6 +22,19 @@
 - User creates support ticket.
 - Admin opens support threads and replies.
 - User sees admin reply in the same thread.
+- In support chat, send a message with a phone/email; verify server blocks with contact-sharing error.
+
+## Marketplace Governance
+- As buyer, attempt to save listing description containing phone/email/address; verify save is blocked with guidance text.
+- As merchant, create listing without customer payout profile; verify required-field error.
+- As merchant, create listing with complete customer payout profile and confirm publish succeeds.
+- As admin, open customer payout profile from Admin Marketplace and use copy action.
+
+## Real Estate
+- Create each listing type: House for Rent, House for Sale, Land for Sale.
+- Filter by property type and location.
+- Filter house listings by bedrooms/bathrooms/furnished/serviced.
+- Filter land listings by land size and title document type.
 
 ## Admin
 - Login as admin.

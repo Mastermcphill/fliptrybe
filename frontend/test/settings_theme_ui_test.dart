@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:fliptrybe/screens/settings_demo_screen.dart';
+import 'package:fliptrybe/screens/settings_screen.dart';
 import 'package:fliptrybe/services/settings_service.dart';
 import 'package:fliptrybe/ui/theme/theme_controller.dart';
 
@@ -58,7 +58,7 @@ void main() {
       ThemeControllerProvider(
         controller: controller,
         child: MaterialApp(
-          home: SettingsDemoScreen(settingsService: fake),
+          home: SettingsScreen(settingsService: fake),
         ),
       ),
     );
@@ -81,3 +81,4 @@ void main() {
     expect(controller.backgroundPalette, AppBackgroundPalette.sand);
   });
 }
+

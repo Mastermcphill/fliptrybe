@@ -20,9 +20,10 @@ This document has two parts:
   - `GET /api/public/categories` now includes `category_groups` with vertical groups:
     - `Vehicles`
     - `Power & Energy`
+    - `Real Estate`
   - `GET /api/public/categories/form-schema?category_id=<id>` returns dynamic form schema:
-    - `schema.metadata_key` in `vehicle_metadata | energy_metadata | ""`
-    - `schema.listing_type_hint` in `vehicle | energy | declutter`
+    - `schema.metadata_key` in `vehicle_metadata | energy_metadata | real_estate_metadata | ""`
+    - `schema.listing_type_hint` in `vehicle | energy | real_estate | declutter`
     - `schema.fields[]` with `key, label, type, required, options`
   - `GET /api/public/category-groups` returns vertical groups only.
 - Listings search:
@@ -35,18 +36,39 @@ This document has two parts:
     - `battery_type`
     - `inverter_capacity`
     - `lithium_only`
+    - `property_type`
+    - `bedrooms_min`, `bedrooms_max`
+    - `bathrooms_min`, `bathrooms_max`
+    - `furnished`
+    - `serviced`
+    - `land_size_min`, `land_size_max`
+    - `title_document_type`
+    - `city`, `area`
 - Listing payload additions:
   - `listing_type`
   - `vehicle_metadata`
   - `energy_metadata`
+  - `real_estate_metadata`
   - `vehicle_make`, `vehicle_model`, `vehicle_year`
   - `battery_type`, `inverter_capacity`, `lithium_only`, `bundle_badge`
+  - `property_type`, `bedrooms`, `bathrooms`, `toilets`, `parking_spaces`
+  - `furnished`, `serviced`, `land_size`, `title_document_type`
   - `delivery_available`, `inspection_required`
   - `location_verified`, `inspection_request_enabled`, `financing_option`
   - `approval_status`, `inspection_flagged`
+  - Merchant-only private `customer_payout_profile` (owner/admin payloads only)
 - Admin listing controls:
   - `POST /api/admin/listings/:id/approve` with `{approved|status}`.
   - `POST /api/admin/listings/:id/inspection-flag` with `{flagged}`.
+  - `GET /api/admin/listings/:id/customer-payout-profile` for payout operations.
+- Saved searches:
+  - CRUD: `/api/saved-searches`, `/api/saved-searches/:id`, `/api/saved-searches/:id/use`
+  - Cap: maximum 20 saved searches per user.
+- Moderation:
+  - Listing create/update rejects contact details in description:
+    - error `DESCRIPTION_CONTACT_BLOCKED`
+  - Support chat rejects contact sharing:
+    - error `CONTACT_BLOCKED`
 - Merchant profile photo:
   - `POST /api/me/profile/photo` now supports both:
     - JSON URL payload (`profile_image_url`) for backward compatibility.
@@ -58,7 +80,8 @@ This document has two parts:
   - `GET /api/auth/verify-email`
   - `POST /api/auth/verify-email/resend`
   - `GET /api/auth/verify-email/status`
-- Protected sell/payout/moneybox/order actions now use phone verification gate:
+- Listing creation is not blocked by email/phone/KYC verification.
+- Money-movement routes continue to use phone/KYC where required:
   - Error code: `PHONE_NOT_VERIFIED`
   - Legacy `EMAIL_NOT_VERIFIED` is no longer returned.
 - Phone OTP endpoints:
@@ -201,7 +224,6 @@ This document has two parts:
 | `POST` | `/me/preferences` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/city_preference_service.dart` |
 | `POST` | `/me/profile/photo` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/merchant_service.dart` |
 | `POST` | `/merchants/$userId/follow` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/merchant_service.dart` |
-| `POST` | `/merchants/$userId/simulate-sale` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/merchant_service.dart` |
 | `POST` | `/merchants/profile` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/merchant_service.dart` |
 | `POST` | `/moneybox/autosave` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/moneybox_service.dart` |
 | `POST` | `/moneybox/autosave/settings` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/moneybox_service.dart` |
@@ -209,7 +231,6 @@ This document has two parts:
 | `POST` | `/moneybox/tier` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/moneybox_service.dart` |
 | `POST` | `/moneybox/withdraw` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/moneybox_service.dart` |
 | `POST` | `/notifications/$safeId/read` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/notification_service.dart` |
-| `POST` | `/notify/flush-demo` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/notification_service.dart` |
 | `POST` | `/orders` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/order_service.dart` |
 | `POST` | `/orders/$orderId/driver/assign` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/order_service.dart` |
 | `POST` | `/orders/$orderId/driver/status` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/order_service.dart` |
@@ -221,7 +242,6 @@ This document has two parts:
 | `POST` | `/payments/manual/$paymentIntentId/proof` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/payment_service.dart` |
 | `POST` | `/payout/recipient` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/payout_recipient_service.dart` |
 | `POST` | `/pricing/suggest` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/pricing_service.dart` |
-| `POST` | `/receipts/demo` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/receipt_service.dart` |
 | `POST` | `/referral/apply` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/referral_service.dart` |
 | `POST` | `/seller/orders/$orderId/confirm-pickup` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/order_service.dart` |
 | `POST` | `/settings` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/settings_service.dart` |
@@ -235,4 +255,3 @@ This document has two parts:
 | `POST` | `/wallet/payouts/$payoutId/admin/pay` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/admin_wallet_service.dart` |
 | `POST` | `/wallet/payouts/$payoutId/admin/process` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/admin_wallet_service.dart` |
 | `POST` | `/wallet/payouts/$payoutId/admin/reject` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/admin_wallet_service.dart` |
-| `POST` | `/wallet/topup-demo` | JSON body + path/query params + auth header where required | JSON object/list; success route-specific, errors use global API contract | `frontend/lib/services/wallet_service.dart` |

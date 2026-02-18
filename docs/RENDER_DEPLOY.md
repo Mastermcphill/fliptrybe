@@ -29,7 +29,7 @@ flask db upgrade
 - Expect JSON: { ok: true, service: "fliptrybe-backend", env: "production", db: "ok"|"fail" }
 
 ## Demo Endpoints
-- POST /api/demo/seed is blocked in production (returns 403)
+- Demo seed endpoints are removed and are not available in any environment.
 
 ## Notes
 - Production will refuse to start if SECRET_KEY or DATABASE_URL is missing.

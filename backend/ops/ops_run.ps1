@@ -23,9 +23,6 @@ try {
     $health = Invoke-Api -State $state -Method "GET" -Path "/api/health"
     Add-Result -State $state -Phase "PREFLIGHT" -Test "health" -Pass ($health.StatusCode -eq 200) -Status ($health.StatusCode.ToString()) -Detail "GET /api/health"
 
-    $seed = Invoke-Api -State $state -Method "POST" -Path "/api/demo/seed"
-    Add-Result -State $state -Phase "PREFLIGHT" -Test "seed" -Pass ($seed.StatusCode -eq 201) -Status ($seed.StatusCode.ToString()) -Detail "POST /api/demo/seed"
-
     $pw = "Password123!"
     $buyerEmail = New-UniqueEmail -Prefix "ops_buyer"
     $driverEmail = New-UniqueEmail -Prefix "ops_driver"
@@ -43,7 +40,8 @@ try {
     $buyerLogin = Login-User -State $state -Email $buyerEmail -Password $pw
     $driverLogin = Login-User -State $state -Email $driverEmail -Password $pw
     $merchantLogin = Login-User -State $state -Email $merchantEmail -Password $pw
-    $adminLogin = Login-User -State $state -Email "admin@fliptrybe.com" -Password "demo12345"
+    $adminPassword = if ([string]::IsNullOrWhiteSpace($env:ADMIN_PASSWORD)) { "Password123!" } else { $env:ADMIN_PASSWORD }
+    $adminLogin = Login-User -State $state -Email "admin@fliptrybe.com" -Password $adminPassword
 
     $buyerToken = [string]$buyerLogin.Json.token
     $driverToken = [string]$driverLogin.Json.token

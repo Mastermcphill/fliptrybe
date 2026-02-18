@@ -14,7 +14,7 @@ python -m flask db upgrade
 What it does
 - Runs migrations
 - Starts the Flask server in background
-- Calls `/api/health` and `/api/demo/seed` if available
+- Calls `/api/health`
 - Executes a set of regression tests and invariants
 - Saves artifacts to `qa/artifacts/qa_run_<timestamp>.log` and DB snapshots
 
