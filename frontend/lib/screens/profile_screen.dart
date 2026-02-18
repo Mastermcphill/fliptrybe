@@ -20,6 +20,7 @@ import 'merchant_listings_demo_screen.dart';
 import 'notifications_inbox_screen.dart';
 import 'orders_screen.dart';
 import 'personal_analytics_screen.dart';
+import 'phone_verify_screen.dart';
 import 'receipts_screen.dart';
 import 'report_problem_screen.dart';
 import 'settings_demo_screen.dart';
@@ -360,7 +361,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     subtitle: isVerified
                         ? 'Your phone is verified.'
                         : 'Complete OTP verification to unlock protected actions.',
-                    onTap: null,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PhoneVerifyScreen(
+                          initialPhone: _profile?['phone']?.toString(),
+                        ),
+                      ),
+                    ),
                   ),
                   FTListTile(
                     leading: const Icon(Icons.verified_user_outlined),

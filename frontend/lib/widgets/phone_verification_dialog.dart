@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../screens/phone_verify_screen.dart';
+
 Future<void> showPhoneVerificationRequiredDialog(
   BuildContext context, {
   String? message,
@@ -19,6 +21,15 @@ Future<void> showPhoneVerificationRequiredDialog(
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Dismiss'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PhoneVerifyScreen()),
+              );
+            },
+            child: const Text('Verify phone'),
           ),
           TextButton(
             onPressed: onRetry == null

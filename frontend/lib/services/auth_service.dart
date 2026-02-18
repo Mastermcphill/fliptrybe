@@ -51,45 +51,23 @@ class AuthService {
     }
   }
 
-  /// Demo OTP: returns true so UI can move to OTP step.
   Future<bool> requestOtp(String phone) async {
-    return true;
+    try {
+      final res = await ApiService.requestPhoneOtp(phone: phone);
+      return res['ok'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  /// Demo OTP verify: returns a REAL backend token by registering/logging in.
-  /// ApiService.register/login will automatically set the token into Dio headers.
   Future<String?> verifyOtp(String phone, String code) async {
-    final safePhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final demoEmail =
-        'phone_${safePhone.isEmpty ? "user" : safePhone}@fliptrybe.dev';
-    const demoPassword = '12345678';
-
     try {
-      final reg = await ApiService.register(
-        name: 'FlipTrybe User',
-        email: demoEmail,
-        password: demoPassword,
-        phone: phone,
-      );
-
-      final t = reg['token'];
-      if (t is String && t.isNotEmpty) return t;
-    } catch (_) {
-      // fall through to login
-    }
-
-    try {
-      final login = await ApiService.login(
-        email: demoEmail,
-        password: demoPassword,
-      );
-
-      final t = login['token'];
+      final res = await ApiService.verifyPhoneOtp(phone: phone, code: code);
+      final t = (res['token'] ?? res['access_token']);
       if (t is String && t.isNotEmpty) return t;
     } catch (_) {
       return null;
     }
-
     return null;
   }
 

@@ -26,6 +26,7 @@ import 'moneybox_withdraw_screen.dart';
 import 'merchant_followers_screen.dart';
 import 'merchant_listings_screen.dart';
 import 'merchant_orders_screen.dart';
+import 'phone_verify_screen.dart';
 import 'support_chat_screen.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
@@ -618,6 +619,18 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                         Text(
                             'Phone verification: ${phoneVerified ? 'Verified' : 'Not verified'}'),
                         Text('KYC status: $kycStatus'),
+                        if (!phoneVerified) ...[
+                          const SizedBox(height: 8),
+                          FTPrimaryButton(
+                            label: 'Verify Phone',
+                            icon: Icons.phonelink_lock_outlined,
+                            onPressed: () => _safePush(
+                              PhoneVerifyScreen(
+                                initialPhone: _profile['phone']?.toString(),
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

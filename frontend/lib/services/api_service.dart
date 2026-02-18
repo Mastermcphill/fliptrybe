@@ -364,6 +364,32 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> requestPhoneOtp({
+    required String phone,
+  }) async {
+    final url = ApiConfig.api('/auth/otp/request');
+    final res = await _client.dio.post(url, data: {'phone': phone.trim()});
+    return _asMap(res.data);
+  }
+
+  static Future<Map<String, dynamic>> verifyPhoneOtp({
+    required String phone,
+    required String code,
+  }) async {
+    final url = ApiConfig.api('/auth/otp/verify');
+    final res = await _client.dio.post(
+      url,
+      data: {
+        'phone': phone.trim(),
+        'code': code.trim(),
+      },
+    );
+    final data = _asMap(res.data);
+    await persistAuthPayload(data);
+    await syncSentryUser(_asMap(data['user']));
+    return data;
+  }
+
   static Future<void> revalidateSessionOnResume({
     Duration minimumInterval = const Duration(minutes: 10),
   }) async {

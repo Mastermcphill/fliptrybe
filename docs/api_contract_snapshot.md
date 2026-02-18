@@ -61,6 +61,13 @@ This document has two parts:
 - Protected sell/payout/moneybox/order actions now use phone verification gate:
   - Error code: `PHONE_NOT_VERIFIED`
   - Legacy `EMAIL_NOT_VERIFIED` is no longer returned.
+- Phone OTP endpoints:
+  - `POST /api/auth/otp/request` with `phone` (or phone aliases) returns:
+    - `ok, sent, detail, expires_in_seconds`
+    - Dev fallback includes `demo_otp` when Termii is unavailable.
+  - `POST /api/auth/otp/verify` with `phone, code`:
+    - Marks `user.is_verified=true` for matched phone.
+    - Returns full session payload (`token`, `refresh_token`, `expires_at`, `user`).
 
 ## Frontend Endpoint Inventory
 

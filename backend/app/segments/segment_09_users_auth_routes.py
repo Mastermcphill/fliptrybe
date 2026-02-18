@@ -8,10 +8,11 @@ from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
-from app.models import User, RoleChangeRequest, PasswordResetToken, RefreshToken, AuditLog
+from app.models import User, RoleChangeRequest, PasswordResetToken, RefreshToken, AuditLog, OTPAttempt
 from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
 from app.utils.autopilot import get_settings
+from app.utils.termii_client import send_termii_message
 from app.utils.rate_limit import (
     check_limit,
     rate_limit_burst,
@@ -404,6 +405,43 @@ def _bearer_token() -> str | None:
     return get_bearer_token(header)
 
 
+def _otp_ttl_minutes() -> int:
+    raw = (os.getenv("OTP_TTL_MINUTES") or "").strip()
+    if raw.isdigit():
+        val = int(raw)
+        if 1 <= val <= 30:
+            return val
+    return 10
+
+
+def _normalize_phone(raw: str | None) -> str:
+    phone = str(raw or "").strip()
+    if not phone:
+        return ""
+    compact = "".join(ch for ch in phone if ch not in (" ", "\t", "\r", "\n"))
+    if compact.startswith("+"):
+        return "+" + "".join(ch for ch in compact[1:] if ch.isdigit())
+    return "".join(ch for ch in compact if ch.isdigit())
+
+
+def _issue_otp_code() -> str:
+    # Use cryptographically secure randomness for one-time verification codes.
+    return "".join(secrets.choice("0123456789") for _ in range(6))
+
+
+def _otp_demo_mode() -> bool:
+    env = (os.getenv("FLIPTRYBE_ENV", "dev") or "dev").strip().lower()
+    return env not in ("prod", "production")
+
+
+def _otp_send_message(phone: str, code: str) -> tuple[bool, str]:
+    message = f"Your FlipTrybe OTP is {code}. It expires in {_otp_ttl_minutes()} minutes."
+    try:
+        return send_termii_message(channel="generic", to=phone, message=message)
+    except Exception as exc:
+        return False, f"termii_exception:{exc}"
+
+
 @auth_bp.post("/register")
 def register():
     rl = _rate_limit_response("register", limit=25, window_seconds=300)
@@ -592,6 +630,107 @@ def me():
 
     # Return user dict directly (cleanest for frontend)
     return jsonify(_user_payload_with_role_status(u)), 200
+
+
+@auth_bp.post("/otp/request")
+def request_phone_otp():
+    rl = _rate_limit_response("otp_request", limit=12, window_seconds=300)
+    if rl is not None:
+        return rl
+    data = request.get_json(silent=True) or {}
+    phone = _normalize_phone(
+        data.get("phone")
+        or data.get("phone_number")
+        or data.get("phoneNumber")
+        or data.get("mobile")
+        or data.get("mobile_number")
+    )
+    if not phone:
+        return jsonify({"ok": False, "error": "PHONE_REQUIRED", "message": "phone is required"}), 400
+
+    code = _issue_otp_code()
+    attempt = OTPAttempt(phone=phone, code=code, success=False)
+    try:
+        db.session.add(attempt)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("otp_request_store_failed")
+        return jsonify({"ok": False, "error": "OTP_REQUEST_FAILED", "message": "Failed to request OTP"}), 500
+
+    sent, detail = _otp_send_message(phone, code)
+    if not sent and not _otp_demo_mode():
+        return (
+            jsonify({"ok": False, "error": "OTP_SEND_FAILED", "message": "Unable to send OTP at the moment"}),
+            503,
+        )
+
+    body: dict[str, object] = {
+        "ok": True,
+        "sent": bool(sent),
+        "detail": detail,
+        "expires_in_seconds": int(_otp_ttl_minutes() * 60),
+    }
+    if not sent and _otp_demo_mode():
+        body["demo_otp"] = code
+    return jsonify(body), 200
+
+
+@auth_bp.post("/otp/verify")
+def verify_phone_otp():
+    rl = _rate_limit_response("otp_verify", limit=20, window_seconds=300)
+    if rl is not None:
+        return rl
+    data = request.get_json(silent=True) or {}
+    phone = _normalize_phone(
+        data.get("phone")
+        or data.get("phone_number")
+        or data.get("phoneNumber")
+        or data.get("mobile")
+        or data.get("mobile_number")
+    )
+    code = str(data.get("code") or "").strip()
+    if not phone or not code:
+        return jsonify({"ok": False, "error": "PHONE_AND_CODE_REQUIRED", "message": "phone and code are required"}), 400
+
+    now = datetime.utcnow()
+    attempt = (
+        OTPAttempt.query.filter_by(phone=phone, code=code)
+        .filter(OTPAttempt.created_at >= (now - timedelta(minutes=_otp_ttl_minutes())))
+        .order_by(OTPAttempt.id.desc())
+        .first()
+    )
+    if not attempt:
+        return jsonify({"ok": False, "error": "INVALID_OR_EXPIRED_OTP", "message": "Invalid or expired OTP"}), 401
+
+    user = User.query.filter_by(phone=phone).first()
+    if not user:
+        return jsonify({"ok": False, "error": "PHONE_NOT_REGISTERED", "message": "No account found for this phone"}), 404
+
+    try:
+        attempt.success = True
+        user.is_verified = True
+        access_token, access_expires_at = _issue_access_token(int(user.id))
+        _refresh_rec, refresh_token = _issue_refresh_token_record(
+            user_id=int(user.id),
+            device_id=request.headers.get("X-Device-Id"),
+        )
+        db.session.add(attempt)
+        db.session.add(user)
+        db.session.commit()
+        body = _session_payload(
+            user,
+            access_token=access_token,
+            access_expires_at=access_expires_at,
+            refresh_token=refresh_token,
+        )
+        body["ok"] = True
+        body["verified"] = True
+        return jsonify(body), 200
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("otp_verify_failed")
+        return jsonify({"ok": False, "error": "OTP_VERIFY_FAILED", "message": "Failed to verify OTP"}), 500
 
 
 @auth_bp.post("/refresh")
