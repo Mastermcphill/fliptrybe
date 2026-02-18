@@ -13,7 +13,7 @@ import '../services/payment_service.dart';
 import '../services/auth_gate_service.dart';
 import '../utils/formatters.dart';
 import '../ui/components/ft_components.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 import '../widgets/listing/listing_card.dart';
 import '../widgets/safe_image.dart';
 import 'cart_screen.dart';
@@ -387,10 +387,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       if (result['ok'] != true) {
         final msg =
             (result['message'] ?? result['error'] ?? 'Order failed').toString();
-        if (ApiService.isEmailNotVerified(result) ||
-            ApiService.isEmailNotVerified(msg)) {
+        if (ApiService.isPhoneNotVerified(result) ||
+            ApiService.isPhoneNotVerified(msg)) {
           if (!mounted) return;
-          await showEmailVerificationRequiredDialog(
+          await showPhoneVerificationRequiredDialog(
             context,
             message: msg,
             onRetry: _buyNowAndRequestDelivery,

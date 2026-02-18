@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../services/api_service.dart';
 import '../services/kpi_service.dart';
@@ -14,10 +15,9 @@ import '../ui/components/app_components.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import '../utils/auth_navigation.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 import '../widgets/how_it_works/role_how_it_works_entry_card.dart';
 import 'create_listing_screen.dart';
-import 'email_verify_screen.dart';
 import 'growth/growth_analytics_screen.dart';
 import 'leaderboards_screen.dart';
 import 'moneybox_autosave_screen.dart';
@@ -45,10 +45,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final _leaderSvc = LeaderboardService();
   final _listingSvc = ListingService();
   final _merchantSvc = MerchantService();
-  final _photoUrlCtrl = TextEditingController();
 
   bool _loading = true;
   bool _signingOut = false;
+  bool _uploadingPhoto = false;
   String? _error;
 
   Map<String, dynamic> _wallet = const {};
@@ -75,7 +75,6 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
   @override
   void dispose() {
-    _photoUrlCtrl.dispose();
     super.dispose();
   }
 
@@ -110,8 +109,6 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
       setState(() {
         _profile = Map<String, dynamic>.from(me);
-        _photoUrlCtrl.text =
-            (me['profile_image_url'] ?? me['avatar_url'] ?? '').toString();
         _wallet = (values[0] as Map<String, dynamic>?) ?? <String, dynamic>{};
         _moneyBox = values[1] as Map<String, dynamic>;
         _autosaveEnabled = (_moneyBox['autosave_enabled'] == true);
@@ -169,8 +166,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   ) async {
     final res = await call();
     if (!mounted) return;
-    if (ApiService.isEmailNotVerified(res)) {
-      await showEmailVerificationRequiredDialog(
+    if (ApiService.isPhoneNotVerified(res)) {
+      await showPhoneVerificationRequiredDialog(
         context,
         message: (res['message'] ?? 'Verify your email to continue').toString(),
       );
@@ -180,57 +177,47 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   }
 
   Future<void> _openPhotoUploadDialog() async {
-    _photoUrlCtrl.text =
-        (_profile['profile_image_url'] ?? _photoUrlCtrl.text).toString();
-    final shouldSave = await showDialog<bool>(
+    if (_uploadingPhoto) return;
+    final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Upload merchant photo'),
-        content: Column(
+      builder: (sheetCtx) => SafeArea(
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Paste your Cloudinary image URL. This single photo appears on your profile, listings, and leaderboards.',
-              ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take photo'),
+              onTap: () => Navigator.of(sheetCtx).pop(ImageSource.camera),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _photoUrlCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Cloudinary image URL',
-                hintText: 'https://res.cloudinary.com/.../image/upload/...',
-                border: OutlineInputBorder(),
-              ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.of(sheetCtx).pop(ImageSource.gallery),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
-    if (shouldSave != true) return;
-    final url = _photoUrlCtrl.text.trim();
-    if (!(url.startsWith('http://') || url.startsWith('https://'))) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid image URL.')),
-      );
-      return;
-    }
-    final res = await _merchantSvc.updateProfilePhoto(url);
+    if (source == null) return;
+
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: source,
+      imageQuality: 82,
+      maxWidth: 1600,
+    );
+    if (image == null || !mounted) return;
+
+    setState(() => _uploadingPhoto = true);
+    final res = await _merchantSvc.updateProfilePhotoFromFile(image.path);
     if (!mounted) return;
+    setState(() => _uploadingPhoto = false);
+
     if (res['ok'] == true) {
-      setState(() => _profile['profile_image_url'] = url);
+      final url = (res['profile_image_url'] ?? '').toString().trim();
+      if (url.isNotEmpty) {
+        setState(() => _profile['profile_image_url'] = url);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Merchant photo updated.')),
       );
@@ -331,8 +318,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       return active && !status.contains('sold') && !status.contains('complete');
     }).length;
     final inactiveListings = _myListings.length - activeListings;
-    final emailVerified = (_profile['email_verified'] == true) ||
-        (_profile['email_verified_at'] ?? '').toString().trim().isNotEmpty;
+    final phoneVerified = _profile['is_verified'] == true;
     final kycStatus =
         (_profile['kyc_status'] ?? _profile['kyc'] ?? 'unknown').toString();
     final moneyboxLocked = _money(_moneyBox['principal_balance']);
@@ -423,9 +409,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                             action: Align(
                               alignment: Alignment.centerLeft,
                               child: FTButton(
-                                label: 'Upload Photo',
+                                label: _uploadingPhoto
+                                    ? 'Uploading...'
+                                    : 'Upload Photo',
                                 variant: FTButtonVariant.ghost,
-                                onPressed: _openPhotoUploadDialog,
+                                onPressed: _uploadingPhoto
+                                    ? null
+                                    : _openPhotoUploadDialog,
                               ),
                             ),
                           ),
@@ -626,17 +616,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                            'Email verification: ${emailVerified ? 'Verified' : 'Not verified'}'),
+                            'Phone verification: ${phoneVerified ? 'Verified' : 'Not verified'}'),
                         Text('KYC status: $kycStatus'),
-                        if (!emailVerified) ...[
-                          const SizedBox(height: 8),
-                          FTPrimaryButton(
-                            label: 'Verify Email',
-                            icon: Icons.verified_outlined,
-                            onPressed: () =>
-                                _safePush(const EmailVerifyScreen()),
-                          ),
-                        ],
                       ],
                     ),
                   ),

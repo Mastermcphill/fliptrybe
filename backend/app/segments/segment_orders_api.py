@@ -128,7 +128,7 @@ def _is_admin(u: User | None) -> bool:
     return _role(u) == "admin"
 
 
-def _is_verified(u: User | None) -> bool:
+def _is_phone_verified(u: User | None) -> bool:
     if not u:
         return False
     return bool(getattr(u, "is_verified", False))
@@ -908,11 +908,11 @@ def create_order():
     except Exception:
         pass
 
-    if not _is_admin(u) and not _is_verified(u):
+    if not _is_admin(u) and not _is_phone_verified(u):
         return jsonify({
             "ok": False,
-            "error": "EMAIL_NOT_VERIFIED",
-            "message": "Your email must be verified to perform this action",
+            "error": "PHONE_NOT_VERIFIED",
+            "message": "Your phone must be verified to perform this action",
         }), 403
 
 # If listing provided, prefer listing pricing rules over payload amount
@@ -1945,8 +1945,8 @@ def merchant_accept(order_id: int):
 
     if int(o.merchant_id) != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
-    if not _is_admin(u) and not _is_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_admin(u) and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     if not _availability_is_confirmed(int(o.id)):
         return jsonify({"message": "Availability confirmation required"}), 409
@@ -2151,8 +2151,8 @@ def assign_driver(order_id: int):
     # merchant or admin can assign. Drivers accept via /driver/jobs/<id>/accept
     if int(o.merchant_id) != int(u.id) and not _is_admin(u):
         return jsonify({"message": "Forbidden"}), 403
-    if not _is_admin(u) and not _is_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_admin(u) and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     payload = request.get_json(silent=True) or {}
     try:
@@ -2438,8 +2438,8 @@ def seller_confirm_pickup(order_id: int):
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
-    if not _is_admin(u) and not _is_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_admin(u) and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     o = Order.query.get(order_id)
     if not o:

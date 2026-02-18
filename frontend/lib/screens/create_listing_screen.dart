@@ -19,7 +19,7 @@ import '../services/analytics_hooks.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import '../utils/role_gates.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 
 class CreateListingScreen extends StatefulWidget {
   const CreateListingScreen({super.key});
@@ -29,7 +29,10 @@ class CreateListingScreen extends StatefulWidget {
 }
 
 class _CreateListingScreenState extends State<CreateListingScreen> {
-  static const _draftKey = 'create_listing_draft_v2';
+  static const _legacyDraftKey = 'create_listing_draft_v2';
+  static const _draftsKey = 'create_listing_drafts_v3';
+  static const _lastDraftBucketKey = 'create_listing_last_bucket_v3';
+  static const _lastCategoryKey = 'create_listing_last_category_id_v1';
 
   final _listingService = ListingService();
   final _feedService = FeedService();
@@ -43,6 +46,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   final _cityCtrl = TextEditingController();
   final _localityCtrl = TextEditingController();
   final _lgaCtrl = TextEditingController();
+  final _categorySearchCtrl = TextEditingController();
 
   int _step = 0;
   bool _loading = false;
@@ -67,6 +71,18 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
   List<Map<String, dynamic>> _taxonomy = const <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _brandOptions = const <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _modelOptions = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _categorySuggestions =
+      const <Map<String, dynamic>>[];
+
+  List<Map<String, dynamic>> _dynamicFields = const <Map<String, dynamic>>[];
+  String _metadataKey = '';
+  String _listingTypeHint = 'declutter';
+  bool _loadingSchema = false;
+  final Map<String, TextEditingController> _metaTextCtrls =
+      <String, TextEditingController>{};
+  final Map<String, String> _metaSelectValues = <String, String>{};
+  final Map<String, bool> _metaBoolValues = <String, bool>{};
+  Map<String, dynamic> _pendingMetadataValues = const <String, dynamic>{};
 
   File? _selectedImage;
   String? _selectedImagePath;
@@ -88,6 +104,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     });
     _attachDraftListeners();
     _titleCtrl.addListener(_onTitleChanged);
+    _categorySearchCtrl.addListener(_onCategorySearchChanged);
     _loadDraft().then((_) async {
       await _loadLocations();
       await _loadTaxonomy();
@@ -102,6 +119,10 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     _cityCtrl.dispose();
     _localityCtrl.dispose();
     _lgaCtrl.dispose();
+    _categorySearchCtrl.dispose();
+    for (final ctrl in _metaTextCtrls.values) {
+      ctrl.dispose();
+    }
     _titleDebounce?.cancel();
     super.dispose();
   }
@@ -138,45 +159,423 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     });
   }
 
-  Future<void> _loadDraft() async {
+  void _onCategorySearchChanged() {
+    final q = _categorySearchCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) {
+      if (!mounted) return;
+      setState(() => _categorySuggestions = const <Map<String, dynamic>>[]);
+      return;
+    }
+    final rows = _taxonomy
+        .where(
+            (row) => (row['name'] ?? '').toString().toLowerCase().contains(q))
+        .take(8)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList(growable: false);
+    if (!mounted) return;
+    setState(() => _categorySuggestions = rows);
+  }
+
+  Map<String, dynamic>? _categoryById(int? categoryId) {
+    if (categoryId == null) return null;
+    for (final row in _taxonomy) {
+      final rowId = int.tryParse('${row['id'] ?? ''}');
+      if (rowId == categoryId) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  void _disposeSchemaControllers() {
+    for (final ctrl in _metaTextCtrls.values) {
+      ctrl.dispose();
+    }
+    _metaTextCtrls.clear();
+    _metaSelectValues.clear();
+    _metaBoolValues.clear();
+  }
+
+  void _applyPendingMetadataValues() {
+    if (_pendingMetadataValues.isEmpty) return;
+    final values = Map<String, dynamic>.from(_pendingMetadataValues);
+    for (final entry in values.entries) {
+      final key = entry.key;
+      final rawValue = entry.value;
+      final textCtrl = _metaTextCtrls[key];
+      if (textCtrl != null) {
+        textCtrl.text = '$rawValue';
+        continue;
+      }
+      if (_metaSelectValues.containsKey(key)) {
+        _metaSelectValues[key] = '$rawValue';
+        continue;
+      }
+      if (_metaBoolValues.containsKey(key)) {
+        _metaBoolValues[key] = rawValue == true ||
+            '$rawValue'.toLowerCase() == 'true' ||
+            '$rawValue' == '1';
+      }
+    }
+    _pendingMetadataValues = const <String, dynamic>{};
+  }
+
+  void _rebuildSchemaControllers(List<Map<String, dynamic>> fields) {
+    _disposeSchemaControllers();
+    for (final field in fields) {
+      final key = (field['key'] ?? '').toString();
+      final type = (field['type'] ?? 'text').toString();
+      if (key.isEmpty) continue;
+      if (type == 'select') {
+        _metaSelectValues[key] = '';
+      } else if (type == 'boolean') {
+        _metaBoolValues[key] = false;
+      } else {
+        _metaTextCtrls[key] = TextEditingController();
+      }
+    }
+  }
+
+  Future<void> _loadDynamicSchema() async {
+    final selectedCategory = _categoryId ?? _parentCategoryId;
+    if (selectedCategory == null) {
+      if (!mounted) return;
+      setState(() {
+        _dynamicFields = const <Map<String, dynamic>>[];
+        _metadataKey = '';
+        _listingTypeHint = 'declutter';
+      });
+      _disposeSchemaControllers();
+      return;
+    }
+
+    final carryValues = _collectMetadataValues();
+    if (_pendingMetadataValues.isEmpty && carryValues.isNotEmpty) {
+      _pendingMetadataValues = carryValues;
+    }
+
+    if (mounted) setState(() => _loadingSchema = true);
+    final payload = await _categorySvc.formSchema(
+      categoryId: selectedCategory,
+      category: _category,
+    );
+    if (!mounted) return;
+    final schema = payload['schema'] is Map
+        ? Map<String, dynamic>.from(payload['schema'] as Map)
+        : const <String, dynamic>{};
+    final fields = (schema['fields'] is List)
+        ? (schema['fields'] as List)
+            .whereType<Map>()
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    _rebuildSchemaControllers(fields);
+    _applyPendingMetadataValues();
+    setState(() {
+      _dynamicFields = fields;
+      _metadataKey = (schema['metadata_key'] ?? '').toString();
+      _listingTypeHint =
+          (schema['listing_type_hint'] ?? 'declutter').toString();
+      _loadingSchema = false;
+    });
+  }
+
+  Future<void> _selectCategoryFromSuggestion(Map<String, dynamic> row) async {
+    final rowId = int.tryParse('${row['id'] ?? ''}');
+    final parentId = int.tryParse('${row['parent_id'] ?? ''}');
+    if (rowId == null) return;
+
+    final oldBucket = _draftBucket();
+    await _saveDraft();
+
+    if (parentId == null) {
+      setState(() {
+        _parentCategoryId = rowId;
+        _categoryId = null;
+        _category = (row['name'] ?? _category).toString();
+        _categorySearchCtrl.text = (row['name'] ?? '').toString();
+        _brandId = null;
+        _modelId = null;
+        _categorySuggestions = const <Map<String, dynamic>>[];
+      });
+    } else {
+      setState(() {
+        _parentCategoryId = parentId;
+        _categoryId = rowId;
+        _category = (row['name'] ?? _category).toString();
+        _categorySearchCtrl.text = (row['name'] ?? '').toString();
+        _brandId = null;
+        _modelId = null;
+        _categorySuggestions = const <Map<String, dynamic>>[];
+      });
+    }
+
+    final newBucket = _draftBucket();
+    if (newBucket != oldBucket) {
+      await _loadDraft(bucket: newBucket);
+    }
+    await _loadBrandModelOptions();
+    await _loadDynamicSchema();
+    await _saveDraft();
+  }
+
+  List<String> _missingRequiredDynamicFields() {
+    final missing = <String>[];
+    for (final field in _dynamicFields) {
+      if (field['required'] != true) continue;
+      final key = (field['key'] ?? '').toString();
+      final label = (field['label'] ?? key).toString();
+      final type = (field['type'] ?? 'text').toString();
+      if (key.isEmpty) continue;
+      if (type == 'select') {
+        final value = (_metaSelectValues[key] ?? '').trim();
+        if (value.isEmpty) {
+          missing.add(label);
+        }
+      } else if (type == 'boolean') {
+        if (!_metaBoolValues.containsKey(key)) {
+          missing.add(label);
+        }
+      } else {
+        final value = (_metaTextCtrls[key]?.text ?? '').trim();
+        if (value.isEmpty) {
+          missing.add(label);
+        }
+      }
+    }
+    return missing;
+  }
+
+  Map<String, dynamic> _buildMetadataPayload() {
+    final payload = <String, dynamic>{};
+    for (final field in _dynamicFields) {
+      final key = (field['key'] ?? '').toString();
+      final type = (field['type'] ?? 'text').toString();
+      if (key.isEmpty) continue;
+      if (type == 'select') {
+        final value = (_metaSelectValues[key] ?? '').trim();
+        if (value.isNotEmpty) {
+          payload[key] = value;
+        }
+        continue;
+      }
+      if (type == 'boolean') {
+        if (_metaBoolValues.containsKey(key)) {
+          payload[key] = _metaBoolValues[key] == true;
+        }
+        continue;
+      }
+      final rawValue = (_metaTextCtrls[key]?.text ?? '').trim();
+      if (rawValue.isEmpty) continue;
+      if (type == 'number') {
+        final asInt = int.tryParse(rawValue);
+        if (asInt != null) {
+          payload[key] = asInt;
+          continue;
+        }
+        final asDouble = double.tryParse(rawValue);
+        if (asDouble != null) {
+          payload[key] = asDouble;
+          continue;
+        }
+      }
+      payload[key] = rawValue;
+    }
+    return payload;
+  }
+
+  bool _isDynamicFieldMissing(Map<String, dynamic> field) {
+    if (field['required'] != true) return false;
+    final key = (field['key'] ?? '').toString();
+    final type = (field['type'] ?? 'text').toString();
+    if (key.isEmpty) return false;
+    if (type == 'select') {
+      return (_metaSelectValues[key] ?? '').trim().isEmpty;
+    }
+    if (type == 'boolean') {
+      return !_metaBoolValues.containsKey(key);
+    }
+    return (_metaTextCtrls[key]?.text ?? '').trim().isEmpty;
+  }
+
+  Widget _buildDynamicField(Map<String, dynamic> field) {
+    final key = (field['key'] ?? '').toString();
+    final label = (field['label'] ?? key).toString();
+    final type = (field['type'] ?? 'text').toString();
+    final options = (field['options'] is List)
+        ? (field['options'] as List)
+            .map((item) => item.toString())
+            .where((item) => item.trim().isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
+    final required = field['required'] == true;
+
+    if (type == 'select') {
+      final selected = (_metaSelectValues[key] ?? '').trim();
+      final selectedOrNull =
+          options.contains(selected) && selected.isNotEmpty ? selected : null;
+      return DropdownButtonFormField<String>(
+        value: selectedOrNull,
+        items: options
+            .map((item) => DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(item),
+                ))
+            .toList(growable: false),
+        onChanged: (value) async {
+          setState(() => _metaSelectValues[key] = (value ?? '').trim());
+          await _saveDraft();
+        },
+        decoration: InputDecoration(
+          labelText: required ? '$label *' : label,
+          border: const OutlineInputBorder(),
+          errorText: _showValidation && _isDynamicFieldMissing(field)
+              ? '$label is required'
+              : null,
+        ),
+      );
+    }
+
+    if (type == 'boolean') {
+      final current = _metaBoolValues[key] == true;
+      return SwitchListTile.adaptive(
+        value: current,
+        onChanged: (value) async {
+          setState(() => _metaBoolValues[key] = value);
+          await _saveDraft();
+        },
+        title: Text(required ? '$label *' : label),
+        contentPadding: EdgeInsets.zero,
+      );
+    }
+
+    final ctrl = _metaTextCtrls[key] ??= TextEditingController();
+    return TextField(
+      controller: ctrl,
+      keyboardType: type == 'number'
+          ? const TextInputType.numberWithOptions(decimal: true)
+          : TextInputType.text,
+      onChanged: (_) => _saveDraft(),
+      decoration: InputDecoration(
+        labelText: required ? '$label *' : label,
+        border: const OutlineInputBorder(),
+        errorText: _showValidation && _isDynamicFieldMissing(field)
+            ? '$label is required'
+            : null,
+      ),
+    );
+  }
+
+  String _draftBucket({int? parentCategoryId}) {
+    final id = parentCategoryId ?? _parentCategoryId ?? 0;
+    return 'group_$id';
+  }
+
+  Map<String, dynamic> _collectMetadataValues() {
+    final out = <String, dynamic>{};
+    for (final entry in _metaTextCtrls.entries) {
+      final value = entry.value.text.trim();
+      if (value.isNotEmpty) {
+        out[entry.key] = value;
+      }
+    }
+    for (final entry in _metaSelectValues.entries) {
+      final value = entry.value.trim();
+      if (value.isNotEmpty) {
+        out[entry.key] = value;
+      }
+    }
+    for (final entry in _metaBoolValues.entries) {
+      out[entry.key] = entry.value;
+    }
+    return out;
+  }
+
+  Future<Map<String, dynamic>> _readDraftStore() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_draftKey);
-    if (raw == null || raw.trim().isEmpty) return;
+    final raw = prefs.getString(_draftsKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return <String, dynamic>{};
+    }
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
-      final draft = Map<String, dynamic>.from(decoded);
-      _titleCtrl.text = (draft['title'] ?? '').toString();
-      _priceCtrl.text = (draft['price'] ?? '').toString();
-      _descCtrl.text = (draft['description'] ?? '').toString();
-      _cityCtrl.text = (draft['city'] ?? '').toString();
-      _localityCtrl.text = (draft['locality'] ?? '').toString();
-      _lgaCtrl.text = (draft['lga'] ?? '').toString();
-      _category = (draft['category'] ?? _category).toString();
-      _parentCategoryId =
-          int.tryParse((draft['parent_category_id'] ?? '').toString());
-      _categoryId = int.tryParse((draft['category_id'] ?? '').toString());
-      _brandId = int.tryParse((draft['brand_id'] ?? '').toString());
-      _modelId = int.tryParse((draft['model_id'] ?? '').toString());
-      _condition = (draft['condition'] ?? _condition).toString();
-      _state = (draft['state'] ?? _state).toString();
-      _inspectionEnabled = draft['inspection_enabled'] == true;
-      _deliveryEnabled = draft['delivery_enabled'] != false;
-      _step = int.tryParse((draft['step'] ?? 0).toString()) ?? 0;
-      _selectedImagePath = (draft['image_path'] ?? '').toString();
-      if (_selectedImagePath != null &&
-          _selectedImagePath!.trim().isNotEmpty &&
-          File(_selectedImagePath!).existsSync()) {
-        _selectedImage = File(_selectedImagePath!);
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
       }
-      if (mounted) setState(() {});
-    } catch (_) {
-      // Ignore invalid draft payload and continue.
+    } catch (_) {}
+    return <String, dynamic>{};
+  }
+
+  Future<void> _loadDraft({String? bucket}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final draftStore = await _readDraftStore();
+    final activeBucket =
+        bucket ?? prefs.getString(_lastDraftBucketKey) ?? _draftBucket();
+    Map<String, dynamic>? draft;
+
+    final picked = draftStore[activeBucket];
+    if (picked is Map) {
+      draft = Map<String, dynamic>.from(picked);
     }
+
+    if (draft == null) {
+      final legacy = prefs.getString(_legacyDraftKey);
+      if (legacy != null && legacy.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(legacy);
+          if (decoded is Map) {
+            draft = Map<String, dynamic>.from(decoded);
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (draft == null) return;
+
+    _titleCtrl.text = (draft['title'] ?? '').toString();
+    _priceCtrl.text = (draft['price'] ?? '').toString();
+    _descCtrl.text = (draft['description'] ?? '').toString();
+    _cityCtrl.text = (draft['city'] ?? '').toString();
+    _localityCtrl.text = (draft['locality'] ?? '').toString();
+    _lgaCtrl.text = (draft['lga'] ?? '').toString();
+    _category = (draft['category'] ?? _category).toString();
+    _parentCategoryId =
+        int.tryParse((draft['parent_category_id'] ?? '').toString());
+    _categoryId = int.tryParse((draft['category_id'] ?? '').toString());
+    _brandId = int.tryParse((draft['brand_id'] ?? '').toString());
+    _modelId = int.tryParse((draft['model_id'] ?? '').toString());
+    _condition = (draft['condition'] ?? _condition).toString();
+    _state = (draft['state'] ?? _state).toString();
+    _inspectionEnabled = draft['inspection_enabled'] == true;
+    _deliveryEnabled = draft['delivery_enabled'] != false;
+    _step = int.tryParse((draft['step'] ?? 0).toString()) ?? 0;
+    _selectedImagePath = (draft['image_path'] ?? '').toString();
+    _listingTypeHint =
+        (draft['listing_type_hint'] ?? _listingTypeHint).toString();
+
+    final metadataRaw = draft['metadata_values'];
+    if (metadataRaw is Map) {
+      _pendingMetadataValues = Map<String, dynamic>.from(metadataRaw);
+    }
+
+    if (_selectedImagePath != null &&
+        _selectedImagePath!.trim().isNotEmpty &&
+        File(_selectedImagePath!).existsSync()) {
+      _selectedImage = File(_selectedImagePath!);
+    }
+
+    if (_categoryId != null) {
+      await prefs.setString(_lastCategoryKey, '$_categoryId');
+    }
+    await prefs.setString(_lastDraftBucketKey, activeBucket);
+    if (mounted) setState(() {});
   }
 
   Future<void> _saveDraft() async {
     final prefs = await SharedPreferences.getInstance();
+    final draftStore = await _readDraftStore();
+    final bucket = _draftBucket();
+
     final payload = <String, dynamic>{
       'step': _step,
       'title': _titleCtrl.text.trim(),
@@ -194,15 +593,26 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       'state': _state,
       'inspection_enabled': _inspectionEnabled,
       'delivery_enabled': _deliveryEnabled,
+      'listing_type_hint': _listingTypeHint,
+      'metadata_values': _collectMetadataValues(),
       'image_path': _selectedImagePath ?? _selectedImage?.path ?? '',
       'updated_at': DateTime.now().toIso8601String(),
     };
-    await prefs.setString(_draftKey, jsonEncode(payload));
+
+    draftStore[bucket] = payload;
+    await prefs.setString(_draftsKey, jsonEncode(draftStore));
+    await prefs.setString(_lastDraftBucketKey, bucket);
+    if (_categoryId != null) {
+      await prefs.setString(_lastCategoryKey, '$_categoryId');
+    }
   }
 
   Future<void> _clearDraft() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_draftKey);
+    final draftStore = await _readDraftStore();
+    draftStore.remove(_draftBucket());
+    await prefs.setString(_draftsKey, jsonEncode(draftStore));
+    await prefs.remove(_legacyDraftKey);
   }
 
   Future<void> _loadLocations() async {
@@ -285,10 +695,35 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
 
   Future<void> _loadTaxonomy() async {
     final tree = await _categorySvc.categoriesTree();
+    final prefs = await SharedPreferences.getInstance();
+    final lastCategoryId =
+        int.tryParse(prefs.getString(_lastCategoryKey) ?? '');
     if (!mounted) return;
     final flat = _flattenCategories(tree);
-    setState(() => _taxonomy = flat);
+    int? nextParent = _parentCategoryId;
+    int? nextCategory = _categoryId;
+    String nextCategoryName = _category;
+
+    if (nextCategory == null && lastCategoryId != null) {
+      for (final row in flat) {
+        final rowId = int.tryParse('${row['id'] ?? ''}');
+        if (rowId == lastCategoryId) {
+          nextCategory = rowId;
+          nextParent = int.tryParse('${row['parent_id'] ?? ''}');
+          nextCategoryName = (row['name'] ?? _category).toString();
+          break;
+        }
+      }
+    }
+
+    setState(() {
+      _taxonomy = flat;
+      _parentCategoryId = nextParent;
+      _categoryId = nextCategory;
+      _category = nextCategoryName;
+    });
     await _loadBrandModelOptions();
+    await _loadDynamicSchema();
   }
 
   Future<void> _loadBrandModelOptions() async {
@@ -366,6 +801,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       case 1:
         final title = _titleCtrl.text.trim();
         final price = double.tryParse(_priceCtrl.text.trim()) ?? 0;
+        final missingDynamic = _missingRequiredDynamicFields();
         if (title.isEmpty) {
           _showSnack('Listing title is required.');
           setState(() => _showValidation = true);
@@ -373,6 +809,11 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         }
         if (price <= 0) {
           _showSnack('Enter a valid price.');
+          setState(() => _showValidation = true);
+          return false;
+        }
+        if (missingDynamic.isNotEmpty) {
+          _showSnack('Complete required category fields.');
           setState(() => _showValidation = true);
           return false;
         }
@@ -398,7 +839,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         return _categoryId != null || _category.trim().isNotEmpty;
       case 1:
         return _titleCtrl.text.trim().isNotEmpty &&
-            (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0;
+            (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0 &&
+            _missingRequiredDynamicFields().isEmpty;
       case 2:
         return _selectedImage != null;
       case 3:
@@ -406,7 +848,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       case 4:
         return _titleCtrl.text.trim().isNotEmpty &&
             (double.tryParse(_priceCtrl.text.trim()) ?? 0) > 0 &&
-            _selectedImage != null;
+            _selectedImage != null &&
+            _missingRequiredDynamicFields().isEmpty;
       default:
         return false;
     }
@@ -440,7 +883,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       );
       if (!mounted) return;
       if (payload['ok'] != true) {
-        _showSnack((payload['message'] ?? 'Could not fetch suggestion').toString());
+        _showSnack(
+            (payload['message'] ?? 'Could not fetch suggestion').toString());
         return;
       }
       final suggestedMinor =
@@ -483,13 +927,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                   const SizedBox(height: 4),
                   Text('Confidence: ${(payload['confidence'] ?? 'low')}'),
                   const SizedBox(height: 10),
-                  ...explanation
-                      .map(
-                        (line) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text('• $line'),
-                        ),
-                      ),
+                  ...explanation.map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text('• $line'),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -597,6 +1040,16 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       return;
     }
 
+    final metadataPayload = _buildMetadataPayload();
+    Map<String, dynamic>? vehicleMetadata;
+    Map<String, dynamic>? energyMetadata;
+    if (_metadataKey == 'vehicle_metadata' && metadataPayload.isNotEmpty) {
+      vehicleMetadata = metadataPayload;
+    }
+    if (_metadataKey == 'energy_metadata' && metadataPayload.isNotEmpty) {
+      energyMetadata = metadataPayload;
+    }
+
     setState(() => _loading = true);
     final res = await _listingService.createListing(
       title: title,
@@ -611,6 +1064,9 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
         if (_lgaCtrl.text.trim().isNotEmpty) 'LGA: ${_lgaCtrl.text.trim()}',
       ].where((line) => line.trim().isNotEmpty).join('\n'),
       price: price,
+      listingType: _listingTypeHint,
+      vehicleMetadata: vehicleMetadata,
+      energyMetadata: energyMetadata,
       category: _category,
       categoryId: _categoryId,
       brandId: _brandId,
@@ -618,6 +1074,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
       state: _state,
       city: _cityCtrl.text.trim(),
       locality: _localityCtrl.text.trim(),
+      deliveryAvailable: _deliveryEnabled,
+      inspectionRequired: _inspectionEnabled,
       imagePath: _selectedImage!.path,
     );
 
@@ -629,8 +1087,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     final msg = (res['message'] ?? res['error'] ?? 'Failed to publish listing')
         .toString();
 
-    if (!ok && ApiService.isEmailNotVerified(res)) {
-      await showEmailVerificationRequiredDialog(
+    if (!ok && ApiService.isPhoneNotVerified(res)) {
+      await showPhoneVerificationRequiredDialog(
         context,
         message: msg,
         onRetry: _submitListing,
@@ -692,6 +1150,7 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       _cityCtrl.clear();
                       _localityCtrl.clear();
                       _lgaCtrl.clear();
+                      _categorySearchCtrl.clear();
                       _selectedImage = null;
                       _selectedImagePath = null;
                       _category = 'General';
@@ -702,7 +1161,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                       _condition = 'Used - Good';
                       _inspectionEnabled = true;
                       _deliveryEnabled = true;
+                      _dynamicFields = const <Map<String, dynamic>>[];
+                      _metadataKey = '';
+                      _listingTypeHint = 'declutter';
+                      _pendingMetadataValues = const <String, dynamic>{};
                     });
+                    _disposeSchemaControllers();
                   },
             child: const Text('Clear draft'),
           ),
@@ -766,6 +1230,33 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_topCategories().isNotEmpty) ...[
+                  TextField(
+                    controller: _categorySearchCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Search category',
+                      hintText: 'Cars, Inverters, Solar Bundle...',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  if (_categorySuggestions.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _categorySuggestions.map((row) {
+                          final label = (row['name'] ?? '').toString();
+                          return ActionChip(
+                            label: Text(label),
+                            onPressed: () => _selectCategoryFromSuggestion(row),
+                          );
+                        }).toList(growable: false),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
                     initialValue: _parentCategoryId,
                     items: _topCategories()
@@ -777,13 +1268,24 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         )
                         .toList(growable: false),
                     onChanged: (value) async {
+                      final oldBucket = _draftBucket();
+                      await _saveDraft();
                       setState(() {
                         _parentCategoryId = value;
                         _categoryId = null;
                         _brandId = null;
                         _modelId = null;
+                        final row = _categoryById(value);
+                        if (row != null) {
+                          _category = (row['name'] ?? _category).toString();
+                        }
                       });
+                      final newBucket = _draftBucket();
+                      if (newBucket != oldBucket) {
+                        await _loadDraft(bucket: newBucket);
+                      }
                       await _loadBrandModelOptions();
+                      await _loadDynamicSchema();
                       await _saveDraft();
                     },
                     decoration: const InputDecoration(
@@ -804,6 +1306,8 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         .toList(growable: false),
                     onChanged: (value) async {
                       if (value == null) return;
+                      final oldBucket = _draftBucket();
+                      await _saveDraft();
                       final row = _leafCategoriesForParent(_parentCategoryId)
                           .firstWhere(
                         (entry) => int.tryParse('${entry['id']}') == value,
@@ -815,7 +1319,12 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                         _brandId = null;
                         _modelId = null;
                       });
+                      final newBucket = _draftBucket();
+                      if (newBucket != oldBucket) {
+                        await _loadDraft(bucket: newBucket);
+                      }
                       await _loadBrandModelOptions();
+                      await _loadDynamicSchema();
                       await _saveDraft();
                     },
                     decoration: const InputDecoration(
@@ -870,21 +1379,18 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 ] else
                   DropdownButtonFormField<String>(
                     initialValue: _category,
-                    items: const [
-                      'General',
-                      'Electronics',
-                      'Phones',
-                      'Furniture',
-                      'Fashion',
-                      'Home',
-                      'Sports',
-                    ]
+                    items: const ['General']
                         .map((item) =>
                             DropdownMenuItem(value: item, child: Text(item)))
                         .toList(),
                     onChanged: (value) async {
                       if (value == null) return;
-                      setState(() => _category = value);
+                      setState(() {
+                        _category = value;
+                        _parentCategoryId = null;
+                        _categoryId = null;
+                      });
+                      await _loadDynamicSchema();
                       await _saveDraft();
                     },
                     decoration: const InputDecoration(
@@ -1055,6 +1561,31 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                if (_loadingSchema) ...[
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(minHeight: 2),
+                ],
+                if (_dynamicFields.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _metadataKey == 'vehicle_metadata'
+                          ? 'Vehicle details'
+                          : _metadataKey == 'energy_metadata'
+                              ? 'Power & energy details'
+                              : 'Category details',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ..._dynamicFields.map((field) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildDynamicField(field),
+                    );
+                  }).toList(growable: false),
+                ],
               ],
             ),
           ),
@@ -1198,12 +1729,27 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                     const Divider(height: 18),
                     Text('Category: $_category'),
                     Text('Condition: $_condition'),
+                    if (_listingTypeHint.trim().isNotEmpty &&
+                        _listingTypeHint != 'declutter')
+                      Text('Listing type: $_listingTypeHint'),
                     Text(
                         'Location: ${_cityCtrl.text.trim()}, ${displayState(_state)}'),
                     Text(
                         'Delivery: ${_deliveryEnabled ? 'Enabled' : 'Disabled'}'),
                     Text(
                         'Inspection: ${_inspectionEnabled ? 'Enabled' : 'Disabled'}'),
+                    if (_dynamicFields.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Category details',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      ..._buildMetadataPayload()
+                          .entries
+                          .take(6)
+                          .map((entry) => Text('${entry.key}: ${entry.value}'))
+                          .toList(growable: false),
+                    ],
                     const SizedBox(height: 10),
                     const Text(
                       'Publishing will submit your listing for marketplace visibility. Draft remains saved until publish succeeds.',
@@ -1218,4 +1764,3 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
     );
   }
 }
-

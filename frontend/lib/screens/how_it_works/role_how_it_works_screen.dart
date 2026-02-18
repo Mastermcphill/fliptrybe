@@ -116,7 +116,7 @@ class RoleHowItWorksScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Standard withdrawal fee: 0%.'),
-            Text('Email verification required.'),
+            Text('Phone verification required.'),
             Text('KYC may be required by endpoint policy.'),
           ],
         ),

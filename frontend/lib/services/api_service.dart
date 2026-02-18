@@ -139,20 +139,22 @@ class ApiService {
     return null;
   }
 
-  static bool isEmailNotVerified(dynamic data) {
+  static bool isPhoneNotVerified(dynamic data) {
     if (data is Map) {
       final err = (data['error'] ?? '').toString().toLowerCase();
-      if (err == 'email_not_verified') return true;
+      if (err == 'phone_not_verified') return true;
       final msg = (data['message'] ?? '').toString().toLowerCase();
-      if (msg.contains('verify your email') ||
-          msg.contains('email verification required')) {
+      if (msg.contains('verify your phone') ||
+          msg.contains('phone verification required') ||
+          msg.contains('phone must be verified')) {
         return true;
       }
     }
     if (data is String) {
       final msg = data.toLowerCase();
-      if (msg.contains('verify your email') ||
-          msg.contains('email verification required')) {
+      if (msg.contains('verify your phone') ||
+          msg.contains('phone verification required') ||
+          msg.contains('phone must be verified')) {
         return true;
       }
     }
@@ -389,29 +391,8 @@ class ApiService {
   }
 
   // ---------------------------
-  // EMAIL VERIFICATION + PASSWORD RESET
+  // PASSWORD RESET
   // ---------------------------
-
-  static Future<Map<String, dynamic>> verifySend() async {
-    final url = ApiConfig.api('/auth/verify-email/resend');
-    final res = await _client.dio.post(url, data: {});
-    return _asMap(res.data);
-  }
-
-  static Future<Map<String, dynamic>> verifyConfirm({
-    required String token,
-  }) async {
-    final url = ApiConfig.api('/auth/verify-email');
-    final res =
-        await _client.dio.get(url, queryParameters: {'token': token.trim()});
-    return _asMap(res.data);
-  }
-
-  static Future<Map<String, dynamic>> verifyStatus() async {
-    final url = ApiConfig.api('/auth/verify-email/status');
-    final res = await _client.dio.get(url);
-    return _asMap(res.data);
-  }
 
   static Future<Map<String, dynamic>> passwordForgot(String email) async {
     final url = ApiConfig.api('/auth/password/forgot');

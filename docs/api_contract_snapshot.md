@@ -15,6 +15,53 @@ This document has two parts:
 - Entity list envelope: `ok, items` (some legacy routes return raw arrays)
 - Action result envelope: `ok` + route-specific keys (`message`, `id`, `status`, etc.)
 
+## Vertical Expansion Additions (2026-02-18)
+- Category taxonomy:
+  - `GET /api/public/categories` now includes `category_groups` with vertical groups:
+    - `Vehicles`
+    - `Power & Energy`
+  - `GET /api/public/categories/form-schema?category_id=<id>` returns dynamic form schema:
+    - `schema.metadata_key` in `vehicle_metadata | energy_metadata | ""`
+    - `schema.listing_type_hint` in `vehicle | energy | declutter`
+    - `schema.fields[]` with `key, label, type, required, options`
+  - `GET /api/public/category-groups` returns vertical groups only.
+- Listings search:
+  - `GET /api/listings/search` added as unified search route.
+  - `GET /api/public/listings/search` and `GET /api/admin/listings/search` support additional filters:
+    - `listing_type`
+    - `make`
+    - `model`
+    - `year`
+    - `battery_type`
+    - `inverter_capacity`
+    - `lithium_only`
+- Listing payload additions:
+  - `listing_type`
+  - `vehicle_metadata`
+  - `energy_metadata`
+  - `vehicle_make`, `vehicle_model`, `vehicle_year`
+  - `battery_type`, `inverter_capacity`, `lithium_only`, `bundle_badge`
+  - `delivery_available`, `inspection_required`
+  - `location_verified`, `inspection_request_enabled`, `financing_option`
+  - `approval_status`, `inspection_flagged`
+- Admin listing controls:
+  - `POST /api/admin/listings/:id/approve` with `{approved|status}`.
+  - `POST /api/admin/listings/:id/inspection-flag` with `{flagged}`.
+- Merchant profile photo:
+  - `POST /api/me/profile/photo` now supports both:
+    - JSON URL payload (`profile_image_url`) for backward compatibility.
+    - Multipart upload payload (`image`) for upload-widget flow.
+
+## Identity Gate Update (2026-02-18)
+- Email verification gate removed end-to-end.
+- Auth routes removed:
+  - `GET /api/auth/verify-email`
+  - `POST /api/auth/verify-email/resend`
+  - `GET /api/auth/verify-email/status`
+- Protected sell/payout/moneybox/order actions now use phone verification gate:
+  - Error code: `PHONE_NOT_VERIFIED`
+  - Legacy `EMAIL_NOT_VERIFIED` is no longer returned.
+
 ## Frontend Endpoint Inventory
 
 | Method | Path Template | Request Keys | Response Keys | Frontend Source |

@@ -29,7 +29,9 @@ class RoleGates {
         (user?['role_status'] ?? user?['role_request_status'] ?? 'approved')
             .toString()
             .toLowerCase();
-    return (role == 'merchant' || role == 'admin') && status == 'approved';
+    return (role == 'merchant' || role == 'admin') &&
+        status == 'approved' &&
+        !requiresPhoneVerified(user);
   }
 
   static bool canWithdraw(Map<String, dynamic>? user) {
@@ -39,12 +41,12 @@ class RoleGates {
         role == 'inspector' ||
         role == 'admin';
     if (!hasMoneyRole) return false;
-    if (requiresEmailVerified(user)) return false;
+    if (requiresPhoneVerified(user)) return false;
     if (requiresKycTier(user)) return false;
     return true;
   }
 
-  static bool requiresEmailVerified(Map<String, dynamic>? user) {
+  static bool requiresPhoneVerified(Map<String, dynamic>? user) {
     final value = user?['is_verified'];
     return value != true;
   }
@@ -63,6 +65,13 @@ class RoleGates {
         title: 'Sign in required',
         message: 'Create an account to post listings in Marketplace.',
         primaryCta: 'Log in',
+      );
+    }
+    if (requiresPhoneVerified(user)) {
+      return const RoleGateBlock(
+        title: 'Phone verification required',
+        message: 'Verify your phone before posting listings.',
+        primaryCta: 'Verify phone',
       );
     }
     if (!canPostListing(user)) {
@@ -84,11 +93,11 @@ class RoleGates {
         primaryCta: 'Log in',
       );
     }
-    if (requiresEmailVerified(user)) {
+    if (requiresPhoneVerified(user)) {
       return const RoleGateBlock(
-        title: 'Email verification required',
-        message: 'Verify your email before requesting withdrawals.',
-        primaryCta: 'Verify email',
+        title: 'Phone verification required',
+        message: 'Verify your phone before requesting withdrawals.',
+        primaryCta: 'Verify phone',
       );
     }
     if (requiresKycTier(user)) {

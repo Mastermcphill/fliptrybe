@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/moneybox_service.dart';
 import '../services/api_service.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 import 'kyc_demo_screen.dart';
 
 class MoneyBoxAutosaveScreen extends StatefulWidget {
@@ -27,9 +27,9 @@ class _MoneyBoxAutosaveScreenState extends State<MoneyBoxAutosaveScreen> {
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
-      if (ApiService.isEmailNotVerified(res) ||
-          ApiService.isEmailNotVerified(showMsg)) {
-        await showEmailVerificationRequiredDialog(
+      if (ApiService.isPhoneNotVerified(res) ||
+          ApiService.isPhoneNotVerified(showMsg)) {
+        await showPhoneVerificationRequiredDialog(
           context,
           message: showMsg,
           onRetry: _save,

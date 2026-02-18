@@ -76,7 +76,7 @@ def _role(u: User | None) -> str:
     return (getattr(u, "role", None) or "buyer").strip().lower()
 
 
-def _is_email_verified(u: User | None) -> bool:
+def _is_phone_verified(u: User | None) -> bool:
     if not u:
         return False
     return bool(getattr(u, "is_verified", False))
@@ -150,8 +150,8 @@ def request_payout():
     u = _current_user()
     if not u:
         return jsonify({"message": "Unauthorized"}), 401
-    if not _is_email_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
     fraud_guard = should_block_withdrawal(int(u.id))
     if bool(fraud_guard.get("blocked")):
         return jsonify(

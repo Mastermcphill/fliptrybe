@@ -10,7 +10,6 @@ import '../ui/components/ft_components.dart';
 import '../utils/auth_navigation.dart';
 import '../utils/formatters.dart';
 import '../utils/ui_feedback.dart';
-import 'email_verify_screen.dart';
 import 'following_merchants_screen.dart';
 import 'investor_metrics_screen.dart';
 import 'invite_earn_screen.dart';
@@ -185,8 +184,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 6),
                   Text(
                     isVerified
-                        ? 'Email verified'
-                        : 'Verify your email to unlock full payouts.',
+                        ? 'Phone verified'
+                        : 'Verify your phone to unlock protected actions.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: isVerified
                               ? Theme.of(context).colorScheme.primary
@@ -356,16 +355,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 children: [
                   FTListTile(
-                    leading: const Icon(Icons.mark_email_read_outlined),
-                    title: 'Verify email',
-                    subtitle: 'Confirm your email to unlock sensitive actions.',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => EmailVerifyScreen(
-                          initialEmail: _profile?['email']?.toString(),
-                        ),
-                      ),
-                    ),
+                    leading: const Icon(Icons.phonelink_lock_outlined),
+                    title: 'Phone verification',
+                    subtitle: isVerified
+                        ? 'Your phone is verified.'
+                        : 'Complete OTP verification to unlock protected actions.',
+                    onTap: null,
                   ),
                   FTListTile(
                     leading: const Icon(Icons.verified_user_outlined),

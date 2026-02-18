@@ -8,7 +8,7 @@ import '../utils/formatters.dart';
 import '../utils/ft_routes.dart';
 import '../utils/role_gates.dart';
 import '../utils/ui_feedback.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 import 'kyc_demo_screen.dart';
 import 'money_action_receipt_screen.dart';
 
@@ -92,9 +92,9 @@ class _MoneyBoxWithdrawScreenState extends State<MoneyBoxWithdrawScreen> {
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
-      if (ApiService.isEmailNotVerified(res) ||
-          ApiService.isEmailNotVerified(showMsg)) {
-        await showEmailVerificationRequiredDialog(
+      if (ApiService.isPhoneNotVerified(res) ||
+          ApiService.isPhoneNotVerified(showMsg)) {
+        await showPhoneVerificationRequiredDialog(
           context,
           message: showMsg,
           onRetry: _withdrawAll,

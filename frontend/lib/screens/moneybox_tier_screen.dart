@@ -5,7 +5,7 @@ import '../services/analytics_hooks.dart';
 import '../services/moneybox_service.dart';
 import '../ui/components/ft_components.dart';
 import '../utils/ft_routes.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 import 'kyc_demo_screen.dart';
 
 class MoneyBoxTierScreen extends StatefulWidget {
@@ -82,9 +82,9 @@ class _MoneyBoxTierScreenState extends State<MoneyBoxTierScreen> {
     final msg = (res['message'] ?? res['error'] ?? '').toString();
     if (!ok) {
       final showMsg = msg.isNotEmpty ? msg : 'Request failed';
-      if (ApiService.isEmailNotVerified(res) ||
-          ApiService.isEmailNotVerified(showMsg)) {
-        await showEmailVerificationRequiredDialog(
+      if (ApiService.isPhoneNotVerified(res) ||
+          ApiService.isPhoneNotVerified(showMsg)) {
+        await showPhoneVerificationRequiredDialog(
           context,
           message: showMsg,
           onRetry: () => _open(tier),

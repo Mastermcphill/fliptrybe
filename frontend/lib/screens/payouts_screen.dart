@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/wallet_service.dart';
 import '../services/bank_store.dart';
 import '../services/api_service.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 
 class PayoutsScreen extends StatefulWidget {
   const PayoutsScreen({super.key});
@@ -77,9 +77,9 @@ class _PayoutsScreenState extends State<PayoutsScreen> {
             (ok ? 'Payout requested' : 'Request failed'))
         .toString();
     if (!ok &&
-        (ApiService.isEmailNotVerified(res) ||
-            ApiService.isEmailNotVerified(msg))) {
-      await showEmailVerificationRequiredDialog(
+        (ApiService.isPhoneNotVerified(res) ||
+            ApiService.isPhoneNotVerified(msg))) {
+      await showPhoneVerificationRequiredDialog(
         context,
         message: msg,
         onRetry: _request,

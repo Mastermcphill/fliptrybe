@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from datetime import datetime
 
 from sqlalchemy import text, or_
@@ -25,6 +26,12 @@ from app.utils.listing_caps import enforce_listing_cap
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.services.search_v2_service import search_listings_v2
+from app.services.listing_metadata_schema import (
+    CATEGORY_GROUPS,
+    slugify,
+    schema_for_category,
+    validate_category_metadata,
+)
 from app.utils.rate_limit import check_limit
 from app.services.risk_engine_service import record_event
 from app.services.image_dedupe_service import ensure_image_unique, DuplicateImageError
@@ -231,6 +238,13 @@ def _search_args():
         "parent_category_id": _to_int(request.args.get("parent_category_id")),
         "brand_id": _to_int(request.args.get("brand_id")),
         "model_id": _to_int(request.args.get("model_id")),
+        "listing_type": (request.args.get("listing_type") or "").strip().lower(),
+        "make": (request.args.get("make") or "").strip(),
+        "model": (request.args.get("model") or "").strip(),
+        "year": _to_int(request.args.get("year")),
+        "battery_type": (request.args.get("battery_type") or "").strip(),
+        "inverter_capacity": (request.args.get("inverter_capacity") or "").strip(),
+        "lithium_only": _to_bool(request.args.get("lithium_only")),
         "state": state,
         "condition": condition,
         "status": status,
@@ -289,6 +303,223 @@ def _maybe_int(value):
         return None
 
 
+def _maybe_bool(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return int(value) == 1
+    text_value = str(value).strip().lower()
+    if text_value in ("1", "true", "yes", "y", "on"):
+        return True
+    if text_value in ("0", "false", "no", "n", "off"):
+        return False
+    return None
+
+
+def _parse_json_map(raw_value) -> dict:
+    if isinstance(raw_value, dict):
+        return dict(raw_value)
+    text_value = str(raw_value or "").strip()
+    if not text_value:
+        return {}
+    try:
+        parsed = json.loads(text_value)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        return {}
+    return {}
+
+
+def _category_rows_by_id() -> dict[int, dict]:
+    try:
+        rows = Category.query.with_entities(Category.id, Category.name, Category.slug, Category.parent_id).all()
+    except Exception:
+        return {}
+    out: dict[int, dict] = {}
+    for row_id, name, slug, parent_id in rows:
+        if row_id is None:
+            continue
+        out[int(row_id)] = {
+            "id": int(row_id),
+            "name": str(name or ""),
+            "slug": str(slug or ""),
+            "parent_id": int(parent_id) if parent_id is not None else None,
+        }
+    return out
+
+
+def _category_group_slug_from_leaf_slug(category_slug: str) -> str:
+    slug = slugify(category_slug)
+    for group in CATEGORY_GROUPS:
+        gslug = slugify(group.get("slug") or "")
+        if not gslug:
+            continue
+        if slug == gslug:
+            return gslug
+        for sub in group.get("subcategories") or []:
+            if slugify(sub.get("slug") or "") == slug:
+                return gslug
+    return ""
+
+
+def _resolve_category_context(*, category_id: int | None, category_name: str = "") -> dict:
+    rows_by_id = _category_rows_by_id()
+    category_row = rows_by_id.get(int(category_id)) if category_id is not None else None
+
+    root_row = category_row
+    if category_row is not None:
+        seen: set[int] = set()
+        while root_row is not None and root_row.get("parent_id") is not None:
+            parent_id = int(root_row["parent_id"])
+            if parent_id in seen:
+                break
+            seen.add(parent_id)
+            root_row = rows_by_id.get(parent_id)
+
+    category_slug = ""
+    if category_row is not None:
+        category_slug = slugify(category_row.get("slug") or category_row.get("name") or "")
+    if not category_slug:
+        category_slug = slugify(category_name)
+
+    group_slug = ""
+    if root_row is not None:
+        group_slug = slugify(root_row.get("slug") or root_row.get("name") or "")
+    if not group_slug:
+        group_slug = _category_group_slug_from_leaf_slug(category_slug)
+
+    return {
+        "category_id": int(category_row["id"]) if category_row is not None else category_id,
+        "category_name": str(category_row.get("name") or category_name or "") if category_row is not None else str(category_name or ""),
+        "category_slug": category_slug,
+        "group_id": int(root_row["id"]) if root_row is not None else None,
+        "group_name": str(root_row.get("name") or "") if root_row is not None else "",
+        "group_slug": group_slug,
+    }
+
+
+def _category_schema_payload(*, category_id: int | None, category_name: str = "") -> dict:
+    context = _resolve_category_context(category_id=category_id, category_name=category_name)
+    schema = schema_for_category(
+        group_slug=str(context.get("group_slug") or ""),
+        category_slug=str(context.get("category_slug") or ""),
+    )
+    return {
+        "ok": True,
+        "category": {
+            "id": context.get("category_id"),
+            "name": context.get("category_name") or "",
+            "slug": context.get("category_slug") or "",
+        },
+        "category_group": {
+            "id": context.get("group_id"),
+            "name": context.get("group_name") or "",
+            "slug": context.get("group_slug") or "",
+        },
+        "schema": schema,
+    }
+
+
+def _normalize_approval_status(raw_value, *, fallback: str = "approved") -> str:
+    value = str(raw_value or "").strip().lower()
+    if value in ("approved", "pending", "rejected"):
+        return value
+    return fallback
+
+
+def _apply_vertical_metadata_to_listing(
+    listing: Listing,
+    *,
+    category_id: int | None,
+    category_name: str = "",
+    listing_type_raw: str = "",
+    vehicle_payload: dict | None = None,
+    energy_payload: dict | None = None,
+    delivery_available_raw=None,
+    inspection_required_raw=None,
+    is_admin: bool = False,
+    approval_status_raw: str = "",
+) -> tuple[bool, dict | None]:
+    context = _resolve_category_context(category_id=category_id, category_name=category_name)
+    group_slug = str(context.get("group_slug") or "")
+    category_slug = str(context.get("category_slug") or "")
+
+    schema = schema_for_category(group_slug=group_slug, category_slug=category_slug)
+    metadata_key = str(schema.get("metadata_key") or "")
+    metadata_payload: dict = {}
+    if metadata_key == "vehicle_metadata":
+        metadata_payload = dict(vehicle_payload or {})
+    elif metadata_key == "energy_metadata":
+        metadata_payload = dict(energy_payload or {})
+
+    validated = validate_category_metadata(
+        group_slug=group_slug,
+        category_slug=category_slug,
+        payload=metadata_payload,
+    )
+    if not validated.get("ok"):
+        return (
+            False,
+            {
+                "ok": False,
+                "error": "VALIDATION_FAILED",
+                "message": "Listing metadata validation failed",
+                "details": validated.get("errors") or [],
+            },
+        )
+
+    listing_type_input = str(listing_type_raw or "").strip().lower()
+    listing_type_hint = str(validated.get("listing_type_hint") or "declutter").strip().lower()
+    if listing_type_hint in ("vehicle", "energy"):
+        final_listing_type = listing_type_hint
+    elif listing_type_input:
+        final_listing_type = listing_type_input
+    else:
+        final_listing_type = "declutter"
+
+    vehicle_metadata = validated.get("vehicle_metadata") or {}
+    energy_metadata = validated.get("energy_metadata") or {}
+    derived = validated.get("derived") or {}
+
+    listing.listing_type = final_listing_type
+    listing.vehicle_metadata = json.dumps(vehicle_metadata, separators=(",", ":")) if vehicle_metadata else None
+    listing.energy_metadata = json.dumps(energy_metadata, separators=(",", ":")) if energy_metadata else None
+
+    listing.vehicle_make = str(derived.get("vehicle_make") or "").strip() or None
+    listing.vehicle_model = str(derived.get("vehicle_model") or "").strip() or None
+    listing.vehicle_year = _maybe_int(derived.get("vehicle_year"))
+    listing.battery_type = str(derived.get("battery_type") or "").strip() or None
+    listing.inverter_capacity = str(derived.get("inverter_capacity") or "").strip() or None
+    listing.lithium_only = bool(derived.get("lithium_only", False))
+    listing.bundle_badge = bool(derived.get("bundle_badge", False))
+    listing.location_verified = bool(derived.get("location_verified", False))
+    listing.inspection_request_enabled = bool(derived.get("inspection_request_enabled", False))
+    listing.financing_option = bool(derived.get("financing_option", False))
+
+    delivery_available = _maybe_bool(delivery_available_raw)
+    if delivery_available is None:
+        delivery_available = _maybe_bool(derived.get("delivery_available"))
+    if delivery_available is not None:
+        listing.delivery_available = bool(delivery_available)
+
+    inspection_required = _maybe_bool(inspection_required_raw)
+    if inspection_required is None:
+        inspection_required = _maybe_bool(derived.get("inspection_required"))
+    if inspection_required is not None:
+        listing.inspection_required = bool(inspection_required)
+
+    if final_listing_type == "vehicle":
+        default_status = "approved" if is_admin else "pending"
+        listing.approval_status = _normalize_approval_status(approval_status_raw, fallback=default_status)
+    else:
+        listing.approval_status = _normalize_approval_status(approval_status_raw, fallback="approved")
+
+    return True, None
+
+
 def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_reason=None) -> dict:
     row = dict(raw or {})
     image_path = str(row.get("image_path") or "").strip()
@@ -312,10 +543,27 @@ def _listing_item_from_raw(raw: dict | None, *, ranking_score: int = 0, ranking_
         "category_id": _maybe_int(row.get("category_id")),
         "brand_id": _maybe_int(row.get("brand_id")),
         "model_id": _maybe_int(row.get("model_id")),
+        "listing_type": str(row.get("listing_type") or "declutter"),
         "state": str(row.get("state") or ""),
         "city": str(row.get("city") or ""),
         "locality": str(row.get("locality") or ""),
         "condition": str(row.get("condition") or ""),
+        "vehicle_metadata": row.get("vehicle_metadata") if isinstance(row.get("vehicle_metadata"), dict) else _parse_json_map(row.get("vehicle_metadata")),
+        "energy_metadata": row.get("energy_metadata") if isinstance(row.get("energy_metadata"), dict) else _parse_json_map(row.get("energy_metadata")),
+        "vehicle_make": str(row.get("vehicle_make") or ""),
+        "vehicle_model": str(row.get("vehicle_model") or ""),
+        "vehicle_year": _maybe_int(row.get("vehicle_year")),
+        "battery_type": str(row.get("battery_type") or ""),
+        "inverter_capacity": str(row.get("inverter_capacity") or ""),
+        "lithium_only": bool(_maybe_bool(row.get("lithium_only"))),
+        "bundle_badge": bool(_maybe_bool(row.get("bundle_badge"))),
+        "delivery_available": bool(_maybe_bool(row.get("delivery_available"))),
+        "inspection_required": bool(_maybe_bool(row.get("inspection_required"))),
+        "financing_option": bool(_maybe_bool(row.get("financing_option"))),
+        "location_verified": bool(_maybe_bool(row.get("location_verified"))),
+        "inspection_request_enabled": bool(_maybe_bool(row.get("inspection_request_enabled"))),
+        "approval_status": str(row.get("approval_status") or ""),
+        "inspection_flagged": bool(_maybe_bool(row.get("inspection_flagged"))),
         "image": image,
         "image_path": image_path,
         "image_filename": str(row.get("image_filename") or ""),
@@ -365,6 +613,13 @@ def _normalize_search_payload(
         "supported_filters": {
             "delivery_available": bool(supported.get("delivery_available", False)),
             "inspection_required": bool(supported.get("inspection_required", False)),
+            "listing_type": bool(supported.get("listing_type", False)),
+            "make": bool(supported.get("make", False)),
+            "model": bool(supported.get("model", False)),
+            "year": bool(supported.get("year", False)),
+            "battery_type": bool(supported.get("battery_type", False)),
+            "inverter_capacity": bool(supported.get("inverter_capacity", False)),
+            "lithium_only": bool(supported.get("lithium_only", False)),
         },
     }
 
@@ -395,7 +650,7 @@ def _rate_limit_response(action: str, *, user: User | None, limit: int, window_s
     return jsonify({"ok": False, "error": "RATE_LIMITED", "message": "Too many listing actions. Retry later.", "retry_after": retry_after}), 429
 
 
-def _is_email_verified(u: User | None) -> bool:
+def _is_phone_verified(u: User | None) -> bool:
     if not u:
         return False
     return bool(getattr(u, "is_verified", False))
@@ -548,13 +803,34 @@ def _category_tree_payload() -> list[dict]:
 def public_categories():
     try:
         items = _category_tree_payload()
-        return jsonify({"ok": True, "items": items}), 200
+        return jsonify({"ok": True, "items": items, "category_groups": CATEGORY_GROUPS}), 200
     except Exception as exc:
         try:
             db.session.rollback()
         except Exception:
             pass
         return jsonify({"ok": False, "error": "CATEGORIES_READ_FAILED", "message": str(exc), "items": []}), 500
+
+
+@market_bp.get("/public/categories/form-schema")
+def public_category_form_schema():
+    category_id = _maybe_int(request.args.get("category_id"))
+    category = (request.args.get("category") or "").strip()
+    try:
+        payload = _category_schema_payload(category_id=category_id, category_name=category)
+        payload["category_groups"] = CATEGORY_GROUPS
+        return jsonify(payload), 200
+    except Exception as exc:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "CATEGORY_SCHEMA_READ_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.get("/public/category-groups")
+def public_category_groups():
+    return jsonify({"ok": True, "items": CATEGORY_GROUPS}), 200
 
 
 @market_bp.get("/public/filters")
@@ -657,6 +933,13 @@ def public_listings_search():
             parent_category_id=args["parent_category_id"],
             brand_id=args["brand_id"],
             model_id=args["model_id"],
+            listing_type=args["listing_type"],
+            make=args["make"],
+            model=args["model"],
+            year=args["year"],
+            battery_type=args["battery_type"],
+            inverter_capacity=args["inverter_capacity"],
+            lithium_only=args["lithium_only"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -702,6 +985,73 @@ def public_listings_search():
         return jsonify(payload), 200
 
 
+@market_bp.get("/listings/search")
+def listings_search():
+    args = _search_args()
+    u = _current_user()
+    pref_city = (request.args.get("city") or "").strip()
+    pref_state = (request.args.get("state") or "").strip()
+    if not pref_city and not pref_state:
+        user_city, user_state = _user_preferences(u)
+        pref_city = user_city or pref_city
+        pref_state = user_state or pref_state
+    include_inactive = _is_admin(u)
+    try:
+        raw_payload = search_listings_v2(
+            q=args["q"],
+            category=args["category"],
+            category_id=args["category_id"],
+            parent_category_id=args["parent_category_id"],
+            brand_id=args["brand_id"],
+            model_id=args["model_id"],
+            listing_type=args["listing_type"],
+            make=args["make"],
+            model=args["model"],
+            year=args["year"],
+            battery_type=args["battery_type"],
+            inverter_capacity=args["inverter_capacity"],
+            lithium_only=args["lithium_only"],
+            state=args["state"],
+            min_price=args["min_price"],
+            max_price=args["max_price"],
+            condition=args["condition"],
+            status=args["status"],
+            delivery_available=args["delivery_available"],
+            inspection_required=args["inspection_required"],
+            sort=args["sort"],
+            limit=args["limit"],
+            offset=args["offset"],
+            include_inactive=include_inactive,
+            preferred_city=pref_city,
+            preferred_state=pref_state,
+        )
+        payload = _normalize_search_payload(
+            raw_payload,
+            city=pref_city,
+            state=pref_state,
+            limit=args["limit"],
+            offset=args["offset"],
+            sort=args["sort"],
+            q=args["q"],
+        )
+        return jsonify(payload), 200
+    except Exception:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        payload = _normalize_search_payload(
+            {},
+            city=pref_city,
+            state=pref_state,
+            limit=args["limit"],
+            offset=args["offset"],
+            sort=args["sort"],
+            q=args["q"],
+        )
+        return jsonify(payload), 200
+
+
 @market_bp.get("/admin/listings/search")
 def admin_listings_search():
     u = _current_user()
@@ -720,6 +1070,13 @@ def admin_listings_search():
             parent_category_id=args["parent_category_id"],
             brand_id=args["brand_id"],
             model_id=args["model_id"],
+            listing_type=args["listing_type"],
+            make=args["make"],
+            model=args["model"],
+            year=args["year"],
+            battery_type=args["battery_type"],
+            inverter_capacity=args["inverter_capacity"],
+            lithium_only=args["lithium_only"],
             state=args["state"],
             min_price=args["min_price"],
             max_price=args["max_price"],
@@ -763,6 +1120,68 @@ def admin_listings_search():
             q=args["q"],
         )
         return jsonify(payload), 200
+
+
+@market_bp.post("/admin/listings/<int:listing_id>/approve")
+def admin_approve_listing(listing_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    listing = Listing.query.get(int(listing_id))
+    if not listing:
+        return jsonify({"message": "Not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    status_raw = str(payload.get("status") or "").strip().lower()
+    approved_raw = _maybe_bool(payload.get("approved"))
+    if status_raw in ("approved", "pending", "rejected"):
+        status = status_raw
+    elif approved_raw is True:
+        status = "approved"
+    elif approved_raw is False:
+        status = "rejected"
+    else:
+        status = "approved"
+
+    listing.approval_status = status
+    if status == "approved" and hasattr(listing, "is_active"):
+        listing.is_active = True
+    try:
+        db.session.add(listing)
+        db.session.commit()
+        return jsonify({"ok": True, "listing": listing.to_dict(base_url=_base_url())}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "LISTING_APPROVAL_FAILED", "message": str(exc)}), 500
+
+
+@market_bp.post("/admin/listings/<int:listing_id>/inspection-flag")
+def admin_flag_listing_for_inspection(listing_id: int):
+    u = _current_user()
+    if not u:
+        return jsonify({"message": "Unauthorized"}), 401
+    if not _is_admin(u):
+        return jsonify({"message": "Forbidden"}), 403
+    listing = Listing.query.get(int(listing_id))
+    if not listing:
+        return jsonify({"message": "Not found"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    flagged = _maybe_bool(payload.get("flagged"))
+    if flagged is None:
+        flagged = True
+    listing.inspection_flagged = bool(flagged)
+    if bool(flagged):
+        listing.inspection_required = True
+    try:
+        db.session.add(listing)
+        db.session.commit()
+        return jsonify({"ok": True, "listing": listing.to_dict(base_url=_base_url())}), 200
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "LISTING_INSPECTION_FLAG_FAILED", "message": str(exc)}), 500
 
 
 @market_bp.get("/public/listings/recommended")
@@ -1427,8 +1846,8 @@ def update_listing(listing_id: int):
         return jsonify({"message": "Not found"}), 404
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
-    if not _is_admin(u) and not _is_email_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_admin(u) and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     payload = request.get_json(silent=True) or {}
     # Listing cap enforcement on activation
@@ -1448,7 +1867,8 @@ def update_listing(listing_id: int):
 
     if new_active and not current_active:
         account_role = _account_role(int(u.id))
-        ok, info = enforce_listing_cap(int(u.id), account_role, "declutter")
+        next_listing_type = str(payload.get("listing_type") or getattr(item, "listing_type", "declutter") or "declutter")
+        ok, info = enforce_listing_cap(int(u.id), account_role, next_listing_type)
         if not ok:
             return jsonify(info), 403
     title = payload.get("title")
@@ -1474,6 +1894,37 @@ def update_listing(listing_id: int):
         item.brand_id = _maybe_int(payload.get("brand_id"))
     if "model_id" in payload and hasattr(item, "model_id"):
         item.model_id = _maybe_int(payload.get("model_id"))
+    if (
+        "listing_type" in payload
+        or "vehicle_metadata" in payload
+        or "energy_metadata" in payload
+        or "metadata" in payload
+        or "category_id" in payload
+        or "category" in payload
+        or "delivery_available" in payload
+        or "inspection_required" in payload
+    ):
+        vehicle_payload = _parse_json_map(payload.get("vehicle_metadata"))
+        energy_payload = _parse_json_map(payload.get("energy_metadata"))
+        shared_payload = _parse_json_map(payload.get("metadata"))
+        if not vehicle_payload:
+            vehicle_payload = dict(shared_payload)
+        if not energy_payload:
+            energy_payload = dict(shared_payload)
+        ok_meta, meta_error = _apply_vertical_metadata_to_listing(
+            item,
+            category_id=_maybe_int(getattr(item, "category_id", None)),
+            category_name=str(getattr(item, "category", "") or ""),
+            listing_type_raw=str(payload.get("listing_type") or ""),
+            vehicle_payload=vehicle_payload,
+            energy_payload=energy_payload,
+            delivery_available_raw=payload.get("delivery_available"),
+            inspection_required_raw=payload.get("inspection_required"),
+            is_admin=_is_admin(u),
+            approval_status_raw=str(payload.get("approval_status") or ""),
+        )
+        if not ok_meta:
+            return jsonify(meta_error or {"ok": False, "error": "VALIDATION_FAILED"}), 400
     if "price" in payload:
         try:
             base_price = float(payload.get("price") or 0.0)
@@ -1545,8 +1996,8 @@ def delete_listing(listing_id: int):
         return jsonify({"message": "Not found"}), 404
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
-    if not _is_admin(u) and not _is_email_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_admin(u) and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     try:
         try:
@@ -1584,6 +2035,13 @@ def create_listing():
     category_id = None
     brand_id = None
     model_id = None
+    listing_type_raw = ""
+    vehicle_payload: dict = {}
+    energy_payload: dict = {}
+    shared_metadata_payload: dict = {}
+    delivery_available_raw = None
+    inspection_required_raw = None
+    approval_status_raw = ""
     uploaded_image_bytes = None
     image_source = "unknown"
 
@@ -1599,6 +2057,13 @@ def create_listing():
         category_id = _maybe_int(request.form.get("category_id"))
         brand_id = _maybe_int(request.form.get("brand_id"))
         model_id = _maybe_int(request.form.get("model_id"))
+        listing_type_raw = (request.form.get("listing_type") or "").strip().lower()
+        vehicle_payload = _parse_json_map(request.form.get("vehicle_metadata"))
+        energy_payload = _parse_json_map(request.form.get("energy_metadata"))
+        shared_metadata_payload = _parse_json_map(request.form.get("metadata"))
+        delivery_available_raw = request.form.get("delivery_available")
+        inspection_required_raw = request.form.get("inspection_required")
+        approval_status_raw = (request.form.get("approval_status") or "").strip().lower()
 
         raw_price = request.form.get("price")
         try:
@@ -1638,6 +2103,13 @@ def create_listing():
         category_id = _maybe_int(payload.get("category_id"))
         brand_id = _maybe_int(payload.get("brand_id"))
         model_id = _maybe_int(payload.get("model_id"))
+        listing_type_raw = (payload.get("listing_type") or "").strip().lower()
+        vehicle_payload = _parse_json_map(payload.get("vehicle_metadata"))
+        energy_payload = _parse_json_map(payload.get("energy_metadata"))
+        shared_metadata_payload = _parse_json_map(payload.get("metadata"))
+        delivery_available_raw = payload.get("delivery_available")
+        inspection_required_raw = payload.get("inspection_required")
+        approval_status_raw = (payload.get("approval_status") or "").strip().lower()
 
         raw_price = payload.get("price")
         try:
@@ -1674,13 +2146,8 @@ def create_listing():
     rl = _rate_limit_response("listing_create", user=owner_user, limit=40, window_seconds=300)
     if rl is not None:
         return rl
-    if not _is_email_verified(owner_user):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
-
-    account_role = _account_role(user_id)
-    ok, info = enforce_listing_cap(int(user_id), account_role, "declutter")
-    if not ok:
-        return jsonify(info), 403
+    if not _is_phone_verified(owner_user):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     listing = Listing(
         user_id=user_id,
@@ -1693,9 +2160,38 @@ def create_listing():
         category_id=category_id,
         brand_id=brand_id,
         model_id=model_id,
+        listing_type=listing_type_raw or "declutter",
         price=price,
         image_path=stored_image_path,
     )
+
+    if not vehicle_payload and shared_metadata_payload:
+        vehicle_payload = dict(shared_metadata_payload)
+    if not energy_payload and shared_metadata_payload:
+        energy_payload = dict(shared_metadata_payload)
+    ok_meta, meta_error = _apply_vertical_metadata_to_listing(
+        listing,
+        category_id=category_id,
+        category_name=category,
+        listing_type_raw=listing_type_raw,
+        vehicle_payload=vehicle_payload,
+        energy_payload=energy_payload,
+        delivery_available_raw=delivery_available_raw,
+        inspection_required_raw=inspection_required_raw,
+        is_admin=_is_admin(owner_user),
+        approval_status_raw=approval_status_raw,
+    )
+    if not ok_meta:
+        return jsonify(meta_error or {"ok": False, "error": "VALIDATION_FAILED"}), 400
+
+    account_role = _account_role(user_id)
+    ok, info = enforce_listing_cap(
+        int(user_id),
+        account_role,
+        str(getattr(listing, "listing_type", "declutter") or "declutter"),
+    )
+    if not ok:
+        return jsonify(info), 403
 
     try:
         seller_role = _seller_role(user_id)

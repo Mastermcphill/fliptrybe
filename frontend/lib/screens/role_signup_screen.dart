@@ -485,7 +485,7 @@ class _RoleSignupScreenState extends State<RoleSignupScreen> {
               value: "merchant",
               title: "Merchant",
               subtitle:
-                  "List products and manage sales. Verified email required for sensitive actions.",
+                  "List products and manage sales. Phone verification required for sensitive actions.",
               icon: Icons.storefront_rounded,
               badge: "Requires admin approval",
             ),

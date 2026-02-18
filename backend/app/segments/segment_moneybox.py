@@ -113,7 +113,7 @@ def _allowed_role(u: User | None) -> bool:
     return _role(u) in ("merchant", "driver", "inspector")
 
 
-def _is_email_verified(u: User | None) -> bool:
+def _is_phone_verified(u: User | None) -> bool:
     if not u:
         return False
     return bool(getattr(u, "is_verified", False))
@@ -123,8 +123,8 @@ def _status_reasons(u: User | None) -> list[str]:
     reasons: list[str] = []
     if not u:
         return reasons
-    if not _is_email_verified(u):
-        reasons.append("EMAIL_NOT_VERIFIED")
+    if not _is_phone_verified(u):
+        reasons.append("PHONE_NOT_VERIFIED")
     try:
         if int(getattr(u, "kyc_tier", 0) or 0) < 1:
             reasons.append("KYC_REQUIRED")
@@ -218,8 +218,8 @@ def open_moneybox():
         tier = 1
     if tier not in (1, 2, 3, 4):
         return jsonify({"message": "Invalid tier"}), 400
-    if tier > 1 and not _is_email_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if tier > 1 and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     acct = get_or_create_account(int(u.id))
     try:
@@ -286,8 +286,8 @@ def relock_moneybox():
         tier = 1
     if tier not in (1, 2, 3, 4):
         return jsonify({"message": "Invalid tier"}), 400
-    if tier > 1 and not _is_email_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if tier > 1 and not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
 
     acct = get_or_create_account(int(u.id))
     try:
@@ -410,8 +410,8 @@ def withdraw():
         return jsonify({"message": "Unauthorized"}), 401
     if not _allowed_role(u):
         return jsonify({"message": "MoneyBox is only for merchants, drivers, inspectors"}), 403
-    if not _is_email_verified(u):
-        return jsonify({"error": "EMAIL_NOT_VERIFIED", "message": "Your email must be verified to perform this action"}), 403
+    if not _is_phone_verified(u):
+        return jsonify({"error": "PHONE_NOT_VERIFIED", "message": "Your phone must be verified to perform this action"}), 403
     fraud_guard = should_block_withdrawal(int(u.id))
     if bool(fraud_guard.get("blocked")):
         return jsonify(

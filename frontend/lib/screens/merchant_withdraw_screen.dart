@@ -7,7 +7,7 @@ import '../ui/components/ft_components.dart';
 import '../utils/formatters.dart';
 import '../utils/role_gates.dart';
 import '../utils/ui_feedback.dart';
-import '../widgets/email_verification_dialog.dart';
+import '../widgets/phone_verification_dialog.dart';
 import 'money_action_receipt_screen.dart';
 
 class MerchantWithdrawScreen extends StatefulWidget {
@@ -91,9 +91,9 @@ class _MerchantWithdrawScreenState extends State<MerchantWithdrawScreen> {
         .toString();
 
     if (!ok &&
-        (ApiService.isEmailNotVerified(res) ||
-            ApiService.isEmailNotVerified(message))) {
-      await showEmailVerificationRequiredDialog(
+        (ApiService.isPhoneNotVerified(res) ||
+            ApiService.isPhoneNotVerified(message))) {
+      await showPhoneVerificationRequiredDialog(
         context,
         message: message,
         onRetry: _submit,

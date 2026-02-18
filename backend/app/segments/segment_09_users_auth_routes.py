@@ -3,19 +3,23 @@ import json
 import secrets
 import hashlib
 import hmac
-import smtplib
-from email.message import EmailMessage
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError, InternalError
 
 from app.extensions import db
-from app.models import User, RoleChangeRequest, EmailVerificationToken, PasswordResetToken, RefreshToken, AuditLog
+from app.models import User, RoleChangeRequest, PasswordResetToken, RefreshToken, AuditLog
 from app.utils.jwt_utils import create_token, decode_token, get_bearer_token
 from app.utils.account_flags import record_account_flag, find_duplicate_phone_users, flag_duplicate_phone
-from app.utils.notify import queue_email
 from app.utils.autopilot import get_settings
-from app.utils.rate_limit import check_limit
+from app.utils.rate_limit import (
+    check_limit,
+    rate_limit_burst,
+    rate_limit_enabled,
+    rate_limit_window_sec,
+    resolve_client_ip,
+    trust_proxy_headers,
+)
 from app.utils.events import log_event
 from app.utils.observability import get_request_id
 from app.services.risk_engine_service import record_event
@@ -150,130 +154,6 @@ def _verification_base_url() -> str:
         return ""
 
 
-def _integration_mode() -> str:
-    env_mode = (os.getenv("INTEGRATIONS_MODE") or "").strip().lower()
-    if env_mode in ("disabled", "sandbox", "live"):
-        return env_mode
-    try:
-        settings = get_settings()
-        db_mode = (getattr(settings, "integrations_mode", "") or "").strip().lower()
-        if db_mode in ("disabled", "sandbox", "live"):
-            return db_mode
-    except Exception:
-        pass
-    return "disabled"
-
-
-def _send_verification_email(user: User, token: str) -> dict:
-    email = (getattr(user, "email", "") or "").strip().lower()
-    if not email:
-        return {"ok": False, "error": "EMAIL_REQUIRED", "message": "User email is missing", "mode": _integration_mode()}
-    link = f"{_verification_base_url()}/api/auth/verify-email?token={token}"
-    mode = _integration_mode()
-    delivery = "smtp" if mode == "live" else ("mock" if mode == "sandbox" else "disabled")
-    smtp_host = (os.getenv("SMTP_HOST") or "").strip()
-    smtp_port = int((os.getenv("SMTP_PORT") or "587").strip() or 587)
-    smtp_user = (os.getenv("SMTP_USER") or "").strip()
-    smtp_pass = (os.getenv("SMTP_PASS") or "").strip()
-    smtp_from = (os.getenv("SMTP_FROM") or smtp_user or "no-reply@fliptrybe.com").strip()
-    smtp_reply_to = (os.getenv("SMTP_REPLY_TO") or "").strip()
-
-    if mode == "live":
-        missing = []
-        if not smtp_host:
-            missing.append("SMTP_HOST")
-        if not ((os.getenv("SMTP_FROM") or "").strip() or smtp_user):
-            missing.append("SMTP_FROM")
-        if missing:
-            message = f"missing {', '.join(missing)}"
-            current_app.logger.warning("email_verify_misconfigured %s", message)
-            return {
-                "ok": False,
-                "error": "INTEGRATION_MISCONFIGURED",
-                "message": message,
-                "mode": mode,
-                "delivery": delivery,
-                "link": link,
-            }
-
-        msg = EmailMessage()
-        msg["Subject"] = "Verify your FlipTrybe email"
-        msg["From"] = smtp_from
-        msg["To"] = email
-        if smtp_reply_to:
-            msg["Reply-To"] = smtp_reply_to
-        msg.set_content(f"Verify your email by clicking:\n{link}\n\nIf you did not request this, ignore this email.")
-        try:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-                server.ehlo()
-                try:
-                    server.starttls()
-                except Exception:
-                    pass
-                if smtp_user and smtp_pass:
-                    server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-            current_app.logger.info("email_verify_sent email=%s", email)
-            return {
-                "ok": True,
-                "mode": mode,
-                "delivery": delivery,
-                "message": "Verification email sent",
-            }
-        except Exception:
-            current_app.logger.exception("email_verify_send_failed")
-            return {
-                "ok": False,
-                "error": "EMAIL_SEND_FAILED",
-                "message": "Failed to send verification email",
-                "mode": mode,
-                "delivery": delivery,
-                "link": link,
-            }
-
-    # Non-live fallback: log link for dev/sandbox/disabled environments.
-    current_app.logger.info("EMAIL_VERIFY_LINK: %s", link)
-    try:
-        queue_email(
-            user_id=int(user.id),
-            title="Verify your FlipTrybe email",
-            message=f"Verification link: {link}",
-            provider="stub",
-            meta={"purpose": "verify_email"},
-        )
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-    return {
-        "ok": True,
-        "mode": mode,
-        "delivery": delivery,
-        "message": "Verification link generated",
-        "link": link,
-    }
-
-
-def _issue_verification_token(user: User, ttl_minutes: int = 30) -> str | None:
-    if not user:
-        return None
-    now = datetime.utcnow()
-    token = secrets.token_urlsafe(32)
-    try:
-        # invalidate older unused tokens
-        EmailVerificationToken.query.filter_by(user_id=int(user.id), used_at=None).update({"used_at": now})
-    except Exception:
-        pass
-    rec = EmailVerificationToken(
-        user_id=int(user.id),
-        token_hash=_hash_token(token),
-        created_at=now,
-        expires_at=now + timedelta(minutes=ttl_minutes),
-        used_at=None,
-    )
-    db.session.add(rec)
-    db.session.commit()
-    return token
-
 def _get_request_payload(label: str) -> dict:
     data_json = request.get_json(silent=True)
     data_form = request.form.to_dict() if request.form else {}
@@ -303,6 +183,9 @@ def _get_request_payload(label: str) -> dict:
 
 
 def _rate_limit_enabled() -> bool:
+    env_enabled = rate_limit_enabled(True)
+    if not env_enabled:
+        return False
     try:
         settings = get_settings()
         return bool(getattr(settings, "rate_limit_enabled", True))
@@ -313,11 +196,13 @@ def _rate_limit_enabled() -> bool:
 def _rate_limit_response(action: str, *, limit: int, window_seconds: int, user_id: int | None = None):
     if not _rate_limit_enabled():
         return None
-    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "unknown").split(",")[0].strip()
+    effective_limit = rate_limit_burst(limit)
+    effective_window = rate_limit_window_sec(window_seconds)
+    ip = resolve_client_ip(request, trusted_proxy=trust_proxy_headers(True))
     key = f"{action}:ip:{ip}"
     if user_id is not None:
         key = f"{key}:u:{int(user_id)}"
-    ok, retry_after = check_limit(key, limit=limit, window_seconds=window_seconds)
+    ok, retry_after = check_limit(key, limit=effective_limit, window_seconds=effective_window)
     if ok:
         return None
     try:
@@ -406,12 +291,6 @@ def _create_user(*, name: str, email: str, phone: str | None, password: str, rol
     except Exception:
         db.session.rollback()
 
-    try:
-        vtoken = _issue_verification_token(u, ttl_minutes=30)
-        if vtoken:
-            _send_verification_email(u, vtoken)
-    except Exception:
-        pass
     return u, None
 
 
@@ -1001,13 +880,6 @@ def _register_common(payload: dict, role: str, extra: dict | None = None):
         except Exception:
             db.session.rollback()
 
-        try:
-            vtoken = _issue_verification_token(u, ttl_minutes=30)
-            if vtoken:
-                _send_verification_email(u, vtoken)
-        except Exception:
-            pass
-
         return {"user": _user_payload_with_role_status(u)}, None
     finally:
         try:
@@ -1188,13 +1060,6 @@ def register_merchant():
             except Exception:
                 pass
             return jsonify({"ok": False, "error": "REGISTER_FAILED", "message": "Failed to register"}), 500
-        try:
-            vtoken = _issue_verification_token(user, ttl_minutes=30)
-            if vtoken:
-                _send_verification_email(user, vtoken)
-        except Exception:
-            pass
-
     if user.role not in ("buyer", "driver", "inspector"):
         return jsonify({"message": "Role change not allowed"}), 403
 
@@ -1459,134 +1324,6 @@ def register_inspector():
     if referral_apply is not None:
         body["referral_apply"] = referral_apply
     return jsonify(body), 201
-
-
-@auth_bp.get("/verify-email")
-def verify_email():
-    try:
-        db.session.rollback()
-    except Exception:
-        pass
-    token = (request.args.get("token") or "").strip()
-    if not token:
-        return jsonify({"message": "token required"}), 400
-
-    now = datetime.utcnow()
-    rec = None
-    try:
-        rec = EmailVerificationToken.query.filter_by(
-            token_hash=_hash_token(token)
-        ).filter(EmailVerificationToken.used_at.is_(None)).first()
-    except Exception:
-        rec = None
-    if not rec or (rec.expires_at and rec.expires_at < now):
-        return jsonify({"message": "Invalid or expired token"}), 400
-
-    try:
-        u = User.query.get(int(rec.user_id))
-    except Exception:
-        u = None
-    if not u:
-        return jsonify({"message": "Invalid or expired token"}), 400
-
-    u.is_verified = True
-    rec.used_at = now
-    try:
-        db.session.add(u)
-        db.session.add(rec)
-        db.session.commit()
-        current_app.logger.info("email_verify_confirmed user_id=%s", u.id)
-        return jsonify({"ok": True, "message": "Email verified"}), 200
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception("email_verify_confirm_failed")
-        return jsonify({"message": "Failed"}), 500
-
-
-@auth_bp.post("/verify-email/resend")
-def resend_verify_email():
-    try:
-        db.session.rollback()
-    except Exception:
-        pass
-    mode = _integration_mode()
-    token = _bearer_token()
-    payload = decode_token(token) if token else None
-    sub = payload.get("sub") if isinstance(payload, dict) else None
-    try:
-        uid = int(sub) if sub is not None else None
-    except Exception:
-        uid = None
-    if not uid:
-        return jsonify({"ok": False, "message": "Unauthorized", "mode": mode}), 401
-
-    u = User.query.get(int(uid))
-    if not u:
-        return jsonify({"ok": False, "message": "Unauthorized", "mode": mode}), 401
-    if bool(getattr(u, "is_verified", False)):
-        return jsonify({"ok": True, "message": "Already verified", "mode": mode}), 200
-
-    debug_requested = (request.headers.get("X-Debug", "").strip() == "1")
-    now = datetime.utcnow()
-    try:
-        last = EmailVerificationToken.query.filter_by(user_id=int(u.id)).order_by(EmailVerificationToken.created_at.desc()).first()
-        if last and (now - last.created_at).total_seconds() < 60:
-            wait_seconds = int(max(0, 60 - (now - last.created_at).total_seconds()))
-            body = {
-                "ok": True,
-                "message": "Please wait before resending",
-                "mode": mode,
-                "retry_after_seconds": wait_seconds,
-            }
-            return jsonify(body), 200
-    except Exception:
-        pass
-
-    try:
-        vtoken = _issue_verification_token(u, ttl_minutes=30)
-        if not vtoken:
-            return jsonify({"ok": False, "error": "TOKEN_ISSUE_FAILED", "message": "Failed to issue verification token", "mode": mode}), 500
-        send_result = _send_verification_email(u, vtoken)
-        effective_mode = (send_result.get("mode") or mode or "disabled").strip().lower()
-        if not bool(send_result.get("ok")):
-            code = (send_result.get("error") or "VERIFY_SEND_FAILED").strip()
-            message = (send_result.get("message") or "Failed to send verification email").strip()
-            status = 503 if code == "INTEGRATION_DISABLED" else 500
-            body = {"ok": False, "error": code, "message": message, "mode": effective_mode}
-            if debug_requested and effective_mode != "live":
-                body["verification_link"] = send_result.get("link")
-            return jsonify(body), status
-        current_app.logger.info("email_verify_resend user_id=%s", u.id)
-        body = {
-            "ok": True,
-            "message": "Verification email sent",
-            "mode": effective_mode,
-            "delivery": send_result.get("delivery"),
-        }
-        if debug_requested and effective_mode != "live":
-            body["verification_link"] = send_result.get("link")
-        return jsonify(body), 200
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception("email_verify_resend_failed")
-        return jsonify({"ok": False, "error": "VERIFY_SEND_FAILED", "message": "Failed to send verification email", "mode": mode}), 500
-
-
-@auth_bp.get("/verify-email/status")
-def verify_email_status():
-    token = _bearer_token()
-    payload = decode_token(token) if token else None
-    sub = payload.get("sub") if isinstance(payload, dict) else None
-    try:
-        uid = int(sub) if sub is not None else None
-    except Exception:
-        uid = None
-    if not uid:
-        return jsonify({"message": "Unauthorized"}), 401
-    u = User.query.get(int(uid))
-    if not u:
-        return jsonify({"message": "Unauthorized"}), 401
-    return jsonify({"ok": True, "verified": bool(getattr(u, "is_verified", False))}), 200
 
 
 @auth_bp.post("/password/forgot")
