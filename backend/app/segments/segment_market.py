@@ -35,7 +35,7 @@ from app.services.search import (
 )
 from app.services.search.meili_client import (
     get_meili_client,
-    is_index_not_found_error,
+    SearchNotInitialized,
     SearchUnavailable,
 )
 from app.services.listing_metadata_schema import (
@@ -1607,18 +1607,40 @@ def listings_search():
         )
         set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
         return jsonify(payload), 200
-    except SearchUnavailable as exc:
-        if is_index_not_found_error(exc):
-            return jsonify(
-                {
-                    "ok": False,
-                    "error": {
-                        "code": "SEARCH_NOT_INITIALIZED",
-                        "message": "Search index is not initialized. Run /api/admin/search/init.",
-                    },
-                    "trace_id": get_request_id(),
-                }
-            ), 400
+    except SearchNotInitialized:
+        if search_fallback_sql_enabled():
+            try:
+                raw_payload = _run_sql_search(
+                    args,
+                    include_inactive=include_inactive,
+                    preferred_city=pref_city,
+                    preferred_state=pref_state,
+                )
+                payload = _normalize_search_payload(
+                    raw_payload,
+                    city=pref_city,
+                    state=pref_state,
+                    limit=args["limit"],
+                    offset=args["offset"],
+                    sort=args["sort"],
+                    q=args["q"],
+                )
+                set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
+                return jsonify(payload), 200
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+        return jsonify(
+            {
+                "ok": False,
+                "error": "SEARCH_NOT_INITIALIZED",
+                "message": "Search index is not initialized. Run /api/admin/search/init.",
+                "trace_id": get_request_id(),
+            }
+        ), 400
+    except SearchUnavailable:
         if search_fallback_sql_enabled():
             try:
                 raw_payload = _run_sql_search(

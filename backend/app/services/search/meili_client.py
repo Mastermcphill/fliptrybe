@@ -11,6 +11,15 @@ class SearchUnavailable(RuntimeError):
     """Raised when the configured search engine is unavailable."""
 
 
+class SearchNotInitialized(SearchUnavailable):
+    """Raised when a requested Meilisearch index has not been initialized."""
+
+    def __init__(self, index_name: str):
+        safe_name = str(index_name or "").strip() or "unknown"
+        self.index_name = safe_name
+        super().__init__(f"Search index '{safe_name}' is not initialized. Run /api/admin/search/init.")
+
+
 class MeiliApiError(SearchUnavailable):
     """Raised for non-5xx Meilisearch API errors with parsed metadata."""
 
@@ -211,7 +220,6 @@ class MeiliClient:
         offset: int,
     ) -> dict[str, Any]:
         safe_name = str(index_name or "").strip()
-        self.ensure_index(safe_name)
         payload: dict[str, Any] = {
             "q": str(q or ""),
             "limit": int(max(1, limit)),
@@ -221,17 +229,18 @@ class MeiliClient:
             payload["filter"] = filters
         if sort:
             payload["sort"] = list(sort)
-        return self._request(
-            "POST",
-            f"/indexes/{safe_name}/search",
-            json_body=payload,
-            ok_codes=(200,),
-        )
+        try:
+            return self._request(
+                "POST",
+                f"/indexes/{safe_name}/search",
+                json_body=payload,
+                ok_codes=(200,),
+            )
+        except MeiliApiError as exc:
+            if exc.is_index_not_found:
+                raise SearchNotInitialized(safe_name) from exc
+            raise
 
 
 def get_meili_client() -> MeiliClient:
     return MeiliClient()
-
-
-def is_index_not_found_error(exc: BaseException) -> bool:
-    return isinstance(exc, MeiliApiError) and bool(exc.is_index_not_found)

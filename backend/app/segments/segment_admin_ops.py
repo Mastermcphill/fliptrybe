@@ -162,6 +162,9 @@ def admin_search_reindex():
     total_rows = int(total_query.count())
     estimated_batches = int((total_rows + batch_size - 1) // batch_size)
     try:
+        client = get_meili_client()
+        index_name = listings_index_name()
+        client.ensure_index(index_name, primary_key="id")
         from app.tasks.search_tasks import search_reindex_all
 
         task = search_reindex_all.delay(

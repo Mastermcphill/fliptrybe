@@ -9,7 +9,7 @@ from unittest.mock import patch
 from app import create_app
 from app.extensions import db
 from app.models import Listing, User
-from app.services.search.meili_client import MeiliApiError, SearchUnavailable
+from app.services.search.meili_client import MeiliClient, SearchNotInitialized, SearchUnavailable
 from app.tasks.search_tasks import search_index_listing
 from app.utils.jwt_utils import create_token
 
@@ -20,13 +20,14 @@ class _FakeMeiliClient:
         *,
         hits: list[dict] | None = None,
         fail_search: bool = False,
-        missing_index_on_search: bool = False,
+        search_not_initialized: bool = False,
         existing_indexes: set[str] | None = None,
     ):
         self._hits = list(hits or [])
         self._fail_search = bool(fail_search)
-        self._missing_index_on_search = bool(missing_index_on_search)
-        self.indexes = set(existing_indexes or {"listings_v1"})
+        self._search_not_initialized = bool(search_not_initialized)
+        self.indexes = set(existing_indexes) if existing_indexes is not None else {"listings_v1"}
+        self.create_calls = 0
         self.docs_by_id: dict[int, dict] = {}
         self.upsert_calls = 0
         self.ensure_calls: list[tuple[str, str]] = []
@@ -36,14 +37,8 @@ class _FakeMeiliClient:
     def search(self, index_name, q, filters, sort, limit, offset):
         if self._fail_search:
             raise SearchUnavailable("timeout")
-        if self._missing_index_on_search:
-            raise MeiliApiError(
-                404,
-                {
-                    "code": "index_not_found",
-                    "message": f"Index `{index_name}` not found.",
-                },
-            )
+        if self._search_not_initialized:
+            raise SearchNotInitialized(str(index_name or ""))
         safe_offset = max(0, int(offset or 0))
         safe_limit = max(1, int(limit or 20))
         page_hits = self._hits[safe_offset : safe_offset + safe_limit]
@@ -59,6 +54,8 @@ class _FakeMeiliClient:
         safe_primary_key = str(primary_key or "id")
         self.ensure_calls.append((safe_name, safe_primary_key))
         self.operations.append(f"ensure:{safe_name}:{safe_primary_key}")
+        if safe_name not in self.indexes:
+            self.create_calls += 1
         self.indexes.add(safe_name)
         return {"uid": safe_name, "primaryKey": safe_primary_key}
 
@@ -235,16 +232,29 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
 
     def test_listings_search_returns_400_when_meili_index_missing(self):
         os.environ["SEARCH_FALLBACK_SQL"] = "false"
-        fake = _FakeMeiliClient(missing_index_on_search=True)
+        fake = _FakeMeiliClient(search_not_initialized=True)
 
         with patch("app.segments.segment_market.get_meili_client", return_value=fake):
             res = self.client.get("/api/listings/search?q=needs-init")
 
         self.assertEqual(res.status_code, 400)
         payload = res.get_json(force=True) or {}
-        error = payload.get("error") or {}
-        self.assertEqual(error.get("code"), "SEARCH_NOT_INITIALIZED")
+        self.assertEqual(payload.get("error"), "SEARCH_NOT_INITIALIZED")
         self.assertTrue((payload.get("trace_id") or "").strip())
+
+    def test_listings_search_falls_back_to_sql_when_index_missing_and_fallback_enabled(self):
+        listing_id = self._create_listing(title="Fallback SQL Init Needed")
+        os.environ["SEARCH_FALLBACK_SQL"] = "true"
+        fake = _FakeMeiliClient(search_not_initialized=True)
+
+        with patch("app.segments.segment_market.get_meili_client", return_value=fake):
+            res = self.client.get("/api/listings/search?q=Fallback%20SQL%20Init%20Needed&limit=10")
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertTrue(bool(payload.get("ok")))
+        items = payload.get("items") or []
+        self.assertTrue(any(int(item.get("id") or 0) == listing_id for item in items))
 
     def test_admin_search_init_creates_index_when_missing(self):
         fake = _FakeMeiliClient(existing_indexes=set())
@@ -282,7 +292,51 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertTrue(bool(second_payload.get("settings_applied")))
         self.assertEqual(fake.ensure_calls.count(("listings_v1", "id")), 2)
         self.assertEqual(fake.configure_calls.count("listings_v1"), 2)
+        self.assertEqual(fake.create_calls, 1)
         self.assertEqual(fake.indexes, {"listings_v1"})
+
+    def test_reindex_ensures_index_before_enqueue(self):
+        fake = _FakeMeiliClient(existing_indexes=set())
+        headers = self._admin_headers()
+
+        class _FakeTaskResult:
+            id = "task-123"
+
+        with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake), patch(
+            "app.tasks.search_tasks.search_reindex_all.delay",
+            return_value=_FakeTaskResult(),
+        ) as delay_mock:
+            res = self.client.post("/api/admin/search/reindex", headers=headers, json={"batch_size": 50})
+
+        self.assertEqual(res.status_code, 202)
+        self.assertGreaterEqual(len(fake.operations), 1)
+        self.assertEqual(fake.operations[0], "ensure:listings_v1:id")
+        delay_mock.assert_called_once()
+
+    def test_meili_index_not_found_maps_to_search_not_initialized(self):
+        class _FakeResponse:
+            def __init__(self, status_code: int, payload: dict):
+                self.status_code = int(status_code)
+                self._payload = dict(payload)
+                self.text = str(payload)
+
+            def json(self):
+                return dict(self._payload)
+
+        response = _FakeResponse(
+            404,
+            {
+                "message": "Index `listings_v1` not found.",
+                "code": "index_not_found",
+                "type": "invalid_request",
+            },
+        )
+        with patch("requests.Session.request", return_value=response):
+            client = MeiliClient(host="http://meili.invalid:7700", api_key="", timeout=0.1)
+            with self.assertRaises(SearchNotInitialized) as raised:
+                client.search("listings_v1", "chair", None, None, 20, 0)
+
+        self.assertEqual(raised.exception.index_name, "listings_v1")
 
     def test_search_index_listing_task_is_idempotent(self):
         listing_id = self._create_listing(title="Idempotent Indexing")

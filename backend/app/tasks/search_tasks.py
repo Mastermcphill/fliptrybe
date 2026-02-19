@@ -46,6 +46,7 @@ def search_index_listing(self, listing_id: int, trace_id: str = ""):
         listing = Listing.query.get(int(listing_id))
         client = get_meili_client()
         index_name = listings_index_name()
+        client.ensure_index(index_name, primary_key="id")
         if listing is None:
             client.delete_document(index_name, int(listing_id))
             _task_log("search_index_listing", status="deleted_missing", started_at=started, trace_id=trace_id, listing_id=int(listing_id))
@@ -82,7 +83,9 @@ def search_delete_listing(self, listing_id: int, trace_id: str = ""):
         return {"ok": True, "skipped": "search_engine_not_meili"}
     try:
         client = get_meili_client()
-        client.delete_document(listings_index_name(), int(listing_id))
+        index_name = listings_index_name()
+        client.ensure_index(index_name, primary_key="id")
+        client.delete_document(index_name, int(listing_id))
         _task_log("search_delete_listing", status="deleted", started_at=started, trace_id=trace_id, listing_id=int(listing_id))
         return {"ok": True, "deleted": True, "listing_id": int(listing_id)}
     except SearchUnavailable as exc:
@@ -115,6 +118,7 @@ def search_reindex_all(self, batch_size: int = 500, since_id: int | None = None,
         scanned = 0
         client = get_meili_client()
         index_name = listings_index_name()
+        client.ensure_index(index_name, primary_key="id")
         while True:
             rows = (
                 Listing.query
