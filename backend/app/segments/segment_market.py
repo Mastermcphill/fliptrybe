@@ -35,6 +35,7 @@ from app.services.search import (
 )
 from app.services.search.meili_client import (
     get_meili_client,
+    is_index_not_found_error,
     SearchUnavailable,
 )
 from app.services.listing_metadata_schema import (
@@ -1606,7 +1607,18 @@ def listings_search():
         )
         set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
         return jsonify(payload), 200
-    except SearchUnavailable:
+    except SearchUnavailable as exc:
+        if is_index_not_found_error(exc):
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "SEARCH_NOT_INITIALIZED",
+                        "message": "Search index is not initialized. Run /api/admin/search/init.",
+                    },
+                    "trace_id": get_request_id(),
+                }
+            ), 400
         if search_fallback_sql_enabled():
             try:
                 raw_payload = _run_sql_search(

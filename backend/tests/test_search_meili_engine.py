@@ -1,27 +1,49 @@
 from __future__ import annotations
 
 import os
+import time
 import unittest
 from datetime import datetime
 from unittest.mock import patch
 
 from app import create_app
 from app.extensions import db
-from app.models import Listing
-from app.services.search.meili_client import SearchUnavailable
+from app.models import Listing, User
+from app.services.search.meili_client import MeiliApiError, SearchUnavailable
 from app.tasks.search_tasks import search_index_listing
+from app.utils.jwt_utils import create_token
 
 
 class _FakeMeiliClient:
-    def __init__(self, *, hits: list[dict] | None = None, fail_search: bool = False):
+    def __init__(
+        self,
+        *,
+        hits: list[dict] | None = None,
+        fail_search: bool = False,
+        missing_index_on_search: bool = False,
+        existing_indexes: set[str] | None = None,
+    ):
         self._hits = list(hits or [])
         self._fail_search = bool(fail_search)
+        self._missing_index_on_search = bool(missing_index_on_search)
+        self.indexes = set(existing_indexes or {"listings_v1"})
         self.docs_by_id: dict[int, dict] = {}
         self.upsert_calls = 0
+        self.ensure_calls: list[tuple[str, str]] = []
+        self.configure_calls: list[str] = []
+        self.operations: list[str] = []
 
     def search(self, index_name, q, filters, sort, limit, offset):
         if self._fail_search:
             raise SearchUnavailable("timeout")
+        if self._missing_index_on_search:
+            raise MeiliApiError(
+                404,
+                {
+                    "code": "index_not_found",
+                    "message": f"Index `{index_name}` not found.",
+                },
+            )
         safe_offset = max(0, int(offset or 0))
         safe_limit = max(1, int(limit or 20))
         page_hits = self._hits[safe_offset : safe_offset + safe_limit]
@@ -32,8 +54,21 @@ class _FakeMeiliClient:
             "limit": safe_limit,
         }
 
-    def ensure_index(self, index_name):
-        return {"uid": str(index_name)}
+    def ensure_index(self, index_name, primary_key="id"):
+        safe_name = str(index_name or "")
+        safe_primary_key = str(primary_key or "id")
+        self.ensure_calls.append((safe_name, safe_primary_key))
+        self.operations.append(f"ensure:{safe_name}:{safe_primary_key}")
+        self.indexes.add(safe_name)
+        return {"uid": safe_name, "primaryKey": safe_primary_key}
+
+    def configure_listings_index(self, index_name):
+        safe_name = str(index_name or "")
+        self.configure_calls.append(safe_name)
+        self.operations.append(f"configure:{safe_name}")
+        if safe_name not in self.indexes:
+            raise AssertionError("configure_listings_index called before ensure_index")
+        return {"taskUid": 1}
 
     def upsert_documents(self, index_name, docs):
         self.upsert_calls += 1
@@ -99,6 +134,22 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
             db.session.remove()
             db.drop_all()
             db.create_all()
+
+    def _admin_headers(self) -> dict[str, str]:
+        with self.app.app_context():
+            suffix = str(time.time_ns())
+            admin = User(
+                name=f"Admin {suffix[-4:]}",
+                email=f"admin-{suffix}@fliptrybe.test",
+                phone=f"080{suffix[-8:]}",
+                role="admin",
+                is_verified=True,
+            )
+            admin.set_password("Passw0rd!")
+            db.session.add(admin)
+            db.session.commit()
+            token = create_token(int(admin.id))
+        return {"Authorization": f"Bearer {token}"}
 
     def _create_listing(self, *, title: str, description: str = "searchable listing") -> int:
         with self.app.app_context():
@@ -181,6 +232,57 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         error = payload.get("error") or {}
         self.assertEqual(error.get("code"), "SEARCH_UNAVAILABLE")
         self.assertTrue((payload.get("trace_id") or "").strip())
+
+    def test_listings_search_returns_400_when_meili_index_missing(self):
+        os.environ["SEARCH_FALLBACK_SQL"] = "false"
+        fake = _FakeMeiliClient(missing_index_on_search=True)
+
+        with patch("app.segments.segment_market.get_meili_client", return_value=fake):
+            res = self.client.get("/api/listings/search?q=needs-init")
+
+        self.assertEqual(res.status_code, 400)
+        payload = res.get_json(force=True) or {}
+        error = payload.get("error") or {}
+        self.assertEqual(error.get("code"), "SEARCH_NOT_INITIALIZED")
+        self.assertTrue((payload.get("trace_id") or "").strip())
+
+    def test_admin_search_init_creates_index_when_missing(self):
+        fake = _FakeMeiliClient(existing_indexes=set())
+        headers = self._admin_headers()
+
+        with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake):
+            res = self.client.post("/api/admin/search/init", headers=headers, json={})
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertTrue(bool(payload.get("ok")))
+        self.assertEqual(payload.get("index_name"), "listings_v1")
+        self.assertTrue(bool(payload.get("settings_applied")))
+        self.assertIn("listings_v1", fake.indexes)
+        self.assertEqual(fake.operations[0], "ensure:listings_v1:id")
+        self.assertEqual(fake.operations[1], "configure:listings_v1")
+
+    def test_admin_search_init_is_idempotent(self):
+        fake = _FakeMeiliClient(existing_indexes=set())
+        headers = self._admin_headers()
+
+        with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake):
+            first = self.client.post("/api/admin/search/init", headers=headers, json={})
+            second = self.client.post("/api/admin/search/init", headers=headers, json={})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_payload = first.get_json(force=True) or {}
+        second_payload = second.get_json(force=True) or {}
+        self.assertTrue(bool(first_payload.get("ok")))
+        self.assertTrue(bool(second_payload.get("ok")))
+        self.assertEqual(first_payload.get("index_name"), "listings_v1")
+        self.assertEqual(second_payload.get("index_name"), "listings_v1")
+        self.assertTrue(bool(first_payload.get("settings_applied")))
+        self.assertTrue(bool(second_payload.get("settings_applied")))
+        self.assertEqual(fake.ensure_calls.count(("listings_v1", "id")), 2)
+        self.assertEqual(fake.configure_calls.count("listings_v1"), 2)
+        self.assertEqual(fake.indexes, {"listings_v1"})
 
     def test_search_index_listing_task_is_idempotent(self):
         listing_id = self._create_listing(title="Idempotent Indexing")

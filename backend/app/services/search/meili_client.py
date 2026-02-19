@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 import requests
@@ -8,6 +9,28 @@ import requests
 
 class SearchUnavailable(RuntimeError):
     """Raised when the configured search engine is unavailable."""
+
+
+class MeiliApiError(SearchUnavailable):
+    """Raised for non-5xx Meilisearch API errors with parsed metadata."""
+
+    def __init__(self, status_code: int, detail: dict[str, Any] | None = None):
+        safe_detail = detail if isinstance(detail, dict) else {}
+        self.status_code = int(status_code)
+        self.detail = safe_detail
+        self.error_code = str(safe_detail.get("code") or "").strip().lower()
+        message = str(safe_detail.get("message") or safe_detail or "").strip()
+        if not message:
+            message = "Meilisearch request failed"
+        super().__init__(f"Meilisearch error {self.status_code}: {message}")
+
+    @property
+    def is_index_not_found(self) -> bool:
+        return int(self.status_code) == 404 and self.error_code == "index_not_found"
+
+    @property
+    def is_index_already_exists(self) -> bool:
+        return int(self.status_code) == 409 and self.error_code == "index_already_exists"
 
 
 def _timeout_seconds() -> float:
@@ -50,7 +73,7 @@ class MeiliClient:
                 detail = response.json()
             except Exception:
                 detail = {"message": response.text[:300]}
-            raise SearchUnavailable(f"Meilisearch error {response.status_code}: {detail}")
+            raise MeiliApiError(int(response.status_code), detail)
 
         if int(response.status_code) == 204:
             return {}
@@ -62,24 +85,39 @@ class MeiliClient:
     def healthcheck(self) -> dict[str, Any]:
         return self._request("GET", "/health", ok_codes=(200,))
 
-    def ensure_index(self, index_name: str) -> dict[str, Any]:
+    def ensure_index(self, index_name: str, primary_key: str = "id") -> dict[str, Any]:
         safe_name = str(index_name or "").strip()
         if not safe_name:
             raise SearchUnavailable("Index name is required")
+        safe_primary_key = str(primary_key or "").strip() or "id"
+
         try:
             return self._request("GET", f"/indexes/{safe_name}", ok_codes=(200,))
-        except SearchUnavailable:
-            payload = {"uid": safe_name, "primaryKey": "id"}
+        except MeiliApiError as exc:
+            if not exc.is_index_not_found:
+                raise
+
+        payload = {"uid": safe_name, "primaryKey": safe_primary_key}
+        try:
+            self._request("POST", "/indexes", json_body=payload, ok_codes=(200, 201, 202))
+        except MeiliApiError as exc:
+            # Concurrent callers can race to create the same index.
+            if not exc.is_index_already_exists:
+                raise
+
+        # Index creation may be async; poll briefly until it is queryable.
+        for _ in range(10):
             try:
-                self._request("POST", "/indexes", json_body=payload, ok_codes=(200, 201, 202))
-            except SearchUnavailable:
-                # Might already exist under race conditions.
-                pass
-            return self._request("GET", f"/indexes/{safe_name}", ok_codes=(200,))
+                return self._request("GET", f"/indexes/{safe_name}", ok_codes=(200,))
+            except MeiliApiError as exc:
+                if not exc.is_index_not_found:
+                    raise
+                time.sleep(0.1)
+        raise SearchUnavailable(f"Meilisearch index '{safe_name}' is not ready yet")
 
     def configure_listings_index(self, index_name: str) -> dict[str, Any]:
         safe_name = str(index_name or "").strip()
-        self.ensure_index(safe_name)
+        self.ensure_index(safe_name, primary_key="id")
         payload = {
             "filterableAttributes": [
                 "state",
@@ -193,3 +231,7 @@ class MeiliClient:
 
 def get_meili_client() -> MeiliClient:
     return MeiliClient()
+
+
+def is_index_not_found_error(exc: BaseException) -> bool:
+    return isinstance(exc, MeiliApiError) and bool(exc.is_index_not_found)

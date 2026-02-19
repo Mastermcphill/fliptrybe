@@ -109,16 +109,13 @@ def admin_search_init():
     index_name = listings_index_name()
     try:
         client = get_meili_client()
-        health = client.healthcheck()
-        client.ensure_index(index_name)
-        settings_task = client.configure_listings_index(index_name)
+        client.ensure_index(index_name, primary_key="id")
+        client.configure_listings_index(index_name)
         return jsonify(
             {
                 "ok": True,
-                "engine": "meili",
-                "index": index_name,
-                "health": health,
-                "settings_task": settings_task,
+                "index_name": index_name,
+                "settings_applied": True,
             }
         ), 200
     except SearchUnavailable as exc:
