@@ -16,87 +16,111 @@ branch_labels = None
 depends_on = None
 
 
+def _create_index_if_missing(inspector, table_name: str, index_name: str, columns: list[str]) -> None:
+    existing = {str(idx.get("name") or "") for idx in inspector.get_indexes(table_name)}
+    if index_name not in existing:
+        op.create_index(index_name, table_name, columns, unique=False)
+
+
+def _drop_index_if_exists(inspector, table_name: str, index_name: str) -> None:
+    existing = {str(idx.get("name") or "") for idx in inspector.get_indexes(table_name)}
+    if index_name in existing:
+        op.drop_index(index_name, table_name=table_name)
+
+
 def upgrade():
-    op.create_table(
-        "pricing_benchmarks",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("category", sa.String(length=24), nullable=False),
-        sa.Column("city", sa.String(length=64), nullable=False),
-        sa.Column("item_type", sa.String(length=120), nullable=True),
-        sa.Column("p25_minor", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("p50_minor", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("p75_minor", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("sample_size", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("category", "city", "item_type", name="uq_pricing_benchmark_scope"),
-    )
-    op.create_index("ix_pricing_benchmarks_category", "pricing_benchmarks", ["category"], unique=False)
-    op.create_index("ix_pricing_benchmarks_city", "pricing_benchmarks", ["city"], unique=False)
-    op.create_index("ix_pricing_benchmarks_item_type", "pricing_benchmarks", ["item_type"], unique=False)
-    op.create_index("ix_pricing_benchmarks_updated_at", "pricing_benchmarks", ["updated_at"], unique=False)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    op.create_table(
-        "commission_policies",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("name", sa.String(length=120), nullable=False),
-        sa.Column("status", sa.String(length=16), nullable=False, server_default="draft"),
-        sa.Column("created_by_admin_id", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("activated_at", sa.DateTime(), nullable=True),
-        sa.Column("notes", sa.Text(), nullable=True),
-        sa.ForeignKeyConstraint(["created_by_admin_id"], ["users.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_commission_policies_status", "commission_policies", ["status"], unique=False)
-    op.create_index("ix_commission_policies_created_by_admin_id", "commission_policies", ["created_by_admin_id"], unique=False)
-    op.create_index("ix_commission_policies_created_at", "commission_policies", ["created_at"], unique=False)
-    op.create_index("ix_commission_policies_activated_at", "commission_policies", ["activated_at"], unique=False)
+    if not inspector.has_table("pricing_benchmarks"):
+        op.create_table(
+            "pricing_benchmarks",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("category", sa.String(length=24), nullable=False),
+            sa.Column("city", sa.String(length=64), nullable=False),
+            sa.Column("item_type", sa.String(length=120), nullable=True),
+            sa.Column("p25_minor", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("p50_minor", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("p75_minor", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("sample_size", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("category", "city", "item_type", name="uq_pricing_benchmark_scope"),
+        )
+    _create_index_if_missing(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_category", ["category"])
+    _create_index_if_missing(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_city", ["city"])
+    _create_index_if_missing(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_item_type", ["item_type"])
+    _create_index_if_missing(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_updated_at", ["updated_at"])
 
-    op.create_table(
-        "commission_policy_rules",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("policy_id", sa.Integer(), nullable=False),
-        sa.Column("applies_to", sa.String(length=24), nullable=False, server_default="all"),
-        sa.Column("seller_type", sa.String(length=24), nullable=False, server_default="all"),
-        sa.Column("city", sa.String(length=64), nullable=True),
-        sa.Column("base_rate_bps", sa.Integer(), nullable=False, server_default="500"),
-        sa.Column("min_fee_minor", sa.Integer(), nullable=True),
-        sa.Column("max_fee_minor", sa.Integer(), nullable=True),
-        sa.Column("promo_discount_bps", sa.Integer(), nullable=True),
-        sa.Column("starts_at", sa.DateTime(), nullable=True),
-        sa.Column("ends_at", sa.DateTime(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["policy_id"], ["commission_policies.id"]),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_commission_policy_rules_policy_id", "commission_policy_rules", ["policy_id"], unique=False)
-    op.create_index("ix_commission_policy_rules_applies_to", "commission_policy_rules", ["applies_to"], unique=False)
-    op.create_index("ix_commission_policy_rules_seller_type", "commission_policy_rules", ["seller_type"], unique=False)
-    op.create_index("ix_commission_policy_rules_city", "commission_policy_rules", ["city"], unique=False)
-    op.create_index("ix_commission_policy_rules_starts_at", "commission_policy_rules", ["starts_at"], unique=False)
-    op.create_index("ix_commission_policy_rules_ends_at", "commission_policy_rules", ["ends_at"], unique=False)
-    op.create_index("ix_commission_policy_rules_created_at", "commission_policy_rules", ["created_at"], unique=False)
+    if not inspector.has_table("commission_policies"):
+        op.create_table(
+            "commission_policies",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("name", sa.String(length=120), nullable=False),
+            sa.Column("status", sa.String(length=16), nullable=False, server_default="draft"),
+            sa.Column("created_by_admin_id", sa.Integer(), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("activated_at", sa.DateTime(), nullable=True),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.ForeignKeyConstraint(["created_by_admin_id"], ["users.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_if_missing(inspector, "commission_policies", "ix_commission_policies_status", ["status"])
+    _create_index_if_missing(inspector, "commission_policies", "ix_commission_policies_created_by_admin_id", ["created_by_admin_id"])
+    _create_index_if_missing(inspector, "commission_policies", "ix_commission_policies_created_at", ["created_at"])
+    _create_index_if_missing(inspector, "commission_policies", "ix_commission_policies_activated_at", ["activated_at"])
+
+    if not inspector.has_table("commission_policy_rules"):
+        op.create_table(
+            "commission_policy_rules",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("policy_id", sa.Integer(), nullable=False),
+            sa.Column("applies_to", sa.String(length=24), nullable=False, server_default="all"),
+            sa.Column("seller_type", sa.String(length=24), nullable=False, server_default="all"),
+            sa.Column("city", sa.String(length=64), nullable=True),
+            sa.Column("base_rate_bps", sa.Integer(), nullable=False, server_default="500"),
+            sa.Column("min_fee_minor", sa.Integer(), nullable=True),
+            sa.Column("max_fee_minor", sa.Integer(), nullable=True),
+            sa.Column("promo_discount_bps", sa.Integer(), nullable=True),
+            sa.Column("starts_at", sa.DateTime(), nullable=True),
+            sa.Column("ends_at", sa.DateTime(), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["policy_id"], ["commission_policies.id"]),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_policy_id", ["policy_id"])
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_applies_to", ["applies_to"])
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_seller_type", ["seller_type"])
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_city", ["city"])
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_starts_at", ["starts_at"])
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_ends_at", ["ends_at"])
+    _create_index_if_missing(inspector, "commission_policy_rules", "ix_commission_policy_rules_created_at", ["created_at"])
 
 
 def downgrade():
-    op.drop_index("ix_commission_policy_rules_created_at", table_name="commission_policy_rules")
-    op.drop_index("ix_commission_policy_rules_ends_at", table_name="commission_policy_rules")
-    op.drop_index("ix_commission_policy_rules_starts_at", table_name="commission_policy_rules")
-    op.drop_index("ix_commission_policy_rules_city", table_name="commission_policy_rules")
-    op.drop_index("ix_commission_policy_rules_seller_type", table_name="commission_policy_rules")
-    op.drop_index("ix_commission_policy_rules_applies_to", table_name="commission_policy_rules")
-    op.drop_index("ix_commission_policy_rules_policy_id", table_name="commission_policy_rules")
-    op.drop_table("commission_policy_rules")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    op.drop_index("ix_commission_policies_activated_at", table_name="commission_policies")
-    op.drop_index("ix_commission_policies_created_at", table_name="commission_policies")
-    op.drop_index("ix_commission_policies_created_by_admin_id", table_name="commission_policies")
-    op.drop_index("ix_commission_policies_status", table_name="commission_policies")
-    op.drop_table("commission_policies")
+    if inspector.has_table("commission_policy_rules"):
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_created_at")
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_ends_at")
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_starts_at")
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_city")
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_seller_type")
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_applies_to")
+        _drop_index_if_exists(inspector, "commission_policy_rules", "ix_commission_policy_rules_policy_id")
+        op.drop_table("commission_policy_rules")
 
-    op.drop_index("ix_pricing_benchmarks_updated_at", table_name="pricing_benchmarks")
-    op.drop_index("ix_pricing_benchmarks_item_type", table_name="pricing_benchmarks")
-    op.drop_index("ix_pricing_benchmarks_city", table_name="pricing_benchmarks")
-    op.drop_index("ix_pricing_benchmarks_category", table_name="pricing_benchmarks")
-    op.drop_table("pricing_benchmarks")
+    if inspector.has_table("commission_policies"):
+        _drop_index_if_exists(inspector, "commission_policies", "ix_commission_policies_activated_at")
+        _drop_index_if_exists(inspector, "commission_policies", "ix_commission_policies_created_at")
+        _drop_index_if_exists(inspector, "commission_policies", "ix_commission_policies_created_by_admin_id")
+        _drop_index_if_exists(inspector, "commission_policies", "ix_commission_policies_status")
+        op.drop_table("commission_policies")
+
+    if inspector.has_table("pricing_benchmarks"):
+        _drop_index_if_exists(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_updated_at")
+        _drop_index_if_exists(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_item_type")
+        _drop_index_if_exists(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_city")
+        _drop_index_if_exists(inspector, "pricing_benchmarks", "ix_pricing_benchmarks_category")
+        op.drop_table("pricing_benchmarks")

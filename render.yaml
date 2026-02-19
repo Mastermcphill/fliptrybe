@@ -7,7 +7,7 @@ services:
     branch: main
     autoDeploy: true
     buildCommand: pip install -r requirements.txt
-    preDeployCommand: flask db upgrade
+    preDeployCommand: python -m flask --app main:app db upgrade
     startCommand: gunicorn -b 0.0.0.0:$PORT "app:create_app()"
     envVars:
       - key: FLIPTRYBE_ENV

@@ -17,29 +17,51 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "refresh_tokens",
-        sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), nullable=False),
-        sa.Column("token_hash", sa.String(length=128), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("expires_at", sa.DateTime(), nullable=False),
-        sa.Column("revoked_at", sa.DateTime(), nullable=True),
-        sa.Column("device_id", sa.String(length=128), nullable=True),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete=None),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("token_hash", name="uq_refresh_tokens_token_hash"),
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    table_name = "refresh_tokens"
+
+    if not insp.has_table(table_name):
+        op.create_table(
+            table_name,
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("user_id", sa.Integer(), nullable=False),
+            sa.Column("token_hash", sa.String(length=128), nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("expires_at", sa.DateTime(), nullable=False),
+            sa.Column("revoked_at", sa.DateTime(), nullable=True),
+            sa.Column("device_id", sa.String(length=128), nullable=True),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete=None),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("token_hash", name="uq_refresh_tokens_token_hash"),
+        )
+
+    existing_indexes = {str(idx.get("name") or "") for idx in insp.get_indexes(table_name)}
+    indexes = (
+        ("ix_refresh_tokens_user_id", ["user_id"]),
+        ("ix_refresh_tokens_token_hash", ["token_hash"]),
+        ("ix_refresh_tokens_expires_at", ["expires_at"]),
+        ("ix_refresh_tokens_revoked_at", ["revoked_at"]),
     )
-    op.create_index("ix_refresh_tokens_user_id", "refresh_tokens", ["user_id"], unique=False)
-    op.create_index("ix_refresh_tokens_token_hash", "refresh_tokens", ["token_hash"], unique=False)
-    op.create_index("ix_refresh_tokens_expires_at", "refresh_tokens", ["expires_at"], unique=False)
-    op.create_index("ix_refresh_tokens_revoked_at", "refresh_tokens", ["revoked_at"], unique=False)
+    for name, columns in indexes:
+        if name not in existing_indexes:
+            op.create_index(name, table_name, columns, unique=False)
 
 
 def downgrade() -> None:
-    op.drop_index("ix_refresh_tokens_revoked_at", table_name="refresh_tokens")
-    op.drop_index("ix_refresh_tokens_expires_at", table_name="refresh_tokens")
-    op.drop_index("ix_refresh_tokens_token_hash", table_name="refresh_tokens")
-    op.drop_index("ix_refresh_tokens_user_id", table_name="refresh_tokens")
-    op.drop_table("refresh_tokens")
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    table_name = "refresh_tokens"
+    if not insp.has_table(table_name):
+        return
 
+    existing_indexes = {str(idx.get("name") or "") for idx in insp.get_indexes(table_name)}
+    for index_name in (
+        "ix_refresh_tokens_revoked_at",
+        "ix_refresh_tokens_expires_at",
+        "ix_refresh_tokens_token_hash",
+        "ix_refresh_tokens_user_id",
+    ):
+        if index_name in existing_indexes:
+            op.drop_index(index_name, table_name=table_name)
+    op.drop_table(table_name)
