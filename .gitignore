@@ -8,6 +8,8 @@ __pycache__/
 # Backend artifacts
 backend/instance/
 backend/**/*.db
+backend/uploads/
+uploads/
 backend/qa/artifacts/
 backend/ops/artifacts/
 
