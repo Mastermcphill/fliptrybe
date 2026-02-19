@@ -2,12 +2,40 @@ services:
   - type: web
     name: tri-o-fliptrybe
     runtime: python
+    pythonVersion: 3.12.2
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    preDeployCommand: python -m flask --app main:app db upgrade
     startCommand: bash -c "chmod +x ops/start.sh && ./ops/start.sh"
     envVars:
       - key: FLIPTRYBE_ENV
         value: prod
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENABLE_METRICS
+        value: "true"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SESSION_COOKIE_HTTPONLY
+        value: "true"
+      - key: SESSION_COOKIE_SAMESITE
+        value: "Lax"
+      - key: ENABLE_CACHE
+        value: "true"
+      - key: ENABLE_RATE_LIMIT
+        value: "true"
+      - key: ENABLE_IDEMPOTENCY_ENFORCEMENT
+        value: "true"
+      - key: DEFAULT_CACHE_TTL_SECONDS
+        value: "60"
+      - key: LISTING_DETAIL_CACHE_TTL_SECONDS
+        value: "300"
+      - key: FEED_CACHE_TTL_SECONDS
+        value: "30"
+      - key: PAYSTACK_WEBHOOK_QUEUE
+        value: "true"
+      - key: TERMII_QUEUE
+        value: "true"
       - key: ESCROW_CRON_TOKEN
         sync: false
       - key: SECRET_KEY
@@ -15,4 +43,86 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: CACHE_REDIS_URL
+        sync: false
+      - key: RATE_LIMIT_REDIS_URL
+        sync: false
+
+  - type: worker
+    name: tri-o-fliptrybe-worker
+    runtime: python
+    pythonVersion: 3.12.2
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: celery -A celery_app.celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-2}
+    envVars:
+      - key: FLIPTRYBE_ENV
+        value: prod
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENABLE_CACHE
+        value: "true"
+      - key: ENABLE_RATE_LIMIT
+        value: "true"
+      - key: ENABLE_IDEMPOTENCY_ENFORCEMENT
+        value: "true"
+      - key: PAYSTACK_WEBHOOK_QUEUE
+        value: "true"
+      - key: TERMII_QUEUE
+        value: "true"
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: CACHE_REDIS_URL
+        sync: false
+      - key: RATE_LIMIT_REDIS_URL
+        sync: false
+
+  - type: worker
+    name: tri-o-fliptrybe-cron
+    runtime: python
+    pythonVersion: 3.12.2
+    rootDir: backend
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: celery -A celery_app.celery beat --loglevel=INFO
+    envVars:
+      - key: FLIPTRYBE_ENV
+        value: prod
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENABLE_CACHE
+        value: "true"
+      - key: ENABLE_RATE_LIMIT
+        value: "true"
+      - key: ENABLE_IDEMPOTENCY_ENFORCEMENT
+        value: "true"
+      - key: PAYSTACK_WEBHOOK_QUEUE
+        value: "true"
+      - key: TERMII_QUEUE
+        value: "true"
+      - key: SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      - key: CACHE_REDIS_URL
+        sync: false
+      - key: RATE_LIMIT_REDIS_URL
         sync: false

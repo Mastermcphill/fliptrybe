@@ -35,6 +35,15 @@ from app.services.listing_metadata_schema import (
     validate_category_metadata,
 )
 from app.utils.rate_limit import check_limit
+from app.utils.cache_layer import (
+    build_cache_key,
+    get_json,
+    set_json,
+    delete,
+    delete_prefix,
+    listing_detail_cache_ttl_seconds,
+    feed_cache_ttl_seconds,
+)
 from app.services.risk_engine_service import record_event
 from app.services.image_dedupe_service import ensure_image_unique, DuplicateImageError
 from app.services.discovery_service import (
@@ -694,6 +703,27 @@ def _normalize_search_payload(
     }
 
 
+def _listing_detail_cache_key(listing_id: int) -> str:
+    return build_cache_key("listing_detail", {"id": int(listing_id)})
+
+
+def _feed_response_cache_key(scope: str, params: dict) -> str:
+    return build_cache_key(f"feed:{scope}", params)
+
+
+def _invalidate_listing_read_caches(listing_id: int | None = None) -> None:
+    # Writes are much less frequent than reads; broad feed invalidation is acceptable.
+    try:
+        if listing_id is not None:
+            delete(_listing_detail_cache_key(int(listing_id)))
+    except Exception:
+        pass
+    try:
+        delete_prefix("v1:feed:")
+    except Exception:
+        pass
+
+
 def _rate_limit_response(action: str, *, user: User | None, limit: int, window_seconds: int):
     try:
         settings = get_settings()
@@ -1183,6 +1213,17 @@ def public_listings_search():
         user_city, user_state = _user_preferences(u)
         pref_city = user_city or pref_city
         pref_state = user_state or pref_state
+    cache_key = _feed_response_cache_key(
+        "public_listings_search",
+        {
+            **args,
+            "preferred_city": pref_city,
+            "preferred_state": pref_state,
+        },
+    )
+    cached_payload = get_json(cache_key)
+    if isinstance(cached_payload, dict):
+        return jsonify(cached_payload), 200
     try:
         raw_payload = search_listings_v2(
             q=args["q"],
@@ -1233,6 +1274,7 @@ def public_listings_search():
             sort=args["sort"],
             q=args["q"],
         )
+        set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
         return jsonify(payload), 200
     except Exception:
         try:
@@ -1266,6 +1308,19 @@ def listings_search():
         pref_city = user_city or pref_city
         pref_state = user_state or pref_state
     include_inactive = _is_admin(u)
+    cache_key = _feed_response_cache_key(
+        "listings_search",
+        {
+            **args,
+            "preferred_city": pref_city,
+            "preferred_state": pref_state,
+            "include_inactive": bool(include_inactive),
+            "requester_user_id": int(getattr(u, "id", 0) or 0),
+        },
+    )
+    cached_payload = get_json(cache_key)
+    if isinstance(cached_payload, dict):
+        return jsonify(cached_payload), 200
     try:
         raw_payload = search_listings_v2(
             q=args["q"],
@@ -1316,6 +1371,7 @@ def listings_search():
             sort=args["sort"],
             q=args["q"],
         )
+        set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
         return jsonify(payload), 200
     except Exception:
         try:
@@ -1445,6 +1501,7 @@ def admin_approve_listing(listing_id: int):
     try:
         db.session.add(listing)
         db.session.commit()
+        _invalidate_listing_read_caches(int(listing.id))
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=_base_url())}), 200
     except Exception as exc:
         db.session.rollback()
@@ -1472,6 +1529,7 @@ def admin_flag_listing_for_inspection(listing_id: int):
     try:
         db.session.add(listing)
         db.session.commit()
+        _invalidate_listing_read_caches(int(listing.id))
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=_base_url())}), 200
     except Exception as exc:
         db.session.rollback()
@@ -1555,6 +1613,21 @@ def public_listings_recommended():
         pref_city, pref_state = _user_preferences(u)
         city = pref_city or city
         state = pref_state or state
+    cache_key = _feed_response_cache_key(
+        "public_listings_recommended",
+        {
+            "limit": int(limit),
+            "city": city,
+            "state": state,
+            "category_id": category_id,
+            "parent_category_id": parent_category_id,
+            "brand_id": brand_id,
+            "model_id": model_id,
+        },
+    )
+    cached_payload = get_json(cache_key)
+    if isinstance(cached_payload, dict):
+        return jsonify(cached_payload), 200
     try:
         q = _apply_listing_ordering(_apply_listing_active_filter(Listing.query))
         if category_id is not None and hasattr(Listing, "category_id"):
@@ -1574,7 +1647,9 @@ def public_listings_recommended():
             payload = _listing_item_from_raw(row.to_dict(base_url=_base_url()), ranking_score=int(score), ranking_reason=reasons)
             ranked.append(payload)
         ranked.sort(key=lambda item: (int(item.get("ranking_score", 0)), item.get("created_at") or ""), reverse=True)
-        return jsonify({"ok": True, "city": city, "state": state, "items": ranked[:limit], "limit": limit}), 200
+        out = {"ok": True, "city": city, "state": state, "items": ranked[:limit], "limit": limit}
+        set_json(cache_key, out, ttl_seconds=feed_cache_ttl_seconds())
+        return jsonify(out), 200
     except Exception:
         try:
             db.session.rollback()
@@ -2171,6 +2246,18 @@ def merchant_listings():
 @market_bp.get("/listings/<int:listing_id>")
 def get_listing(listing_id: int):
     u = _current_user()
+    cache_key = _listing_detail_cache_key(int(listing_id))
+    cached_envelope = get_json(cache_key)
+    if isinstance(cached_envelope, dict):
+        cached_listing = cached_envelope.get("listing") if isinstance(cached_envelope.get("listing"), dict) else None
+        if isinstance(cached_listing, dict):
+            is_owner_cached = False
+            try:
+                is_owner_cached = bool(u is not None and int(getattr(u, "id", 0) or 0) == int(cached_listing.get("user_id") or 0))
+            except Exception:
+                is_owner_cached = False
+            if not _is_admin(u) and not is_owner_cached:
+                return jsonify(cached_envelope), 200
     item = Listing.query.get(listing_id)
     if not item:
         return jsonify({"message": "Not found"}), 404
@@ -2185,7 +2272,10 @@ def get_listing(listing_id: int):
         elif user and (user.name or "").strip():
             payload["merchant_name"] = (user.name or "").strip()
         payload["merchant_profile_image_url"] = (getattr(user, "profile_image_url", "") or "") if user else ""
-    return jsonify({"ok": True, "listing": payload}), 200
+    envelope = {"ok": True, "listing": payload}
+    if not include_private:
+        set_json(cache_key, envelope, ttl_seconds=listing_detail_cache_ttl_seconds())
+    return jsonify(envelope), 200
 
 
 @market_bp.put("/listings/<int:listing_id>")
@@ -2356,6 +2446,7 @@ def update_listing(listing_id: int):
             db.session.rollback()
         db.session.add(item)
         db.session.commit()
+        _invalidate_listing_read_caches(int(item.id))
         if current_active and not new_active:
             try:
                 queue_item_unavailable_notifications(entity="listing", entity_id=int(item.id), title=item.title or "Listing")
@@ -2385,6 +2476,7 @@ def delete_listing(listing_id: int):
             db.session.rollback()
         db.session.delete(item)
         db.session.commit()
+        _invalidate_listing_read_caches(int(listing_id))
         return jsonify({"ok": True, "deleted": True, "listing_id": listing_id}), 200
     except Exception as e:
         db.session.rollback()
@@ -2639,6 +2731,7 @@ def create_listing():
                 fp.listing_id = int(listing.id)
                 db.session.add(fp)
         db.session.commit()
+        _invalidate_listing_read_caches(int(listing.id))
 
         base = _base_url()
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=base)}), 201

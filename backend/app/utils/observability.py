@@ -147,6 +147,20 @@ def install_request_observers(app) -> None:
         g.request_id = rid
         g.request_started_at = time.perf_counter()
         try:
+            app.logger.info(
+                json.dumps(
+                    {
+                        "ts": datetime.utcnow().isoformat(),
+                        "event": "request_start",
+                        "request_id": rid,
+                        "path": request.path,
+                        "method": request.method,
+                    }
+                )
+            )
+        except Exception:
+            pass
+        try:
             import sentry_sdk
 
             sentry_sdk.set_tag("request_id", rid)

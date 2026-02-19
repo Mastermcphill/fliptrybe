@@ -121,6 +121,13 @@ def _coerce_manual_sla(raw_value, default_value: int = 360) -> int:
     return raw
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = (os.getenv(name) or "").strip().lower()
+    if not raw:
+        return bool(default)
+    return raw in ("1", "true", "yes", "on")
+
+
 def _manual_sla_minutes(settings) -> int:
     return _coerce_manual_sla(getattr(settings, "manual_payment_sla_minutes", 360), 360)
 
@@ -934,10 +941,8 @@ def initialize_payment():
         return rl
 
     data = request.get_json(silent=True) or {}
-    idem = lookup_response(int(u.id), "/api/payments/initialize", data)
-    if idem and idem[0] == "hit":
-        return jsonify(idem[1]), idem[2]
-    if idem and idem[0] == "conflict":
+    idem = lookup_response(int(u.id), "/api/payments/initialize", data, scope="/api/payments/initialize")
+    if idem and idem[0] in ("hit", "conflict", "required"):
         return jsonify(idem[1]), idem[2]
     idem_row = idem[1] if idem and idem[0] == "miss" else None
 
@@ -1291,6 +1296,24 @@ def paystack_webhook():
         raw = request.get_data() or b""
         sig = request.headers.get("X-Paystack-Signature")
         payload = request.get_json(silent=True) or {}
+        if _env_bool("PAYSTACK_WEBHOOK_QUEUE", True):
+            trace_id = _request_id()
+            try:
+                from app.tasks.scale_tasks import process_paystack_webhook_task
+
+                process_paystack_webhook_task.delay(
+                    payload=payload if isinstance(payload, dict) else {},
+                    raw_text=(raw or b"").decode("utf-8", errors="ignore"),
+                    signature=sig,
+                    source="api/payments/webhook/paystack:queued",
+                    trace_id=trace_id,
+                )
+                return jsonify({"ok": True, "queued": True, "trace_id": trace_id}), 200
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
         body, status = process_paystack_webhook(payload=payload, raw=raw, signature=sig, source="api/payments/webhook/paystack")
         return jsonify(body), int(status)
     except Exception:

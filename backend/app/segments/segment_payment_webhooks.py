@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 
 from flask import Blueprint, jsonify, request, current_app
 
@@ -9,6 +10,7 @@ from app.models import Wallet, Transaction
 from app.segments.segment_payments import process_paystack_webhook
 from app.utils.autopilot import get_settings
 from app.services.risk_engine_service import record_event
+from app.utils.observability import get_request_id
 
 webhooks_bp = Blueprint("webhooks_bp", __name__, url_prefix="/api/webhooks")
 
@@ -74,6 +76,24 @@ def paystack_webhook():
         raw = request.get_data() or b"{}"
         sig = request.headers.get("X-Paystack-Signature")
         payload = request.get_json(silent=True) or {}
+
+        if (os.getenv("PAYSTACK_WEBHOOK_QUEUE") or "true").strip().lower() in ("1", "true", "yes", "on"):
+            try:
+                from app.tasks.scale_tasks import process_paystack_webhook_task
+
+                process_paystack_webhook_task.delay(
+                    payload=payload if isinstance(payload, dict) else {},
+                    raw_text=(raw or b"").decode("utf-8", errors="ignore"),
+                    signature=sig,
+                    source="api/webhooks/paystack:queued",
+                    trace_id=get_request_id(),
+                )
+                return jsonify({"ok": True, "queued": True, "trace_id": get_request_id()}), 200
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
         body, status = process_paystack_webhook(payload=payload, raw=raw, signature=sig, source="api/webhooks/paystack")
 

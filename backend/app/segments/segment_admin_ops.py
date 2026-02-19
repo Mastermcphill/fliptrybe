@@ -36,6 +36,7 @@ from app.models import (
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.feature_flags import get_all_flags
+from app.utils.cache_layer import cache_stats
 from app.services.simulation.liquidity_simulator import (
     get_liquidity_baseline,
     run_liquidity_simulation,
@@ -85,6 +86,51 @@ def _require_admin():
     if not _is_admin(u):
         return None, (jsonify({"message": "Forbidden"}), 403)
     return u, None
+
+
+@admin_ops_bp.get("/ops/cache-stats")
+def admin_cache_stats():
+    _, err = _require_admin()
+    if err:
+        return err
+    return jsonify({"ok": True, "cache": cache_stats()}), 200
+
+
+@admin_ops_bp.get("/ops/db-pool-stats")
+def admin_db_pool_stats():
+    u, err = _require_admin()
+    if err:
+        return err
+    metrics_enabled = (os.getenv("ENABLE_METRICS") or "").strip().lower() in ("1", "true", "yes", "on")
+    if not metrics_enabled and not _is_admin(u):
+        return jsonify({"ok": False, "error": "FORBIDDEN"}), 403
+    engine = db.engine
+    pool = getattr(engine, "pool", None)
+    payload = {
+        "ok": True,
+        "dialect": str(getattr(getattr(engine, "dialect", None), "name", "") or ""),
+        "pool_class": pool.__class__.__name__ if pool is not None else "",
+    }
+    if pool is not None:
+        for attr, key in (
+            ("checkedin", "checked_in"),
+            ("checkedout", "checked_out"),
+            ("overflow", "overflow"),
+            ("size", "size"),
+        ):
+            fn = getattr(pool, attr, None)
+            if callable(fn):
+                try:
+                    payload[key] = int(fn())
+                except Exception:
+                    payload[key] = None
+        status_fn = getattr(pool, "status", None)
+        if callable(status_fn):
+            try:
+                payload["status"] = str(status_fn())
+            except Exception:
+                payload["status"] = ""
+    return jsonify(payload), 200
 
 
 def _audit(actor_id: int | None, action: str, target_type: str, target_id: int | None, meta: dict | None = None):

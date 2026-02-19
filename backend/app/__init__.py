@@ -60,6 +60,11 @@ from app.segments.segment_omega_intelligence import omega_bp
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.observability import init_sentry, init_otel, install_request_observers
+from app.utils.rate_limit import (
+    check_limit,
+    rate_limit_enabled,
+    build_rate_limit_subject,
+)
 
 
 def _resolve_alembic_head() -> str:
@@ -92,6 +97,22 @@ def _resolve_git_sha() -> str:
         return out.decode().strip()
     except Exception:
         return "unknown"
+
+
+def _env_int(name: str, default: int, *, minimum: int = 1, maximum: int = 100000) -> int:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        value = int(default)
+    else:
+        try:
+            value = int(raw)
+        except Exception:
+            value = int(default)
+    if value < minimum:
+        value = minimum
+    if value > maximum:
+        value = maximum
+    return value
 
 
 def _ensure_referral_schema_compatibility():
@@ -306,11 +327,6 @@ def create_app():
     # Basic config
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "pool_pre_ping": True,
-        "pool_reset_on_return": "rollback",
-        "pool_recycle": 300,
-    }
 
     # Ensure instance dir exists for SQLite paths
     instance_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "instance"))
@@ -330,6 +346,27 @@ def create_app():
     if "fliptrybe-logistics" in database_url.replace("\\", "/"):
         raise RuntimeError("Invalid DATABASE_URL: must not point to fliptrybe-logistics")
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    engine_options = {
+        "pool_pre_ping": True,
+        "pool_reset_on_return": "rollback",
+        "pool_recycle": _env_int("DB_POOL_RECYCLE_SECONDS", 1800, minimum=60, maximum=86400),
+    }
+    if not database_url.startswith("sqlite://"):
+        engine_options.update(
+            {
+                "pool_size": _env_int("DB_POOL_SIZE", 10, minimum=1, maximum=200),
+                "max_overflow": _env_int("DB_MAX_OVERFLOW", 20, minimum=0, maximum=500),
+                "pool_timeout": _env_int("DB_POOL_TIMEOUT_SECONDS", 30, minimum=1, maximum=300),
+            }
+        )
+        app.logger.info(
+            "db_pooling_enabled pool_size=%s max_overflow=%s pool_timeout=%s pool_recycle=%s pgbouncer_recommended=true",
+            int(engine_options.get("pool_size", 0) or 0),
+            int(engine_options.get("max_overflow", 0) or 0),
+            int(engine_options.get("pool_timeout", 0) or 0),
+            int(engine_options.get("pool_recycle", 0) or 0),
+        )
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = engine_options
 
     # CORS configuration
     cors_origins = (os.getenv("CORS_ORIGINS") or "").strip()
@@ -620,6 +657,93 @@ def create_app():
                 db.session.rollback()
             except Exception:
                 pass
+
+    def _rate_limited_response(retry_after_seconds: int):
+        retry_after = int(max(1, retry_after_seconds or 1))
+        payload = {
+            "ok": False,
+            "error": {
+                "code": "RATE_LIMITED",
+                "retry_after_seconds": retry_after,
+            },
+        }
+        rid = (getattr(g, "request_id", "") or "").strip()
+        if rid:
+            payload["trace_id"] = rid
+        resp = jsonify(payload)
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(retry_after)
+        return resp
+
+    @app.before_request
+    def _global_rate_limit_guard():
+        if bool(app.config.get("TESTING")):
+            allow_in_tests = (os.getenv("RATE_LIMIT_IN_TESTS") or "").strip().lower() in ("1", "true", "yes", "on")
+            if not allow_in_tests:
+                return None
+        if not rate_limit_enabled(True):
+            return None
+        method = (request.method or "GET").strip().upper()
+        if method == "OPTIONS":
+            return None
+        path = (request.path or "").strip()
+        if not path.startswith("/api/"):
+            return None
+
+        auth_paths = (
+            "/api/auth",
+            "/api/login",
+            "/api/register",
+            "/api/otp",
+            "/api/password",
+        )
+        is_auth_path = any(path.startswith(prefix) for prefix in auth_paths)
+        if is_auth_path:
+            subject = build_rate_limit_subject(
+                scope="ip",
+                user_id=None,
+                request_obj=request,
+            )
+            ok_minute, retry_minute = check_limit(
+                f"tier:auth:minute:{subject}",
+                limit=10,
+                window_seconds=60,
+            )
+            if not ok_minute:
+                return _rate_limited_response(retry_minute)
+            ok_hour, retry_hour = check_limit(
+                f"tier:auth:hour:{subject}",
+                limit=30,
+                window_seconds=3600,
+            )
+            if not ok_hour:
+                return _rate_limited_response(retry_hour)
+            return None
+
+        user_id = getattr(g, "auth_user_id", None)
+        scope = "user" if user_id is not None else "ip"
+        subject = build_rate_limit_subject(
+            scope=scope,
+            user_id=int(user_id) if user_id is not None else None,
+            request_obj=request,
+        )
+        if method == "GET":
+            limit = 120
+            window_seconds = 60
+            tier = "browse"
+        else:
+            limit = 60
+            window_seconds = 60
+            tier = "write"
+        key = f"tier:{tier}:{method}:{path}:{subject}"
+        ok, retry_after = check_limit(
+            key,
+            limit=limit,
+            window_seconds=window_seconds,
+        )
+        if not ok:
+            return _rate_limited_response(retry_after)
+        return None
 
     @app.before_request
     def _log_client_fingerprint():

@@ -436,6 +436,21 @@ def _otp_demo_mode() -> bool:
 
 def _otp_send_message(phone: str, code: str) -> tuple[bool, str]:
     message = f"Your FlipTrybe OTP is {code}. It expires in {_otp_ttl_minutes()} minutes."
+    queue_enabled = (os.getenv("TERMII_QUEUE") or "true").strip().lower() in ("1", "true", "yes", "on")
+    if queue_enabled and not _otp_demo_mode():
+        try:
+            from app.tasks.scale_tasks import send_termii_message_task
+
+            send_termii_message_task.delay(
+                channel="generic",
+                to=phone,
+                message=message,
+                reference="otp_request",
+                trace_id=get_request_id(),
+            )
+            return True, "queued"
+        except Exception:
+            pass
     try:
         return send_termii_message(channel="generic", to=phone, message=message)
     except Exception as exc:

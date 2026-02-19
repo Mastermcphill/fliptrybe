@@ -16,6 +16,7 @@ from app.models import Receipt
 from app.services.fraud import should_block_withdrawal
 from app.utils.events import log_event
 from app.utils.observability import get_request_id
+from app.utils.idempotency import lookup_response, store_response
 import os
 
 wallets_bp = Blueprint("wallets_bp", __name__, url_prefix="/api/wallet")
@@ -143,6 +144,10 @@ def request_payout():
             }
         ), 403
     payload = request.get_json(silent=True) or {}
+    idem = lookup_response(int(u.id), "/api/wallet/payouts", payload, scope="/api/wallet/payouts")
+    if idem and idem[0] in ("hit", "conflict", "required"):
+        return jsonify(idem[1]), idem[2]
+    idem_row = idem[1] if idem and idem[0] == "miss" else None
     try:
         amount = float(payload.get("amount") or 0.0)
     except Exception:
@@ -210,7 +215,10 @@ def request_payout():
             idempotency_key=f"payout_requested:{int(pr.id)}",
             metadata={"amount": float(pr.amount or 0.0), "speed": pr.speed or "standard"},
         )
-        return jsonify({"ok": True, "payout": pr.to_dict()}), 201
+        response_payload = {"ok": True, "payout": pr.to_dict()}
+        if idem_row is not None:
+            store_response(idem_row, response_payload, 201)
+        return jsonify(response_payload), 201
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": "Failed", "error": str(e)}), 500

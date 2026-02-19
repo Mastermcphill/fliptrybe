@@ -793,6 +793,11 @@ def create_order():
             raise ValueError(f"{field_name} invalid")
         return parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
+    idem = lookup_response(int(u.id), "/api/orders", payload, scope="/api/orders")
+    if idem and idem[0] in ("hit", "conflict", "required"):
+        return jsonify(idem[1]), idem[2]
+    idem_row = idem[1] if idem and idem[0] == "miss" else None
+
     buyer_id_raw = payload.get("buyer_id")
     try:
         buyer_id = int(buyer_id_raw or u.id)
@@ -890,7 +895,10 @@ def create_order():
                 int(listing_id_int) if listing_id_int is not None else None
             )
             if same_buyer and same_merchant and same_listing:
-                return jsonify({"ok": True, "order": existing.to_dict(), "idempotent": True}), 200
+                response_payload = {"ok": True, "order": existing.to_dict(), "idempotent": True}
+                if idem_row is not None:
+                    store_response(idem_row, response_payload, 200)
+                return jsonify(response_payload), 200
             return jsonify({"ok": False, "message": "payment_reference already used"}), 409
 
     if listing and hasattr(listing, "is_active") and not bool(getattr(listing, "is_active")):
@@ -1030,7 +1038,10 @@ def create_order():
         _event(order.id, u.id, "created", "Order created")
         _notify_user(int(order.merchant_id), "New Order", f"You received a new order #{int(order.id)}")
         _notify_user(int(order.buyer_id), "Order Created", f"Your order #{int(order.id)} was created")
-        return jsonify({"ok": True, "order": order.to_dict()}), 201
+        response_payload = {"ok": True, "order": order.to_dict()}
+        if idem_row is not None:
+            store_response(idem_row, response_payload, 201)
+        return jsonify(response_payload), 201
     except Exception as e:
         db.session.rollback()
         try:
@@ -1199,9 +1210,7 @@ def create_orders_bulk():
         ), 503
 
     idem = lookup_response(int(u.id), "/api/orders/bulk", payload)
-    if idem and idem[0] == "hit":
-        return jsonify(idem[1]), idem[2]
-    if idem and idem[0] == "conflict":
+    if idem and idem[0] in ("hit", "conflict", "required"):
         return jsonify(idem[1]), idem[2]
     idem_row = idem[1] if idem and idem[0] == "miss" else None
 

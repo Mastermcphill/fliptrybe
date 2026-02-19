@@ -7,12 +7,48 @@ from functools import wraps
 
 from flask import jsonify, request, g
 
+try:
+    import redis
+except Exception:  # pragma: no cover - optional dependency fallback
+    redis = None
+
 
 _LOCK = threading.Lock()
 _WINDOWS: dict[str, list[float]] = {}
+_CLIENT = None
+_CLIENT_INIT = False
+_STATS = {
+    "redis_hits": 0,
+    "redis_errors": 0,
+    "memory_hits": 0,
+}
 
 
 def check_limit(key: str, *, limit: int, window_seconds: int) -> tuple[bool, int]:
+    safe_window = max(1, int(window_seconds))
+    safe_limit = max(1, int(limit))
+    redis_client = _get_client()
+    if redis_client is not None:
+        now_sec = int(time.time())
+        window_epoch = now_sec // safe_window
+        counter_key = f"rl:v1:{key}:{window_epoch}"
+        try:
+            current = int(redis_client.incr(counter_key))
+            if current == 1:
+                redis_client.expire(counter_key, safe_window + 1)
+            with _LOCK:
+                _STATS["redis_hits"] = int(_STATS.get("redis_hits", 0) or 0) + 1
+            if current <= safe_limit:
+                return True, 0
+            retry_after = int(max(1, safe_window - (now_sec % safe_window)))
+            return False, retry_after
+        except Exception:
+            with _LOCK:
+                _STATS["redis_errors"] = int(_STATS.get("redis_errors", 0) or 0) + 1
+    return _check_limit_memory(key, limit=safe_limit, window_seconds=safe_window)
+
+
+def _check_limit_memory(key: str, *, limit: int, window_seconds: int) -> tuple[bool, int]:
     now = time.time()
     start = now - max(1, int(window_seconds))
     safe_limit = max(1, int(limit))
@@ -22,6 +58,7 @@ def check_limit(key: str, *, limit: int, window_seconds: int) -> tuple[bool, int
         if len(bucket) >= safe_limit:
             retry_after = int(max(1, window_seconds - (now - min(bucket))))
             _WINDOWS[key] = bucket
+            _STATS["memory_hits"] = int(_STATS.get("memory_hits", 0) or 0) + 1
             return False, retry_after
         bucket.append(now)
         _WINDOWS[key] = bucket
@@ -52,6 +89,8 @@ def _env_int(name: str, default: int, *, minimum: int = 1, maximum: int | None =
 
 
 def rate_limit_enabled(default: bool = True) -> bool:
+    if (os.getenv("ENABLE_RATE_LIMIT") or "").strip():
+        return _env_bool("ENABLE_RATE_LIMIT", default)
     return _env_bool("RATE_LIMIT_ENABLED", default)
 
 
@@ -63,8 +102,43 @@ def rate_limit_window_sec(default: int) -> int:
     return _env_int("RATE_LIMIT_WINDOW_SEC", default, minimum=1, maximum=86400)
 
 
-def trust_proxy_headers(default: bool = True) -> bool:
+def trust_proxy_headers(default: bool = False) -> bool:
     return _env_bool("TRUST_PROXY_HEADERS", default)
+
+
+def _rate_limit_redis_url() -> str:
+    return (os.getenv("RATE_LIMIT_REDIS_URL") or os.getenv("REDIS_URL") or "").strip()
+
+
+def _get_client():
+    global _CLIENT, _CLIENT_INIT
+    if not rate_limit_enabled(True):
+        return None
+    with _LOCK:
+        if _CLIENT_INIT:
+            return _CLIENT
+        _CLIENT_INIT = True
+    if redis is None:
+        return None
+    url = _rate_limit_redis_url()
+    if not url:
+        return None
+    try:
+        client = redis.Redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=0.75,
+            socket_timeout=0.75,
+            health_check_interval=30,
+        )
+        client.ping()
+        with _LOCK:
+            _CLIENT = client
+        return client
+    except Exception:
+        with _LOCK:
+            _CLIENT = None
+        return None
 
 
 def resolve_client_ip(request, *, trusted_proxy: bool = True) -> str:
@@ -98,7 +172,7 @@ def rate_limit(
     safe_key = str(key or "rate_limit")
     safe_window = max(1, int(per_seconds or 1))
     safe_limit = max(1, int(limit or 1))
-    trusted = trust_proxy_headers(True) if trusted_proxy is None else bool(trusted_proxy)
+    trusted = trust_proxy_headers(False) if trusted_proxy is None else bool(trusted_proxy)
 
     def decorator(fn):
         @wraps(fn)
@@ -130,6 +204,27 @@ def rate_limit(
         return wrapped
 
     return decorator
+
+
+def limiter_stats() -> dict:
+    with _LOCK:
+        return {
+            "enabled": bool(rate_limit_enabled(True)),
+            "redis_configured": bool(_rate_limit_redis_url()),
+            "redis_connected": bool(_CLIENT is not None),
+            "redis_hits": int(_STATS.get("redis_hits", 0) or 0),
+            "redis_errors": int(_STATS.get("redis_errors", 0) or 0),
+            "memory_hits": int(_STATS.get("memory_hits", 0) or 0),
+        }
+
+
+def build_rate_limit_subject(*, scope: str, user_id: int | None, request_obj=None, trusted_proxy: bool | None = None) -> str:
+    req = request_obj or request
+    normalized_scope = (scope or "ip").strip().lower()
+    trusted = trust_proxy_headers(False) if trusted_proxy is None else bool(trusted_proxy)
+    if normalized_scope == "user" and user_id is not None:
+        return f"u:{int(user_id)}"
+    return f"ip:{resolve_client_ip(req, trusted_proxy=trusted)}"
 
 
 def rate_limit_burst(
@@ -177,4 +272,6 @@ __all__ = [
     "rate_limit_window_sec",
     "resolve_client_ip",
     "trust_proxy_headers",
+    "limiter_stats",
+    "build_rate_limit_subject",
 ]
