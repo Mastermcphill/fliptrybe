@@ -1,4 +1,20 @@
 services:
+  - type: pserv
+    name: tri-o-meili
+    runtime: docker
+    rootDir: .
+    dockerfilePath: backend/ops/meili/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: MEILI_MASTER_KEY
+        sync: false
+      - key: MEILI_ENV
+        value: production
+    disk:
+      name: tri-o-meili-data
+      mountPath: /meili_data
+      sizeGB: 20
+
   - type: web
     name: tri-o-fliptrybe
     runtime: python
@@ -36,6 +52,18 @@ services:
         value: "true"
       - key: TERMII_QUEUE
         value: "true"
+      - key: SEARCH_ENGINE
+        value: meili
+      - key: MEILI_HOST
+        value: http://tri-o-meili:7700
+      - key: MEILI_API_KEY
+        sync: false
+      - key: SEARCH_FALLBACK_SQL
+        value: "true"
+      - key: SEARCH_TIMEOUT_MS
+        value: "1500"
+      - key: SEARCH_INDEX_LISTINGS
+        value: listings_v1
       - key: ESCROW_CRON_TOKEN
         sync: false
       - key: SECRET_KEY
@@ -75,6 +103,18 @@ services:
         value: "true"
       - key: TERMII_QUEUE
         value: "true"
+      - key: SEARCH_ENGINE
+        value: meili
+      - key: MEILI_HOST
+        value: http://tri-o-meili:7700
+      - key: MEILI_API_KEY
+        sync: false
+      - key: SEARCH_FALLBACK_SQL
+        value: "true"
+      - key: SEARCH_TIMEOUT_MS
+        value: "1500"
+      - key: SEARCH_INDEX_LISTINGS
+        value: listings_v1
       - key: SECRET_KEY
         sync: false
       - key: DATABASE_URL
