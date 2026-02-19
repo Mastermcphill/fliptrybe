@@ -91,8 +91,47 @@ class MeiliClient:
         except Exception:
             return {}
 
-    def healthcheck(self) -> dict[str, Any]:
+    def get_health(self) -> dict[str, Any]:
         return self._request("GET", "/health", ok_codes=(200,))
+
+    def healthcheck(self) -> dict[str, Any]:
+        # Backwards compatible alias
+        return self.get_health()
+
+    def _raise_not_initialized_if_missing(self, index_name: str, exc: MeiliApiError):
+        if exc.is_index_not_found:
+            raise SearchNotInitialized(index_name) from exc
+        raise exc
+
+    def index_exists(self, index_name: str) -> bool:
+        safe_name = str(index_name or "").strip()
+        if not safe_name:
+            raise SearchUnavailable("Index name is required")
+        try:
+            self._request("GET", f"/indexes/{safe_name}", ok_codes=(200,))
+            return True
+        except MeiliApiError as exc:
+            if exc.is_index_not_found:
+                return False
+            raise
+
+    def get_index_stats(self, index_name: str) -> dict[str, Any]:
+        safe_name = str(index_name or "").strip()
+        if not safe_name:
+            raise SearchUnavailable("Index name is required")
+        try:
+            return self._request("GET", f"/indexes/{safe_name}/stats", ok_codes=(200,))
+        except MeiliApiError as exc:
+            self._raise_not_initialized_if_missing(safe_name, exc)
+
+    def get_index_settings(self, index_name: str) -> dict[str, Any]:
+        safe_name = str(index_name or "").strip()
+        if not safe_name:
+            raise SearchUnavailable("Index name is required")
+        try:
+            return self._request("GET", f"/indexes/{safe_name}/settings", ok_codes=(200,))
+        except MeiliApiError as exc:
+            self._raise_not_initialized_if_missing(safe_name, exc)
 
     def ensure_index(self, index_name: str, primary_key: str = "id") -> dict[str, Any]:
         safe_name = str(index_name or "").strip()
@@ -237,9 +276,7 @@ class MeiliClient:
                 ok_codes=(200,),
             )
         except MeiliApiError as exc:
-            if exc.is_index_not_found:
-                raise SearchNotInitialized(safe_name) from exc
-            raise
+            self._raise_not_initialized_if_missing(safe_name, exc)
 
 
 def get_meili_client() -> MeiliClient:

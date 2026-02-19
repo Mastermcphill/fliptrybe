@@ -20,19 +20,52 @@ class _FakeMeiliClient:
         *,
         hits: list[dict] | None = None,
         fail_search: bool = False,
+        fail_health: bool = False,
         search_not_initialized: bool = False,
         existing_indexes: set[str] | None = None,
+        document_count: int = 0,
+        settings: dict | None = None,
     ):
         self._hits = list(hits or [])
         self._fail_search = bool(fail_search)
+        self._fail_health = bool(fail_health)
         self._search_not_initialized = bool(search_not_initialized)
         self.indexes = set(existing_indexes) if existing_indexes is not None else {"listings_v1"}
+        self._document_count = int(max(0, int(document_count or 0)))
+        self._settings = dict(
+            settings
+            or {
+                "searchableAttributes": [],
+                "filterableAttributes": [],
+                "sortableAttributes": [],
+            }
+        )
         self.create_calls = 0
         self.docs_by_id: dict[int, dict] = {}
         self.upsert_calls = 0
         self.ensure_calls: list[tuple[str, str]] = []
         self.configure_calls: list[str] = []
         self.operations: list[str] = []
+
+    def get_health(self):
+        if self._fail_health:
+            raise SearchUnavailable("connection refused")
+        return {"status": "available"}
+
+    def index_exists(self, index_name):
+        return str(index_name or "") in self.indexes
+
+    def get_index_stats(self, index_name):
+        safe_name = str(index_name or "")
+        if safe_name not in self.indexes:
+            raise SearchNotInitialized(safe_name)
+        return {"numberOfDocuments": int(self._document_count)}
+
+    def get_index_settings(self, index_name):
+        safe_name = str(index_name or "")
+        if safe_name not in self.indexes:
+            raise SearchNotInitialized(safe_name)
+        return dict(self._settings)
 
     def search(self, index_name, q, filters, sort, limit, offset):
         if self._fail_search:
@@ -312,6 +345,81 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertGreaterEqual(len(fake.operations), 1)
         self.assertEqual(fake.operations[0], "ensure:listings_v1:id")
         delay_mock.assert_called_once()
+
+    def test_search_status_when_engine_disabled(self):
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "sql"
+
+        res = self.client.get("/api/admin/search/status", headers=headers)
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertTrue(bool(payload.get("ok")))
+        self.assertEqual(payload.get("engine"), "disabled")
+        self.assertEqual(payload.get("index_name"), "listings_v1")
+        self.assertFalse(bool(payload.get("index_exists")))
+        self.assertEqual(int(payload.get("document_count") or 0), 0)
+
+    def test_search_status_index_missing(self):
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "meili"
+        fake = _FakeMeiliClient(existing_indexes=set())
+
+        with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake):
+            res = self.client.get("/api/admin/search/status", headers=headers)
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertTrue(bool(payload.get("ok")))
+        self.assertEqual(payload.get("engine"), "meili")
+        self.assertTrue(bool((payload.get("health") or {}).get("reachable")))
+        self.assertFalse(bool(payload.get("index_exists")))
+        self.assertEqual(int(payload.get("document_count") or 0), 0)
+
+    def test_search_status_index_present(self):
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "meili"
+        fake_settings = {
+            "searchableAttributes": ["title", "description"],
+            "filterableAttributes": ["category", "city"],
+            "sortableAttributes": ["price", "created_at"],
+        }
+        fake = _FakeMeiliClient(
+            existing_indexes={"listings_v1"},
+            document_count=34,
+            settings=fake_settings,
+        )
+
+        with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake):
+            res = self.client.get("/api/admin/search/status", headers=headers)
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertTrue(bool(payload.get("ok")))
+        self.assertEqual(payload.get("engine"), "meili")
+        self.assertTrue(bool(payload.get("index_exists")))
+        self.assertEqual(int(payload.get("document_count") or 0), 34)
+        settings = payload.get("settings") or {}
+        self.assertEqual(settings.get("searchableAttributes"), fake_settings["searchableAttributes"])
+        self.assertEqual(settings.get("filterableAttributes"), fake_settings["filterableAttributes"])
+        self.assertEqual(settings.get("sortableAttributes"), fake_settings["sortableAttributes"])
+
+    def test_search_status_meili_unreachable(self):
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "meili"
+        fake = _FakeMeiliClient(fail_health=True)
+
+        with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake):
+            res = self.client.get("/api/admin/search/status", headers=headers)
+
+        self.assertEqual(res.status_code, 503)
+        payload = res.get_json(force=True) or {}
+        self.assertFalse(bool(payload.get("ok")))
+        self.assertEqual(payload.get("engine"), "meili")
+        self.assertEqual(payload.get("error"), "SEARCH_UNAVAILABLE")
+        health = payload.get("health") or {}
+        self.assertFalse(bool(health.get("reachable")))
+        self.assertEqual(health.get("status"), "unreachable")
 
     def test_meili_index_not_found_maps_to_search_not_initialized(self):
         class _FakeResponse:

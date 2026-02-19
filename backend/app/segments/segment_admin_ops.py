@@ -39,7 +39,7 @@ from app.utils.feature_flags import get_all_flags
 from app.utils.cache_layer import cache_stats
 from app.utils.observability import get_request_id
 from app.services.search import listings_index_name, search_engine_is_meili
-from app.services.search.meili_client import SearchUnavailable, get_meili_client
+from app.services.search.meili_client import SearchNotInitialized, SearchUnavailable, get_meili_client
 from app.services.simulation.liquidity_simulator import (
     get_liquidity_baseline,
     run_liquidity_simulation,
@@ -184,6 +184,96 @@ def admin_search_reindex():
         ), 202
     except Exception as exc:
         return jsonify({"ok": False, "error": "SEARCH_REINDEX_ENQUEUE_FAILED", "message": str(exc), "trace_id": get_request_id()}), 500
+
+
+@admin_ops_bp.get("/search/status")
+def admin_search_status():
+    _, err = _require_admin()
+    if err:
+        return err
+
+    index_name = listings_index_name()
+    env_search_engine = str(os.getenv("SEARCH_ENGINE") or "")
+    env_fallback_sql = str(os.getenv("SEARCH_FALLBACK_SQL") or "")
+    meili_host_set = bool(str(os.getenv("MEILI_HOST") or "").strip())
+    is_meili = bool(search_engine_is_meili())
+
+    base_payload = {
+        "engine": "meili" if is_meili else "disabled",
+        "index_name": index_name,
+        "index_exists": False,
+        "document_count": 0,
+        "health": {
+            "reachable": False,
+            "status": "unreachable",
+        },
+        "settings": {
+            "searchableAttributes": [],
+            "filterableAttributes": [],
+            "sortableAttributes": [],
+        },
+        "env": {
+            "SEARCH_ENGINE": env_search_engine,
+            "SEARCH_FALLBACK_SQL": env_fallback_sql,
+            "MEILI_HOST_set": bool(meili_host_set),
+        },
+    }
+
+    if not is_meili:
+        return jsonify({"ok": True, **base_payload}), 200
+
+    try:
+        client = get_meili_client()
+        _ = client.get_health()
+        base_payload["health"] = {"reachable": True, "status": "available"}
+
+        index_exists = bool(client.index_exists(index_name))
+        base_payload["index_exists"] = bool(index_exists)
+        if not index_exists:
+            return jsonify({"ok": True, **base_payload}), 200
+
+        stats = client.get_index_stats(index_name) or {}
+        settings = client.get_index_settings(index_name) or {}
+        try:
+            document_count = int(stats.get("numberOfDocuments") or 0)
+        except Exception:
+            document_count = 0
+        base_payload["document_count"] = max(0, int(document_count))
+        base_payload["settings"] = {
+            "searchableAttributes": list(settings.get("searchableAttributes") or []),
+            "filterableAttributes": list(settings.get("filterableAttributes") or []),
+            "sortableAttributes": list(settings.get("sortableAttributes") or []),
+        }
+        return jsonify({"ok": True, **base_payload}), 200
+    except SearchNotInitialized:
+        # Index disappeared between checks; keep diagnostics stable and non-fatal.
+        return jsonify({"ok": True, **base_payload}), 200
+    except SearchUnavailable as exc:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    **base_payload,
+                    "error": "SEARCH_UNAVAILABLE",
+                    "message": str(exc),
+                    "trace_id": get_request_id(),
+                }
+            ),
+            503,
+        )
+    except Exception as exc:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    **base_payload,
+                    "error": "SEARCH_STATUS_FAILED",
+                    "message": str(exc),
+                    "trace_id": get_request_id(),
+                }
+            ),
+            500,
+        )
 
 
 @admin_ops_bp.get("/ops/db-pool-stats")
