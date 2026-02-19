@@ -18,12 +18,13 @@ services:
   - type: web
     name: tri-o-fliptrybe
     runtime: python
-    pythonVersion: 3.12.2
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     preDeployCommand: python -m flask --app main:app db upgrade
     startCommand: bash -c "chmod +x ops/start.sh && ./ops/start.sh"
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.8"
       - key: FLIPTRYBE_ENV
         value: prod
       - key: LOG_LEVEL
@@ -84,11 +85,12 @@ services:
   - type: worker
     name: tri-o-fliptrybe-worker
     runtime: python
-    pythonVersion: 3.12.2
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: celery -A celery_app.celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-2}
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.8"
       - key: FLIPTRYBE_ENV
         value: prod
       - key: LOG_LEVEL
@@ -133,11 +135,12 @@ services:
   - type: worker
     name: tri-o-fliptrybe-cron
     runtime: python
-    pythonVersion: 3.12.2
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
     startCommand: celery -A celery_app.celery beat --loglevel=INFO
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.8"
       - key: FLIPTRYBE_ENV
         value: prod
       - key: LOG_LEVEL
