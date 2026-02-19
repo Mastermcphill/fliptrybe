@@ -28,6 +28,15 @@ from app.utils.listing_caps import enforce_listing_cap
 from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.services.search_v2_service import search_listings_v2
+from app.services.search import (
+    search_engine_is_meili,
+    search_fallback_sql_enabled,
+    listings_index_name,
+)
+from app.services.search.meili_client import (
+    get_meili_client,
+    SearchUnavailable,
+)
 from app.services.listing_metadata_schema import (
     CATEGORY_GROUPS,
     slugify,
@@ -703,6 +712,292 @@ def _normalize_search_payload(
     }
 
 
+def _supported_search_filters() -> dict:
+    return {
+        "delivery_available": hasattr(Listing, "delivery_available"),
+        "inspection_required": hasattr(Listing, "inspection_required"),
+        "listing_type": hasattr(Listing, "listing_type"),
+        "make": hasattr(Listing, "vehicle_make"),
+        "model": hasattr(Listing, "vehicle_model"),
+        "year": hasattr(Listing, "vehicle_year"),
+        "battery_type": hasattr(Listing, "battery_type"),
+        "inverter_capacity": hasattr(Listing, "inverter_capacity"),
+        "lithium_only": hasattr(Listing, "lithium_only"),
+        "property_type": hasattr(Listing, "property_type"),
+        "bedrooms": hasattr(Listing, "bedrooms"),
+        "bathrooms": hasattr(Listing, "bathrooms"),
+        "furnished": hasattr(Listing, "furnished"),
+        "serviced": hasattr(Listing, "serviced"),
+        "land_size": hasattr(Listing, "land_size"),
+        "title_document_type": hasattr(Listing, "title_document_type"),
+    }
+
+
+def _normalized_sort_key(raw_sort: str) -> str:
+    candidate = str(raw_sort or "relevance").strip().lower()
+    if candidate in ("price_low", "price_low_to_high", "priceasc"):
+        return "price_asc"
+    if candidate in ("price_high", "price_high_to_low", "pricedesc"):
+        return "price_desc"
+    if candidate in ("new", "latest"):
+        return "newest"
+    if candidate in ("relevance", "newest", "price_asc", "price_desc"):
+        return candidate
+    return "relevance"
+
+
+def _meili_quote(raw_value) -> str:
+    return json.dumps(str(raw_value or ""))
+
+
+def _meili_number(raw_value) -> str:
+    try:
+        value = float(raw_value)
+    except Exception:
+        return "0"
+    whole = int(value)
+    if abs(value - float(whole)) < 1e-9:
+        return str(whole)
+    return f"{value:.6f}".rstrip("0").rstrip(".")
+
+
+def _meili_filter_expression(args: dict, *, include_inactive: bool) -> str | None:
+    clauses: list[str] = []
+    if not include_inactive:
+        clauses.append("is_active = true")
+        clauses.append(f"(listing_type != {_meili_quote('vehicle')} OR approval_status = {_meili_quote('approved')})")
+
+    category = str(args.get("category") or "").strip()
+    if category:
+        clauses.append(f"category_ci = {_meili_quote(category.lower())}")
+    category_id = _maybe_int(args.get("category_id"))
+    parent_category_id = _maybe_int(args.get("parent_category_id"))
+    if category_id is not None:
+        clauses.append(f"category_id = {int(category_id)}")
+    elif parent_category_id is not None:
+        descendant_ids = _descendant_category_ids(int(parent_category_id))
+        if descendant_ids:
+            clauses.append(f"category_id IN [{','.join(str(int(x)) for x in descendant_ids)}]")
+
+    brand_id = _maybe_int(args.get("brand_id"))
+    if brand_id is not None:
+        clauses.append(f"brand_id = {int(brand_id)}")
+    model_id = _maybe_int(args.get("model_id"))
+    if model_id is not None:
+        clauses.append(f"model_id = {int(model_id)}")
+
+    listing_type = str(args.get("listing_type") or "").strip().lower()
+    if listing_type:
+        clauses.append(f"listing_type = {_meili_quote(listing_type)}")
+
+    make = str(args.get("make") or "").strip()
+    if make:
+        clauses.append(f"make_ci = {_meili_quote(make.lower())}")
+    model = str(args.get("model") or "").strip()
+    if model:
+        clauses.append(f"model_ci = {_meili_quote(model.lower())}")
+    year = _maybe_int(args.get("year"))
+    if year is not None:
+        clauses.append(f"year = {int(year)}")
+
+    battery_type = str(args.get("battery_type") or "").strip()
+    if battery_type:
+        clauses.append(f"battery_type_ci = {_meili_quote(battery_type.lower())}")
+    inverter_capacity = str(args.get("inverter_capacity") or "").strip()
+    if inverter_capacity:
+        clauses.append(f"inverter_capacity_ci = {_meili_quote(inverter_capacity.lower())}")
+    lithium_only = _maybe_bool(args.get("lithium_only"))
+    if lithium_only is not None:
+        clauses.append(f"lithium_only = {'true' if bool(lithium_only) else 'false'}")
+
+    property_type = str(args.get("property_type") or "").strip()
+    if property_type:
+        clauses.append(f"property_type_ci = {_meili_quote(property_type.lower())}")
+    bedrooms_min = _maybe_int(args.get("bedrooms_min"))
+    if bedrooms_min is not None:
+        clauses.append(f"bedrooms >= {int(bedrooms_min)}")
+    bedrooms_max = _maybe_int(args.get("bedrooms_max"))
+    if bedrooms_max is not None:
+        clauses.append(f"bedrooms <= {int(bedrooms_max)}")
+    bathrooms_min = _maybe_int(args.get("bathrooms_min"))
+    if bathrooms_min is not None:
+        clauses.append(f"bathrooms >= {int(bathrooms_min)}")
+    bathrooms_max = _maybe_int(args.get("bathrooms_max"))
+    if bathrooms_max is not None:
+        clauses.append(f"bathrooms <= {int(bathrooms_max)}")
+
+    furnished = _maybe_bool(args.get("furnished"))
+    if furnished is not None:
+        clauses.append(f"furnished = {'true' if bool(furnished) else 'false'}")
+    serviced = _maybe_bool(args.get("serviced"))
+    if serviced is not None:
+        clauses.append(f"serviced = {'true' if bool(serviced) else 'false'}")
+
+    land_size_min = _maybe_float(args.get("land_size_min"))
+    if land_size_min is not None:
+        clauses.append(f"land_size >= {_meili_number(land_size_min)}")
+    land_size_max = _maybe_float(args.get("land_size_max"))
+    if land_size_max is not None:
+        clauses.append(f"land_size <= {_meili_number(land_size_max)}")
+
+    title_document_type = str(args.get("title_document_type") or "").strip()
+    if title_document_type:
+        clauses.append(f"title_document_type_ci = {_meili_quote(title_document_type.lower())}")
+
+    city = str(args.get("city") or "").strip()
+    if city:
+        clauses.append(f"city_ci = {_meili_quote(city.lower())}")
+    area = str(args.get("area") or "").strip()
+    if area:
+        clauses.append(f"locality_ci = {_meili_quote(area.lower())}")
+    state = str(args.get("state") or "").strip()
+    if state:
+        clauses.append(f"state_ci = {_meili_quote(state.lower())}")
+
+    condition = str(args.get("condition") or "").strip()
+    if condition:
+        clauses.append(f"condition_ci = {_meili_quote(condition.lower())}")
+
+    status_key = str(args.get("status") or "").strip().lower()
+    if status_key and status_key not in ("all", "any"):
+        if status_key in ("active", "inactive"):
+            clauses.append(f"is_active = {'true' if status_key == 'active' else 'false'}")
+        else:
+            clauses.append(f"status_ci = {_meili_quote(status_key)}")
+
+    delivery_available = _maybe_bool(args.get("delivery_available"))
+    if delivery_available is not None:
+        clauses.append(f"delivery_available = {'true' if bool(delivery_available) else 'false'}")
+    inspection_required = _maybe_bool(args.get("inspection_required"))
+    if inspection_required is not None:
+        clauses.append(f"inspection_required = {'true' if bool(inspection_required) else 'false'}")
+
+    min_price = _maybe_float(args.get("min_price"))
+    if min_price is not None:
+        clauses.append(f"price >= {_meili_number(min_price)}")
+    max_price = _maybe_float(args.get("max_price"))
+    if max_price is not None:
+        clauses.append(f"price <= {_meili_number(max_price)}")
+
+    if not clauses:
+        return None
+    return " AND ".join(clauses)
+
+
+def _meili_sort_for_search(sort_key: str, *, q: str) -> list[str] | None:
+    if sort_key == "price_asc":
+        return ["price:asc"]
+    if sort_key == "price_desc":
+        return ["price:desc"]
+    if sort_key == "newest":
+        return ["created_at:desc"]
+    if sort_key == "relevance" and not str(q or "").strip():
+        return ["created_at:desc"]
+    return None
+
+
+def _run_sql_search(args: dict, *, include_inactive: bool, preferred_city: str = "", preferred_state: str = "") -> dict:
+    return search_listings_v2(
+        q=args["q"],
+        category=args["category"],
+        category_id=args["category_id"],
+        parent_category_id=args["parent_category_id"],
+        brand_id=args["brand_id"],
+        model_id=args["model_id"],
+        listing_type=args["listing_type"],
+        make=args["make"],
+        model=args["model"],
+        year=args["year"],
+        battery_type=args["battery_type"],
+        inverter_capacity=args["inverter_capacity"],
+        lithium_only=args["lithium_only"],
+        property_type=args["property_type"],
+        bedrooms_min=args["bedrooms_min"],
+        bedrooms_max=args["bedrooms_max"],
+        bathrooms_min=args["bathrooms_min"],
+        bathrooms_max=args["bathrooms_max"],
+        furnished=args["furnished"],
+        serviced=args["serviced"],
+        land_size_min=args["land_size_min"],
+        land_size_max=args["land_size_max"],
+        title_document_type=args["title_document_type"],
+        city=args["city"],
+        area=args["area"],
+        state=args["state"],
+        min_price=args["min_price"],
+        max_price=args["max_price"],
+        condition=args["condition"],
+        status=args["status"],
+        delivery_available=args["delivery_available"],
+        inspection_required=args["inspection_required"],
+        sort=args["sort"],
+        limit=args["limit"],
+        offset=args["offset"],
+        include_inactive=bool(include_inactive),
+        preferred_city=preferred_city,
+        preferred_state=preferred_state,
+    )
+
+
+def _run_meili_search(args: dict, *, include_inactive: bool) -> dict:
+    client = get_meili_client()
+    sort_key = _normalized_sort_key(str(args.get("sort") or "relevance"))
+    result = client.search(
+        listings_index_name(),
+        str(args.get("q") or "").strip(),
+        _meili_filter_expression(args, include_inactive=bool(include_inactive)),
+        _meili_sort_for_search(sort_key, q=str(args.get("q") or "")),
+        int(args.get("limit") or 20),
+        int(args.get("offset") or 0),
+    )
+    hits = result.get("hits")
+    if not isinstance(hits, list):
+        hits = []
+    total = (
+        _maybe_int(result.get("estimatedTotalHits"))
+        or _maybe_int(result.get("totalHits"))
+        or len(hits)
+    )
+    return {
+        "ok": True,
+        "items": [dict(hit) for hit in hits if isinstance(hit, dict)],
+        "total": int(total),
+        "limit": int(args.get("limit") or 20),
+        "offset": int(args.get("offset") or 0),
+        "sort": sort_key,
+        "q": str(args.get("q") or ""),
+        "supported_filters": _supported_search_filters(),
+    }
+
+
+def _enqueue_search_index(listing_id: int) -> None:
+    if not search_engine_is_meili():
+        return
+    try:
+        from app.tasks.search_tasks import search_index_listing
+
+        search_index_listing.delay(int(listing_id), trace_id=get_request_id())
+    except Exception:
+        try:
+            current_app.logger.exception("search_index_enqueue_failed listing_id=%s", int(listing_id))
+        except Exception:
+            pass
+
+
+def _enqueue_search_delete(listing_id: int) -> None:
+    if not search_engine_is_meili():
+        return
+    try:
+        from app.tasks.search_tasks import search_delete_listing
+
+        search_delete_listing.delay(int(listing_id), trace_id=get_request_id())
+    except Exception:
+        try:
+            current_app.logger.exception("search_delete_enqueue_failed listing_id=%s", int(listing_id))
+        except Exception:
+            pass
+
+
 def _listing_detail_cache_key(listing_id: int) -> str:
     return build_cache_key("listing_detail", {"id": int(listing_id)})
 
@@ -1225,42 +1520,8 @@ def public_listings_search():
     if isinstance(cached_payload, dict):
         return jsonify(cached_payload), 200
     try:
-        raw_payload = search_listings_v2(
-            q=args["q"],
-            category=args["category"],
-            category_id=args["category_id"],
-            parent_category_id=args["parent_category_id"],
-            brand_id=args["brand_id"],
-            model_id=args["model_id"],
-            listing_type=args["listing_type"],
-            make=args["make"],
-            model=args["model"],
-            year=args["year"],
-            battery_type=args["battery_type"],
-            inverter_capacity=args["inverter_capacity"],
-            lithium_only=args["lithium_only"],
-            property_type=args["property_type"],
-            bedrooms_min=args["bedrooms_min"],
-            bedrooms_max=args["bedrooms_max"],
-            bathrooms_min=args["bathrooms_min"],
-            bathrooms_max=args["bathrooms_max"],
-            furnished=args["furnished"],
-            serviced=args["serviced"],
-            land_size_min=args["land_size_min"],
-            land_size_max=args["land_size_max"],
-            title_document_type=args["title_document_type"],
-            city=args["city"],
-            area=args["area"],
-            state=args["state"],
-            min_price=args["min_price"],
-            max_price=args["max_price"],
-            condition=args["condition"],
-            status=args["status"],
-            delivery_available=args["delivery_available"],
-            inspection_required=args["inspection_required"],
-            sort=args["sort"],
-            limit=args["limit"],
-            offset=args["offset"],
+        raw_payload = _run_sql_search(
+            args,
             include_inactive=False,
             preferred_city=pref_city,
             preferred_state=pref_state,
@@ -1316,52 +1577,24 @@ def listings_search():
             "preferred_state": pref_state,
             "include_inactive": bool(include_inactive),
             "requester_user_id": int(getattr(u, "id", 0) or 0),
+            "search_engine": "meili" if bool(search_engine_is_meili() and not include_inactive) else "sql",
         },
     )
     cached_payload = get_json(cache_key)
     if isinstance(cached_payload, dict):
         return jsonify(cached_payload), 200
     try:
-        raw_payload = search_listings_v2(
-            q=args["q"],
-            category=args["category"],
-            category_id=args["category_id"],
-            parent_category_id=args["parent_category_id"],
-            brand_id=args["brand_id"],
-            model_id=args["model_id"],
-            listing_type=args["listing_type"],
-            make=args["make"],
-            model=args["model"],
-            year=args["year"],
-            battery_type=args["battery_type"],
-            inverter_capacity=args["inverter_capacity"],
-            lithium_only=args["lithium_only"],
-            property_type=args["property_type"],
-            bedrooms_min=args["bedrooms_min"],
-            bedrooms_max=args["bedrooms_max"],
-            bathrooms_min=args["bathrooms_min"],
-            bathrooms_max=args["bathrooms_max"],
-            furnished=args["furnished"],
-            serviced=args["serviced"],
-            land_size_min=args["land_size_min"],
-            land_size_max=args["land_size_max"],
-            title_document_type=args["title_document_type"],
-            city=args["city"],
-            area=args["area"],
-            state=args["state"],
-            min_price=args["min_price"],
-            max_price=args["max_price"],
-            condition=args["condition"],
-            status=args["status"],
-            delivery_available=args["delivery_available"],
-            inspection_required=args["inspection_required"],
-            sort=args["sort"],
-            limit=args["limit"],
-            offset=args["offset"],
-            include_inactive=include_inactive,
-            preferred_city=pref_city,
-            preferred_state=pref_state,
-        )
+        raw_payload: dict
+        use_meili = bool(search_engine_is_meili() and not include_inactive)
+        if use_meili:
+            raw_payload = _run_meili_search(args, include_inactive=include_inactive)
+        else:
+            raw_payload = _run_sql_search(
+                args,
+                include_inactive=include_inactive,
+                preferred_city=pref_city,
+                preferred_state=pref_state,
+            )
         payload = _normalize_search_payload(
             raw_payload,
             city=pref_city,
@@ -1373,6 +1606,41 @@ def listings_search():
         )
         set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
         return jsonify(payload), 200
+    except SearchUnavailable:
+        if search_fallback_sql_enabled():
+            try:
+                raw_payload = _run_sql_search(
+                    args,
+                    include_inactive=include_inactive,
+                    preferred_city=pref_city,
+                    preferred_state=pref_state,
+                )
+                payload = _normalize_search_payload(
+                    raw_payload,
+                    city=pref_city,
+                    state=pref_state,
+                    limit=args["limit"],
+                    offset=args["offset"],
+                    sort=args["sort"],
+                    q=args["q"],
+                )
+                set_json(cache_key, payload, ttl_seconds=feed_cache_ttl_seconds())
+                return jsonify(payload), 200
+            except Exception:
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+        return jsonify(
+            {
+                "ok": False,
+                "error": {
+                    "code": "SEARCH_UNAVAILABLE",
+                    "message": "Search service unavailable. Try again shortly.",
+                },
+                "trace_id": get_request_id(),
+            }
+        ), 503
     except Exception:
         try:
             db.session.rollback()
@@ -1401,42 +1669,8 @@ def admin_listings_search():
     pref_city = (request.args.get("city") or "").strip()
     pref_state = (request.args.get("state") or "").strip()
     try:
-        raw_payload = search_listings_v2(
-            q=args["q"],
-            category=args["category"],
-            category_id=args["category_id"],
-            parent_category_id=args["parent_category_id"],
-            brand_id=args["brand_id"],
-            model_id=args["model_id"],
-            listing_type=args["listing_type"],
-            make=args["make"],
-            model=args["model"],
-            year=args["year"],
-            battery_type=args["battery_type"],
-            inverter_capacity=args["inverter_capacity"],
-            lithium_only=args["lithium_only"],
-            property_type=args["property_type"],
-            bedrooms_min=args["bedrooms_min"],
-            bedrooms_max=args["bedrooms_max"],
-            bathrooms_min=args["bathrooms_min"],
-            bathrooms_max=args["bathrooms_max"],
-            furnished=args["furnished"],
-            serviced=args["serviced"],
-            land_size_min=args["land_size_min"],
-            land_size_max=args["land_size_max"],
-            title_document_type=args["title_document_type"],
-            city=args["city"],
-            area=args["area"],
-            state=args["state"],
-            min_price=args["min_price"],
-            max_price=args["max_price"],
-            condition=args["condition"],
-            status=args["status"],
-            delivery_available=args["delivery_available"],
-            inspection_required=args["inspection_required"],
-            sort=args["sort"],
-            limit=args["limit"],
-            offset=args["offset"],
+        raw_payload = _run_sql_search(
+            args,
             include_inactive=True,
             preferred_city=pref_city,
             preferred_state=pref_state,
@@ -1502,6 +1736,7 @@ def admin_approve_listing(listing_id: int):
         db.session.add(listing)
         db.session.commit()
         _invalidate_listing_read_caches(int(listing.id))
+        _enqueue_search_index(int(listing.id))
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=_base_url())}), 200
     except Exception as exc:
         db.session.rollback()
@@ -1530,6 +1765,7 @@ def admin_flag_listing_for_inspection(listing_id: int):
         db.session.add(listing)
         db.session.commit()
         _invalidate_listing_read_caches(int(listing.id))
+        _enqueue_search_index(int(listing.id))
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=_base_url())}), 200
     except Exception as exc:
         db.session.rollback()
@@ -2447,6 +2683,7 @@ def update_listing(listing_id: int):
         db.session.add(item)
         db.session.commit()
         _invalidate_listing_read_caches(int(item.id))
+        _enqueue_search_index(int(item.id))
         if current_active and not new_active:
             try:
                 queue_item_unavailable_notifications(entity="listing", entity_id=int(item.id), title=item.title or "Listing")
@@ -2477,6 +2714,7 @@ def delete_listing(listing_id: int):
         db.session.delete(item)
         db.session.commit()
         _invalidate_listing_read_caches(int(listing_id))
+        _enqueue_search_delete(int(listing_id))
         return jsonify({"ok": True, "deleted": True, "listing_id": listing_id}), 200
     except Exception as e:
         db.session.rollback()
@@ -2732,6 +2970,7 @@ def create_listing():
                 db.session.add(fp)
         db.session.commit()
         _invalidate_listing_read_caches(int(listing.id))
+        _enqueue_search_index(int(listing.id))
 
         base = _base_url()
         return jsonify({"ok": True, "listing": listing.to_dict(base_url=base)}), 201

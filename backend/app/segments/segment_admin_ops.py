@@ -37,6 +37,9 @@ from app.utils.jwt_utils import decode_token, get_bearer_token
 from app.utils.autopilot import get_settings
 from app.utils.feature_flags import get_all_flags
 from app.utils.cache_layer import cache_stats
+from app.utils.observability import get_request_id
+from app.services.search import listings_index_name, search_engine_is_meili
+from app.services.search.meili_client import SearchUnavailable, get_meili_client
 from app.services.simulation.liquidity_simulator import (
     get_liquidity_baseline,
     run_liquidity_simulation,
@@ -94,6 +97,93 @@ def admin_cache_stats():
     if err:
         return err
     return jsonify({"ok": True, "cache": cache_stats()}), 200
+
+
+@admin_ops_bp.post("/search/init")
+def admin_search_init():
+    _, err = _require_admin()
+    if err:
+        return err
+    if not search_engine_is_meili():
+        return jsonify({"ok": False, "error": "SEARCH_ENGINE_DISABLED", "message": "SEARCH_ENGINE is not set to meili."}), 400
+    index_name = listings_index_name()
+    try:
+        client = get_meili_client()
+        health = client.healthcheck()
+        client.ensure_index(index_name)
+        settings_task = client.configure_listings_index(index_name)
+        return jsonify(
+            {
+                "ok": True,
+                "engine": "meili",
+                "index": index_name,
+                "health": health,
+                "settings_task": settings_task,
+            }
+        ), 200
+    except SearchUnavailable as exc:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": {"code": "SEARCH_UNAVAILABLE", "message": str(exc)},
+                    "trace_id": get_request_id(),
+                }
+            ),
+            503,
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "SEARCH_INIT_FAILED", "message": str(exc), "trace_id": get_request_id()}), 500
+
+
+@admin_ops_bp.post("/search/reindex")
+def admin_search_reindex():
+    _, err = _require_admin()
+    if err:
+        return err
+    if not search_engine_is_meili():
+        return jsonify({"ok": False, "error": "SEARCH_ENGINE_DISABLED", "message": "SEARCH_ENGINE is not set to meili."}), 400
+    payload = request.get_json(silent=True) or {}
+    try:
+        batch_size = int(payload.get("batch_size") or request.args.get("batch_size") or 500)
+    except Exception:
+        batch_size = 500
+    batch_size = max(1, min(batch_size, 2000))
+    since_id = None
+    try:
+        since_raw = payload.get("since_id")
+        if since_raw in (None, ""):
+            since_raw = request.args.get("since_id")
+        if since_raw not in (None, ""):
+            since_id = int(since_raw)
+    except Exception:
+        since_id = None
+
+    total_query = Listing.query
+    if since_id is not None:
+        total_query = total_query.filter(Listing.id > int(since_id))
+    total_rows = int(total_query.count())
+    estimated_batches = int((total_rows + batch_size - 1) // batch_size)
+    try:
+        from app.tasks.search_tasks import search_reindex_all
+
+        task = search_reindex_all.delay(
+            batch_size=int(batch_size),
+            since_id=since_id,
+            trace_id=get_request_id(),
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "task_id": str(getattr(task, "id", "") or ""),
+                "estimated_batches": int(estimated_batches),
+                "batch_size": int(batch_size),
+                "total_candidates": int(total_rows),
+                "since_id": int(since_id) if since_id is not None else None,
+            }
+        ), 202
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "SEARCH_REINDEX_ENQUEUE_FAILED", "message": str(exc), "trace_id": get_request_id()}), 500
 
 
 @admin_ops_bp.get("/ops/db-pool-stats")
