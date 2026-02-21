@@ -18,6 +18,14 @@ function Fail($msg) {
 
 function NowIso() { (Get-Date).ToUniversalTime().ToString("o") }
 
+$canUseHttpUtility = $false
+try {
+    Add-Type -AssemblyName System.Web
+    $canUseHttpUtility = $true
+} catch {
+    $canUseHttpUtility = $false
+}
+
 if (-not $BaseUrl) { $BaseUrl = "https://tri-o-fliptrybe.onrender.com" }
 $BaseUrl = $BaseUrl.TrimEnd("/")
 
@@ -92,9 +100,18 @@ try {
     $deadline = $t0.AddSeconds($PollSeconds)
 
     while ((Get-Date) -lt $deadline) {
-        $encodedQ = [uri]::EscapeDataString($unique)
-        $searchUri = "{0}/api/listings/search?q={1}&limit=5" -f $BaseUrl, $encodedQ
-        $res = Invoke-RestMethod -Method Get -Uri $searchUri
+        if ($canUseHttpUtility) {
+            $ub = [System.UriBuilder]::new("$BaseUrl/api/listings/search")
+            $q = [System.Web.HttpUtility]::ParseQueryString([string]::Empty)
+            $q["q"] = $unique
+            $q["limit"] = "5"
+            $ub.Query = $q.ToString()
+            $searchUrl = $ub.Uri.AbsoluteUri
+        } else {
+            $encodedQ = [uri]::EscapeDataString($unique)
+            $searchUrl = "{0}/api/listings/search?q={1}&limit=5" -f $BaseUrl, $encodedQ
+        }
+        $res = Invoke-RestMethod -Method Get -Uri $searchUrl
         if ($res.total -ge 1) {
             $found = $true
             $latency = [int]((Get-Date) - $t0).TotalSeconds
