@@ -10,6 +10,12 @@ services:
         sync: false
       - key: MEILI_ENV
         value: production
+      - key: MEILI_DB_PATH
+        value: /meili_data
+      - key: MEILI_SCHEDULE_SNAPSHOT
+        value: "true"
+      - key: MEILI_SNAPSHOT_INTERVAL_SEC
+        value: "86400"
     disk:
       name: tri-o-meili-data
       mountPath: /meili_data
@@ -87,7 +93,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: celery -A celery_app.celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-2}
+    startCommand: celery -A celery_app:celery worker --loglevel=INFO --concurrency=${CELERY_CONCURRENCY:-2}
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.8"
@@ -137,7 +143,7 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: celery -A celery_app.celery beat --loglevel=INFO
+    startCommand: celery -A celery_app:celery beat --loglevel=INFO
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.8"

@@ -14,7 +14,7 @@ from app.services.search import (
     listings_index_name,
     search_engine_is_meili,
 )
-from app.services.search.meili_client import SearchUnavailable, get_meili_client
+from app.services.search.meili_client import SearchNotInitialized, SearchUnavailable, get_meili_client
 
 
 def _retry_countdown(retries: int) -> int:
@@ -35,6 +35,27 @@ def _task_log(task_name: str, *, status: str, started_at: float, trace_id: str =
         current_app.logger.info(json.dumps(payload))
     except Exception:
         pass
+
+
+def _is_transient_search_error(exc: Exception) -> bool:
+    if isinstance(exc, SearchNotInitialized):
+        return False
+    detail = str(exc or "").strip().lower()
+    if not detail:
+        return True
+    transient_markers = (
+        "timed out",
+        "timeout",
+        "request failed",
+        "unavailable",
+        "connection",
+        "refused",
+        "reset by peer",
+        "502",
+        "503",
+        "504",
+    )
+    return any(marker in detail for marker in transient_markers)
 
 
 @shared_task(bind=True, name="app.tasks.search_tasks.search_index_listing", max_retries=5)
@@ -60,7 +81,9 @@ def search_index_listing(self, listing_id: int, trace_id: str = ""):
         _task_log("search_index_listing", status="indexed", started_at=started, trace_id=trace_id, listing_id=int(listing_id))
         return {"ok": True, "indexed": True, "listing_id": int(listing_id)}
     except SearchUnavailable as exc:
-        if int(self.request.retries or 0) < int(self.max_retries or 0):
+        retries = int(self.request.retries or 0)
+        max_retries = int(self.max_retries or 0)
+        if _is_transient_search_error(exc) and retries < max_retries:
             countdown = _retry_countdown(int(self.request.retries or 0))
             _task_log(
                 "search_index_listing",
@@ -72,7 +95,17 @@ def search_index_listing(self, listing_id: int, trace_id: str = ""):
                 detail=str(exc),
             )
             raise self.retry(exc=exc, countdown=countdown)
-        _task_log("search_index_listing", status="failed", started_at=started, trace_id=trace_id, listing_id=int(listing_id), detail=str(exc))
+        _task_log(
+            "search_index_listing",
+            status="failed",
+            started_at=started,
+            trace_id=trace_id,
+            listing_id=int(listing_id),
+            detail=str(exc),
+            retry_count=retries,
+            max_retries=max_retries,
+            final_failure=True,
+        )
         raise
 
 
@@ -89,7 +122,9 @@ def search_delete_listing(self, listing_id: int, trace_id: str = ""):
         _task_log("search_delete_listing", status="deleted", started_at=started, trace_id=trace_id, listing_id=int(listing_id))
         return {"ok": True, "deleted": True, "listing_id": int(listing_id)}
     except SearchUnavailable as exc:
-        if int(self.request.retries or 0) < int(self.max_retries or 0):
+        retries = int(self.request.retries or 0)
+        max_retries = int(self.max_retries or 0)
+        if _is_transient_search_error(exc) and retries < max_retries:
             countdown = _retry_countdown(int(self.request.retries or 0))
             _task_log(
                 "search_delete_listing",
@@ -101,7 +136,17 @@ def search_delete_listing(self, listing_id: int, trace_id: str = ""):
                 detail=str(exc),
             )
             raise self.retry(exc=exc, countdown=countdown)
-        _task_log("search_delete_listing", status="failed", started_at=started, trace_id=trace_id, listing_id=int(listing_id), detail=str(exc))
+        _task_log(
+            "search_delete_listing",
+            status="failed",
+            started_at=started,
+            trace_id=trace_id,
+            listing_id=int(listing_id),
+            detail=str(exc),
+            retry_count=retries,
+            max_retries=max_retries,
+            final_failure=True,
+        )
         raise
 
 
@@ -163,7 +208,9 @@ def search_reindex_all(self, batch_size: int = 500, since_id: int | None = None,
             "last_seen_id": int(last_seen_id),
         }
     except SearchUnavailable as exc:
-        if int(self.request.retries or 0) < int(self.max_retries or 0):
+        retries = int(self.request.retries or 0)
+        max_retries = int(self.max_retries or 0)
+        if _is_transient_search_error(exc) and retries < max_retries:
             countdown = _retry_countdown(int(self.request.retries or 0))
             _task_log(
                 "search_reindex_all",
@@ -174,5 +221,14 @@ def search_reindex_all(self, batch_size: int = 500, since_id: int | None = None,
                 detail=str(exc),
             )
             raise self.retry(exc=exc, countdown=countdown)
-        _task_log("search_reindex_all", status="failed", started_at=started, trace_id=trace_id, detail=str(exc))
+        _task_log(
+            "search_reindex_all",
+            status="failed",
+            started_at=started,
+            trace_id=trace_id,
+            detail=str(exc),
+            retry_count=retries,
+            max_retries=max_retries,
+            final_failure=True,
+        )
         raise

@@ -11,6 +11,7 @@ from app.extensions import db
 from app.models import Listing, User
 from app.services.search.meili_client import MeiliClient, SearchNotInitialized, SearchUnavailable
 from app.tasks.search_tasks import search_index_listing
+from ops.check_celery_import import main as celery_import_check_main
 from app.utils.jwt_utils import create_token
 
 
@@ -25,6 +26,9 @@ class _FakeMeiliClient:
         existing_indexes: set[str] | None = None,
         document_count: int = 0,
         settings: dict | None = None,
+        version: str = "1.11.0",
+        global_stats: dict | None = None,
+        index_meta: dict | None = None,
     ):
         self._hits = list(hits or [])
         self._fail_search = bool(fail_search)
@@ -40,6 +44,9 @@ class _FakeMeiliClient:
                 "sortableAttributes": [],
             }
         )
+        self._version = str(version or "")
+        self._global_stats = dict(global_stats or {})
+        self._index_meta = dict(index_meta or {})
         self.create_calls = 0
         self.docs_by_id: dict[int, dict] = {}
         self.upsert_calls = 0
@@ -52,8 +59,24 @@ class _FakeMeiliClient:
             raise SearchUnavailable("connection refused")
         return {"status": "available"}
 
+    def get_version(self):
+        return {"pkgVersion": self._version}
+
+    def get_stats(self):
+        payload = {"databaseSize": 0}
+        payload.update(self._global_stats)
+        return payload
+
     def index_exists(self, index_name):
         return str(index_name or "") in self.indexes
+
+    def get_index(self, index_name):
+        safe_name = str(index_name or "")
+        if safe_name not in self.indexes:
+            raise SearchNotInitialized(safe_name)
+        payload = {"uid": safe_name}
+        payload.update(self._index_meta)
+        return payload
 
     def get_index_stats(self, index_name):
         safe_name = str(index_name or "")
@@ -359,6 +382,10 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertEqual(payload.get("index_name"), "listings_v1")
         self.assertFalse(bool(payload.get("index_exists")))
         self.assertEqual(int(payload.get("document_count") or 0), 0)
+        self.assertEqual(payload.get("index_uid"), "listings_v1")
+        self.assertIn("meili_version", payload)
+        self.assertIn("databaseSize", payload)
+        self.assertIn("lastUpdate", payload)
 
     def test_search_status_index_missing(self):
         headers = self._admin_headers()
@@ -375,6 +402,9 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertTrue(bool((payload.get("health") or {}).get("reachable")))
         self.assertFalse(bool(payload.get("index_exists")))
         self.assertEqual(int(payload.get("document_count") or 0), 0)
+        self.assertEqual(payload.get("index_uid"), "listings_v1")
+        self.assertEqual(payload.get("meili_version"), "1.11.0")
+        self.assertEqual(int(payload.get("databaseSize") or 0), 0)
 
     def test_search_status_index_present(self):
         headers = self._admin_headers()
@@ -388,6 +418,8 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
             existing_indexes={"listings_v1"},
             document_count=34,
             settings=fake_settings,
+            global_stats={"databaseSize": 2048, "lastUpdate": "2026-02-20T12:00:00Z"},
+            index_meta={"uid": "listings_v1", "updatedAt": "2026-02-20T12:00:00Z"},
         )
 
         with patch("app.segments.segment_admin_ops.get_meili_client", return_value=fake):
@@ -403,6 +435,10 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertEqual(settings.get("searchableAttributes"), fake_settings["searchableAttributes"])
         self.assertEqual(settings.get("filterableAttributes"), fake_settings["filterableAttributes"])
         self.assertEqual(settings.get("sortableAttributes"), fake_settings["sortableAttributes"])
+        self.assertEqual(payload.get("index_uid"), "listings_v1")
+        self.assertEqual(payload.get("meili_version"), "1.11.0")
+        self.assertEqual(int(payload.get("databaseSize") or 0), 2048)
+        self.assertEqual(payload.get("lastUpdate"), "2026-02-20T12:00:00Z")
 
     def test_search_status_meili_unreachable(self):
         headers = self._admin_headers()
@@ -424,6 +460,39 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
     def test_search_status_route_requires_auth_and_is_mounted(self):
         res = self.client.get("/api/admin/search/status")
         self.assertEqual(res.status_code, 401)
+
+    def test_admin_ops_health_deps_requires_auth(self):
+        res = self.client.get("/api/admin/ops/health-deps")
+        self.assertEqual(res.status_code, 401)
+
+    def test_admin_ops_health_deps_returns_200_with_admin(self):
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "sql"
+        with patch.dict(os.environ, {"RATE_LIMIT_REDIS_URL": "", "CACHE_REDIS_URL": "", "REDIS_URL": ""}, clear=False):
+            res = self.client.get("/api/admin/ops/health-deps", headers=headers)
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertIn("postgres", payload)
+        self.assertIn("redis", payload)
+        self.assertIn("meili", payload)
+
+    def test_admin_ops_celery_status_requires_auth(self):
+        res = self.client.get("/api/admin/ops/celery/status")
+        self.assertEqual(res.status_code, 401)
+
+    def test_admin_ops_celery_status_returns_200_with_admin(self):
+        headers = self._admin_headers()
+        with patch.dict(os.environ, {"CELERY_BROKER_URL": "", "REDIS_URL": ""}, clear=False):
+            res = self.client.get("/api/admin/ops/celery/status", headers=headers)
+
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json(force=True) or {}
+        self.assertTrue(bool(payload.get("ok")))
+        self.assertFalse(bool(payload.get("broker_url_configured")))
+        queue = payload.get("queue") or {}
+        self.assertEqual(queue.get("name"), "celery")
+        self.assertIn("status", queue)
 
     def test_meili_index_not_found_maps_to_search_not_initialized(self):
         class _FakeResponse:
@@ -465,6 +534,31 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertEqual(fake.upsert_calls, 2)
         self.assertEqual(len(fake.docs_by_id), 1)
         self.assertIn(int(listing_id), fake.docs_by_id)
+
+    def test_search_index_listing_retries_on_transient_meili_error(self):
+        listing_id = self._create_listing(title="Retry listing")
+        os.environ["SEARCH_ENGINE"] = "meili"
+
+        class _FailingClient(_FakeMeiliClient):
+            def upsert_documents(self, index_name, docs):
+                raise SearchUnavailable("Meilisearch request timed out")
+
+        with self.app.app_context():
+            with patch("app.tasks.search_tasks.get_meili_client", return_value=_FailingClient()), patch.object(
+                search_index_listing,
+                "retry",
+                side_effect=RuntimeError("retry-called"),
+            ) as retry_mock:
+                search_index_listing.request.retries = 0
+                with self.assertRaises(RuntimeError):
+                    search_index_listing.run(listing_id=listing_id, trace_id="trace_retry")
+
+        retry_mock.assert_called_once()
+        retry_kwargs = dict(retry_mock.call_args.kwargs or {})
+        self.assertEqual(int(retry_kwargs.get("countdown") or 0), 5)
+
+    def test_celery_import_check_passes(self):
+        self.assertEqual(int(celery_import_check_main()), 0)
 
 
 if __name__ == "__main__":

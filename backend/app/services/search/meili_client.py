@@ -94,6 +94,12 @@ class MeiliClient:
     def get_health(self) -> dict[str, Any]:
         return self._request("GET", "/health", ok_codes=(200,))
 
+    def get_version(self) -> dict[str, Any]:
+        return self._request("GET", "/version", ok_codes=(200,))
+
+    def get_stats(self) -> dict[str, Any]:
+        return self._request("GET", "/stats", ok_codes=(200,))
+
     def healthcheck(self) -> dict[str, Any]:
         # Backwards compatible alias
         return self.get_health()
@@ -114,6 +120,15 @@ class MeiliClient:
             if exc.is_index_not_found:
                 return False
             raise
+
+    def get_index(self, index_name: str) -> dict[str, Any]:
+        safe_name = str(index_name or "").strip()
+        if not safe_name:
+            raise SearchUnavailable("Index name is required")
+        try:
+            return self._request("GET", f"/indexes/{safe_name}", ok_codes=(200,))
+        except MeiliApiError as exc:
+            self._raise_not_initialized_if_missing(safe_name, exc)
 
     def get_index_stats(self, index_name: str) -> dict[str, Any]:
         safe_name = str(index_name or "").strip()

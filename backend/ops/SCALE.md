@@ -2,8 +2,8 @@
 
 ## Runtime Topology
 - `web`: `ops/start.sh` (runs migrations once, then Gunicorn)
-- `worker`: Celery worker (`celery -A celery_app.celery worker`)
-- `cron`: Celery beat scheduler (`celery -A celery_app.celery beat`)
+- `worker`: Celery worker (`celery -A celery_app:celery worker`)
+- `cron`: Celery beat scheduler (`celery -A celery_app:celery beat`)
 
 ## Local Run
 - Web:
@@ -15,12 +15,12 @@ python -m flask --app main:app db upgrade
 - Worker:
 ```bash
 cd backend
-celery -A celery_app.celery worker --loglevel=INFO
+celery -A celery_app:celery worker --loglevel=INFO
 ```
 - Beat:
 ```bash
 cd backend
-celery -A celery_app.celery beat --loglevel=INFO
+celery -A celery_app:celery beat --loglevel=INFO
 ```
 
 ## Required Env Vars

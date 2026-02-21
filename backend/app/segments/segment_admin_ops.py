@@ -8,7 +8,12 @@ import os
 import subprocess
 
 from flask import Blueprint, jsonify, request, Response
-from sqlalchemy import or_
+from sqlalchemy import or_, text
+
+try:
+    import redis
+except Exception:  # pragma: no cover - optional dependency
+    redis = None
 
 from app.extensions import db
 from app.models import (
@@ -90,6 +95,37 @@ def _require_admin():
     if not _is_admin(u):
         return None, (jsonify({"message": "Forbidden"}), 403)
     return u, None
+
+
+def _coerce_non_negative_int(raw_value, default: int = 0) -> int:
+    try:
+        return max(0, int(raw_value))
+    except Exception:
+        try:
+            return max(0, int(float(raw_value)))
+        except Exception:
+            return max(0, int(default))
+
+
+def _short_error(exc: Exception | str, *, limit: int = 220) -> str:
+    text_value = str(exc or "").strip()
+    if not text_value:
+        return ""
+    if len(text_value) <= int(limit):
+        return text_value
+    return f"{text_value[: int(limit) - 3]}..."
+
+
+def _redis_url_for_ops() -> str:
+    return (
+        (os.getenv("RATE_LIMIT_REDIS_URL") or "").strip()
+        or (os.getenv("CACHE_REDIS_URL") or "").strip()
+        or (os.getenv("REDIS_URL") or "").strip()
+    )
+
+
+def _celery_broker_url() -> str:
+    return (os.getenv("CELERY_BROKER_URL") or "").strip() or (os.getenv("REDIS_URL") or "").strip()
 
 
 @admin_ops_bp.get("/ops/cache-stats")
@@ -202,8 +238,13 @@ def admin_search_status():
     base_payload = {
         "engine": "meili" if is_meili else "disabled",
         "index_name": index_name,
+        "index_uid": index_name,
         "index_exists": False,
         "document_count": 0,
+        "meili_version": "",
+        "databaseSize": 0,
+        "used_bytes": 0,
+        "lastUpdate": None,
         "health": {
             "reachable": False,
             "status": "unreachable",
@@ -228,18 +269,41 @@ def admin_search_status():
         _ = client.get_health()
         base_payload["health"] = {"reachable": True, "status": "available"}
 
+        try:
+            version_payload = client.get_version() or {}
+        except Exception:
+            version_payload = {}
+        base_payload["meili_version"] = str(version_payload.get("pkgVersion") or version_payload.get("commitSha") or "").strip()
+
+        try:
+            global_stats = client.get_stats() or {}
+        except Exception:
+            global_stats = {}
+        database_size = _coerce_non_negative_int(global_stats.get("databaseSize"), default=0)
+        base_payload["databaseSize"] = int(database_size)
+        base_payload["used_bytes"] = int(database_size)
+        if str(global_stats.get("lastUpdate") or "").strip():
+            base_payload["lastUpdate"] = str(global_stats.get("lastUpdate"))
+
         index_exists = bool(client.index_exists(index_name))
         base_payload["index_exists"] = bool(index_exists)
         if not index_exists:
             return jsonify({"ok": True, **base_payload}), 200
 
+        index_meta = client.get_index(index_name) or {}
+        base_payload["index_uid"] = str(index_meta.get("uid") or index_name or "").strip() or index_name
+        if not base_payload.get("lastUpdate"):
+            last_update = str(index_meta.get("updatedAt") or index_meta.get("createdAt") or "").strip()
+            if last_update:
+                base_payload["lastUpdate"] = last_update
+
         stats = client.get_index_stats(index_name) or {}
         settings = client.get_index_settings(index_name) or {}
-        try:
-            document_count = int(stats.get("numberOfDocuments") or 0)
-        except Exception:
-            document_count = 0
-        base_payload["document_count"] = max(0, int(document_count))
+        base_payload["document_count"] = _coerce_non_negative_int(stats.get("numberOfDocuments"), default=0)
+        stats_database_size = _coerce_non_negative_int(stats.get("databaseSize"), default=0)
+        if stats_database_size > 0:
+            base_payload["databaseSize"] = int(stats_database_size)
+            base_payload["used_bytes"] = int(stats_database_size)
         base_payload["settings"] = {
             "searchableAttributes": list(settings.get("searchableAttributes") or []),
             "filterableAttributes": list(settings.get("filterableAttributes") or []),
@@ -275,6 +339,148 @@ def admin_search_status():
             ),
             500,
         )
+
+
+@admin_ops_bp.get("/ops/celery/status")
+def admin_ops_celery_status():
+    _, err = _require_admin()
+    if err:
+        return err
+
+    broker_url = _celery_broker_url()
+    payload = {
+        "ok": True,
+        "broker_url_configured": bool(broker_url),
+        "worker_heartbeat_hint": {
+            "status": "not_configured" if not broker_url else "unknown",
+            "worker_count": 0,
+            "workers": [],
+        },
+        "queue": {
+            "name": "celery",
+            "status": "not_supported",
+            "length": None,
+        },
+        "trace_id": get_request_id(),
+    }
+    if not broker_url:
+        return jsonify(payload), 200
+
+    try:
+        from celery import Celery
+
+        inspect_app = Celery("fliptrybe-ops", broker=broker_url)
+        inspector = inspect_app.control.inspect(timeout=1.0)
+        ping = inspector.ping() if inspector is not None else {}
+        if isinstance(ping, dict) and ping:
+            payload["worker_heartbeat_hint"] = {
+                "status": "available",
+                "worker_count": int(len(ping)),
+                "workers": sorted([str(worker) for worker in ping.keys()]),
+            }
+        else:
+            payload["worker_heartbeat_hint"] = {
+                "status": "unreachable",
+                "worker_count": 0,
+                "workers": [],
+            }
+    except Exception as exc:
+        payload["worker_heartbeat_hint"] = {
+            "status": "not_supported",
+            "worker_count": 0,
+            "workers": [],
+            "detail": _short_error(exc),
+        }
+
+    if broker_url.startswith(("redis://", "rediss://")):
+        if redis is None:
+            payload["queue"] = {
+                "name": "celery",
+                "status": "not_supported",
+                "length": None,
+            }
+        else:
+            try:
+                redis_client = redis.Redis.from_url(
+                    broker_url,
+                    decode_responses=True,
+                    socket_connect_timeout=0.75,
+                    socket_timeout=0.75,
+                    health_check_interval=30,
+                )
+                queue_length = _coerce_non_negative_int(redis_client.llen("celery"), default=0)
+                payload["queue"] = {
+                    "name": "celery",
+                    "status": "ok",
+                    "length": int(queue_length),
+                }
+            except Exception as exc:
+                payload["queue"] = {
+                    "name": "celery",
+                    "status": "unreachable",
+                    "length": None,
+                    "detail": _short_error(exc),
+                }
+    return jsonify(payload), 200
+
+
+@admin_ops_bp.get("/ops/health-deps")
+def admin_ops_health_deps():
+    _, err = _require_admin()
+    if err:
+        return err
+
+    payload = {
+        "ok": True,
+        "postgres": {"ok": False, "status": "unreachable"},
+        "redis": {"ok": False, "status": "unreachable"},
+        "meili": {"ok": False, "status": "unreachable"},
+        "trace_id": get_request_id(),
+    }
+
+    try:
+        with db.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        payload["postgres"] = {"ok": True, "status": "available"}
+    except Exception as exc:
+        payload["postgres"] = {"ok": False, "status": "unreachable", "error": _short_error(exc)}
+
+    redis_url = _redis_url_for_ops()
+    if not redis_url:
+        payload["redis"] = {"ok": False, "status": "not_configured"}
+    elif redis is None:
+        payload["redis"] = {"ok": False, "status": "not_supported"}
+    else:
+        try:
+            redis_client = redis.Redis.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=0.75,
+                socket_timeout=0.75,
+                health_check_interval=30,
+            )
+            redis_client.ping()
+            payload["redis"] = {"ok": True, "status": "available"}
+        except Exception as exc:
+            payload["redis"] = {"ok": False, "status": "unreachable", "error": _short_error(exc)}
+
+    if not search_engine_is_meili():
+        payload["meili"] = {"ok": True, "status": "disabled"}
+    else:
+        try:
+            client = get_meili_client()
+            client.get_health()
+            payload["meili"] = {"ok": True, "status": "available"}
+        except SearchUnavailable as exc:
+            payload["meili"] = {"ok": False, "status": "unreachable", "error": _short_error(exc)}
+        except Exception as exc:
+            payload["meili"] = {"ok": False, "status": "unreachable", "error": _short_error(exc)}
+
+    postgres_ok = bool((payload.get("postgres") or {}).get("ok"))
+    redis_ok = bool((payload.get("redis") or {}).get("ok"))
+    meili_ok = bool((payload.get("meili") or {}).get("ok"))
+    payload["ok"] = bool(postgres_ok and redis_ok and meili_ok)
+    return jsonify(payload), 200
 
 
 @admin_ops_bp.get("/ops/db-pool-stats")
