@@ -21,7 +21,7 @@ export 'ft_toast.dart';
 import 'package:flutter/material.dart';
 
 import '../design/ft_tokens.dart';
-import '../foundation/app_tokens.dart';
+import '../foundation/tokens/ft_motion.dart';
 import '../foundation/app_typography.dart';
 import 'ft_button.dart';
 import 'ft_card.dart';
@@ -310,7 +310,7 @@ class FTLoadStateLayout extends StatelessWidget {
       stateKey = 'data';
     }
     return AnimatedSwitcher(
-      duration: AppTokens.d200,
+      duration: FTMotion.standard,
       switchInCurve: Curves.easeOut,
       switchOutCurve: Curves.easeIn,
       child: KeyedSubtree(key: ValueKey<String>(stateKey), child: currentChild),

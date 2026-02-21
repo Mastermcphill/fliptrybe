@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../foundation/app_tokens.dart';
+import '../foundation/tokens/ft_motion.dart';
+import '../foundation/tokens/ft_radius.dart';
+import '../foundation/tokens/ft_spacing.dart';
+import '../foundation/utils/haptics.dart';
 
 enum FTButtonVariant {
   primary,
@@ -53,10 +55,10 @@ class _FTButtonState extends State<FTButton> {
               color: _foregroundColor(scheme),
             ),
           ),
-          const SizedBox(width: AppTokens.s8),
+          const SizedBox(width: FTSpacing.xs),
         ] else if (widget.icon != null) ...[
           Icon(widget.icon, size: 18),
-          const SizedBox(width: AppTokens.s8),
+          const SizedBox(width: FTSpacing.xs),
         ],
         Text(widget.label),
       ],
@@ -71,7 +73,7 @@ class _FTButtonState extends State<FTButton> {
         onPointerCancel:
             enabled ? (_) => setState(() => _pressed = false) : null,
         child: AnimatedScale(
-          duration: AppTokens.d150,
+          duration: FTMotion.quick,
           curve: Curves.easeOut,
           scale: _pressed && enabled ? 0.98 : 1,
           child: _buildButton(context, child, enabled),
@@ -109,7 +111,7 @@ class _FTButtonState extends State<FTButton> {
   Widget _buildButton(BuildContext context, Widget child, bool enabled) {
     final scheme = Theme.of(context).colorScheme;
     final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(AppTokens.r12),
+      borderRadius: BorderRadius.circular(FTRadius.sm),
       side: widget.variant == FTButtonVariant.ghost
           ? BorderSide(color: scheme.outlineVariant)
           : BorderSide.none,
@@ -123,7 +125,7 @@ class _FTButtonState extends State<FTButton> {
         onPressed: enabled
             ? () {
                 if (widget.variant == FTButtonVariant.primary) {
-                  HapticFeedback.selectionClick();
+                  FTHaptics.selection();
                 }
                 widget.onPressed?.call();
               }

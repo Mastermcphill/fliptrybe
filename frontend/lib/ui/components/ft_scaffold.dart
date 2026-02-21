@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../foundation/app_tokens.dart';
+import '../foundation/tokens/ft_spacing.dart';
 import 'ft_app_bar.dart';
 import 'ft_network_banner.dart';
 
@@ -44,13 +44,13 @@ class FTScaffold extends StatelessWidget {
           );
     final content = SafeArea(
       child: Padding(
-        padding: padding ?? const EdgeInsets.all(AppTokens.s16),
+        padding: padding ?? const EdgeInsets.all(FTSpacing.sm),
         child: Column(
           children: [
             if (showNetworkBanner) const FTNetworkBanner(),
             Expanded(child: bodyChild),
             if (footer != null) ...[
-              const SizedBox(height: AppTokens.s12),
+              const SizedBox(height: FTSpacing.xs),
               footer!,
             ],
           ],

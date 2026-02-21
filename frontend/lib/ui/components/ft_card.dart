@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../design/ft_tokens.dart';
+import '../foundation/tokens/ft_motion.dart';
+import '../foundation/tokens/ft_radius.dart';
+import '../foundation/tokens/ft_shadows.dart';
+import '../foundation/tokens/ft_spacing.dart';
 
 class FTCard extends StatelessWidget {
   const FTCard({
@@ -9,7 +12,7 @@ class FTCard extends StatelessWidget {
     this.padding,
     this.margin,
     this.color,
-    this.elevation = FTDesignTokens.e1,
+    this.elevation = 1,
     this.borderRadius,
   });
 
@@ -24,17 +27,16 @@ class FTCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return AnimatedContainer(
-      duration: FTDesignTokens.d150,
+      duration: FTMotion.quick,
       margin: margin,
       decoration: BoxDecoration(
         color: color ?? scheme.surfaceContainerLow,
         border: Border.all(color: scheme.outlineVariant),
-        borderRadius:
-            borderRadius ?? BorderRadius.circular(FTDesignTokens.radiusMd),
-        boxShadow: FTDesignTokens.elevationShadows(scheme, elevation),
+        borderRadius: borderRadius ?? FTRadius.roundedMd,
+        boxShadow: elevation > 0 ? FTShadows.subtle(scheme) : FTShadows.none(),
       ),
       child: Padding(
-        padding: padding ?? const EdgeInsets.all(FTDesignTokens.md),
+        padding: padding ?? const EdgeInsets.all(FTSpacing.sm),
         child: child,
       ),
     );

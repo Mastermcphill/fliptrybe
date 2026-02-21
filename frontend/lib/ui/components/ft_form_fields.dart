@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../design/ft_tokens.dart';
+import '../foundation/tokens/ft_radius.dart';
+import '../foundation/tokens/ft_spacing.dart';
 
 InputDecoration _ftDecoration(
   BuildContext context, {
@@ -20,27 +21,27 @@ InputDecoration _ftDecoration(
     prefixIcon: prefixIcon,
     suffixIcon: suffixIcon,
     contentPadding: const EdgeInsets.symmetric(
-      horizontal: FTDesignTokens.md,
-      vertical: FTDesignTokens.sm,
+      horizontal: FTSpacing.sm,
+      vertical: FTSpacing.xs,
     ),
     border: OutlineInputBorder(
-      borderRadius: FTDesignTokens.roundedMd,
+      borderRadius: FTRadius.roundedMd,
       borderSide: BorderSide(color: scheme.outlineVariant),
     ),
     enabledBorder: OutlineInputBorder(
-      borderRadius: FTDesignTokens.roundedMd,
+      borderRadius: FTRadius.roundedMd,
       borderSide: BorderSide(color: scheme.outlineVariant),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: FTDesignTokens.roundedMd,
+      borderRadius: FTRadius.roundedMd,
       borderSide: BorderSide(color: scheme.primary, width: 1.4),
     ),
     errorBorder: OutlineInputBorder(
-      borderRadius: FTDesignTokens.roundedMd,
+      borderRadius: FTRadius.roundedMd,
       borderSide: BorderSide(color: scheme.error),
     ),
     focusedErrorBorder: OutlineInputBorder(
-      borderRadius: FTDesignTokens.roundedMd,
+      borderRadius: FTRadius.roundedMd,
       borderSide: BorderSide(color: scheme.error, width: 1.4),
     ),
   );

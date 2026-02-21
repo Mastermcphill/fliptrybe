@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../foundation/app_tokens.dart';
+import '../foundation/tokens/ft_spacing.dart';
 import 'ft_card.dart';
 
 class FTSkeleton extends StatelessWidget {
@@ -23,7 +23,7 @@ class FTSkeleton extends StatelessWidget {
       width: width,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: borderRadius ?? BorderRadius.circular(AppTokens.s8),
+        borderRadius: borderRadius ?? BorderRadius.circular(FTSpacing.xs),
       ),
     );
   }
@@ -39,9 +39,9 @@ class FTMetricSkeletonTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FTSkeleton(height: 12, width: 96),
-          SizedBox(height: AppTokens.s8),
+          SizedBox(height: FTSpacing.xs),
           FTSkeleton(height: 22, width: 120),
-          SizedBox(height: AppTokens.s8),
+          SizedBox(height: FTSpacing.xs),
           FTSkeleton(height: 12, width: 140),
         ],
       ),
@@ -62,16 +62,16 @@ class FTListCardSkeleton extends StatelessWidget {
         children: [
           if (withImage) ...[
             const FTSkeleton(height: 72, width: 72),
-            const SizedBox(width: AppTokens.s12),
+            const SizedBox(width: FTSpacing.xs),
           ],
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 FTSkeleton(height: 14, width: 150),
-                SizedBox(height: AppTokens.s8),
+                SizedBox(height: FTSpacing.xs),
                 FTSkeleton(height: 12),
-                SizedBox(height: AppTokens.s8),
+                SizedBox(height: FTSpacing.xs),
                 FTSkeleton(height: 12, width: 120),
               ],
             ),
