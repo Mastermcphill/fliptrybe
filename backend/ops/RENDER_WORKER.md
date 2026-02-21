@@ -44,3 +44,22 @@ Assumes service `rootDir=backend`.
 Run:
 - `python ops/check_celery_import.py`
 Exit code `0` means the canonical Celery app import loads successfully.
+
+## Production smoke (PowerShell)
+
+Set env vars:
+
+- FLIPTRYBE_BASE_URL (optional)
+- FLIPTRYBE_ADMIN_EMAIL
+- FLIPTRYBE_ADMIN_PASSWORD
+
+Run:
+
+```powershell
+cd backend/ops
+.\ps_smoke.ps1
+```
+
+Artifacts:
+
+backend/ops/test_artifacts/ps_smoke_*.json
