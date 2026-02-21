@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Fail($msg) {
-    Write-Host "🔴 FAIL: $msg"
+    Write-Host "FAIL: $msg"
     exit 1
 }
 
@@ -92,7 +92,9 @@ try {
     $deadline = $t0.AddSeconds($PollSeconds)
 
     while ((Get-Date) -lt $deadline) {
-        $res = Invoke-RestMethod -Method Get -Uri "$BaseUrl/api/listings/search?q=$([uri]::EscapeDataString($unique))&limit=5"
+        $encodedQ = [uri]::EscapeDataString($unique)
+        $searchUri = "{0}/api/listings/search?q={1}&limit=5" -f $BaseUrl, $encodedQ
+        $res = Invoke-RestMethod -Method Get -Uri $searchUri
         if ($res.total -ge 1) {
             $found = $true
             $latency = [int]((Get-Date) - $t0).TotalSeconds
@@ -121,15 +123,15 @@ try {
     AddStep "exception" $false @{ message = $err }
     if ($WriteJsonArtifact) {
         $report | ConvertTo-Json -Depth 30 | Out-File -FilePath $artifactPath -Encoding utf8
-        Write-Host "🧾 JSON artifact written: $artifactPath"
+        Write-Host "JSON artifact written: $artifactPath"
     }
     Fail $err
 }
 
 if ($WriteJsonArtifact) {
     $report | ConvertTo-Json -Depth 30 | Out-File -FilePath $artifactPath -Encoding utf8
-    Write-Host "🧾 JSON artifact written: $artifactPath"
+    Write-Host "JSON artifact written: $artifactPath"
 }
 
-Write-Host "🟢 PASS: production smoke checks OK"
+Write-Host "PASS: production smoke checks OK"
 exit 0
