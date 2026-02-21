@@ -51,7 +51,7 @@ from app.segments.segment_inspector_bonds_admin import inspector_bonds_admin_bp
 from app.segments.segment_role_change import role_change_bp
 from app.segments.segment_moneybox import moneybox_bp, moneybox_system_bp
 from app.segments.segment_public_feed import public_bp
-from app.segments.segment_admin_ops import admin_ops_bp
+from app.segments.segment_admin_ops import admin_ops_bp, admin_bp as admin_search_bp
 from app.segments.segment_feature_flags import flags_bp
 from app.segments.segment_referral import referral_bp
 from app.segments.segment_user_analytics import user_analytics_bp
@@ -472,6 +472,7 @@ def create_app():
     app.register_blueprint(moneybox_system_bp)
     app.register_blueprint(public_bp)
     app.register_blueprint(public_payments_bp)
+    app.register_blueprint(admin_search_bp)
     app.register_blueprint(admin_ops_bp)
     app.register_blueprint(flags_bp)
     app.register_blueprint(referral_bp)

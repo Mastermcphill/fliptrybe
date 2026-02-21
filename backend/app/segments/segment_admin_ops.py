@@ -46,6 +46,7 @@ from app.services.simulation.liquidity_simulator import (
 )
 
 admin_ops_bp = Blueprint("admin_ops_bp", __name__, url_prefix="/api/admin")
+admin_bp = Blueprint("admin_search_bp", __name__, url_prefix="/api/admin/search")
 
 
 def _current_user() -> User | None:
@@ -99,7 +100,7 @@ def admin_cache_stats():
     return jsonify({"ok": True, "cache": cache_stats()}), 200
 
 
-@admin_ops_bp.post("/search/init")
+@admin_bp.post("/init")
 def admin_search_init():
     _, err = _require_admin()
     if err:
@@ -133,7 +134,7 @@ def admin_search_init():
         return jsonify({"ok": False, "error": "SEARCH_INIT_FAILED", "message": str(exc), "trace_id": get_request_id()}), 500
 
 
-@admin_ops_bp.post("/search/reindex")
+@admin_bp.post("/reindex")
 def admin_search_reindex():
     _, err = _require_admin()
     if err:
@@ -186,7 +187,7 @@ def admin_search_reindex():
         return jsonify({"ok": False, "error": "SEARCH_REINDEX_ENQUEUE_FAILED", "message": str(exc), "trace_id": get_request_id()}), 500
 
 
-@admin_ops_bp.get("/search/status")
+@admin_bp.get("/status")
 def admin_search_status():
     _, err = _require_admin()
     if err:

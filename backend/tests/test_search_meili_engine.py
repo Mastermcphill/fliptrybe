@@ -421,6 +421,10 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertFalse(bool(health.get("reachable")))
         self.assertEqual(health.get("status"), "unreachable")
 
+    def test_search_status_route_requires_auth_and_is_mounted(self):
+        res = self.client.get("/api/admin/search/status")
+        self.assertEqual(res.status_code, 401)
+
     def test_meili_index_not_found_maps_to_search_not_initialized(self):
         class _FakeResponse:
             def __init__(self, status_code: int, payload: dict):
