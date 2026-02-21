@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../foundation/tokens/ft_motion.dart';
+import '../foundation/tokens/ft_radius.dart';
+import '../foundation/tokens/ft_shadows.dart';
+import '../foundation/tokens/ft_spacing.dart';
+
 class FTDesignTokens {
   const FTDesignTokens._();
 
-  static const double xs = 8;
+  static const double xs = FTSpacing.xs;
   static const double sm = 12;
-  static const double md = 16;
-  static const double lg = 24;
-  static const double xl = 32;
+  static const double md = FTSpacing.sm;
+  static const double lg = FTSpacing.md;
+  static const double xl = FTSpacing.lg;
 
-  static const double radiusSm = 12;
-  static const double radiusMd = 16;
+  static const double radiusSm = FTRadius.sm;
+  static const double radiusMd = FTRadius.md;
   static const double radiusLg = 20;
 
   static const double e0 = 0;
@@ -18,9 +23,9 @@ class FTDesignTokens {
   static const double e2 = 2;
   static const double e3 = 3;
 
-  static const Duration d150 = Duration(milliseconds: 150);
-  static const Duration d220 = Duration(milliseconds: 220);
-  static const Duration d300 = Duration(milliseconds: 300);
+  static const Duration d150 = FTMotion.quick;
+  static const Duration d220 = FTMotion.emphasized;
+  static const Duration d300 = FTMotion.slow;
 
   static BorderRadius get roundedSm => BorderRadius.circular(radiusSm);
   static BorderRadius get roundedMd => BorderRadius.circular(radiusMd);
@@ -28,6 +33,7 @@ class FTDesignTokens {
 
   static List<BoxShadow> elevationShadows(ColorScheme scheme, double level) {
     if (level <= e0) return const <BoxShadow>[];
+    if (level == e1) return FTShadows.subtle(scheme);
     final alpha = level == e1
         ? 0.06
         : level == e2

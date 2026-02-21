@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../design/ft_theme.dart';
+import '../foundation/theme/ft_theme.dart';
 import 'theme_controller.dart';
 
 class AppTheme {
