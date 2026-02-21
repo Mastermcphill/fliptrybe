@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../services/order_service.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/tokens/ft_spacing.dart';
+import '../utils/ft_routes.dart';
 import 'order_detail_screen.dart';
 import 'transaction/transaction_timeline_screen.dart';
 
@@ -22,72 +26,83 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
   Future<void> _reload() async {
     setState(() => _future = _svc.merchantOrders());
+    await _future;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Merchant Orders')),
-      body: RefreshIndicator(
-        onRefresh: _reload,
-        child: FutureBuilder<List<dynamic>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final items = snap.data ?? [];
-            if (items.isEmpty) {
-              return ListView(
-                padding: const EdgeInsets.all(16),
-                children: const [
-                  SizedBox(height: 50),
-                  Icon(Icons.receipt_long_outlined, size: 44),
-                  SizedBox(height: 12),
-                  Center(child: Text('No merchant orders yet.')),
-                ],
-              );
-            }
-            return ListView.separated(
-              padding: const EdgeInsets.all(12),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const Divider(),
-              itemBuilder: (context, i) {
-                final o = items[i] as Map<String, dynamic>;
-                final oid = o['id'];
-                final id = (oid is int) ? oid : int.tryParse(oid.toString());
-                return ListTile(
-                  leading: const Icon(Icons.storefront),
-                  trailing: TextButton(
+    return FTScaffold(
+      title: 'Merchant Orders',
+      onRefresh: _reload,
+      child: FutureBuilder<List<dynamic>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return FTSkeletonList(
+              itemCount: 4,
+              itemBuilder: (_, __) => const FTSkeletonCard(height: 88),
+            );
+          }
+          if (snap.hasError) {
+            return FTErrorState(
+              message: 'Unable to load merchant orders.',
+              onRetry: _reload,
+            );
+          }
+          final items = snap.data ?? const <dynamic>[];
+          if (items.isEmpty) {
+            return FTEmptyState(
+              icon: Icons.receipt_long_outlined,
+              title: 'No merchant orders yet',
+              subtitle:
+                  'Orders will appear here when buyers check out successfully.',
+              primaryCtaText: 'Refresh',
+              onPrimaryCta: _reload,
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.only(bottom: FTSpacing.lg),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(height: FTSpacing.xs),
+            itemBuilder: (context, i) {
+              final o = Map<String, dynamic>.from(items[i] as Map);
+              final oid = o['id'];
+              final id = oid is int ? oid : int.tryParse(oid.toString());
+              return FTCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: FTSpacing.xs,
+                  vertical: FTSpacing.xxs,
+                ),
+                child: FTListTile(
+                  leading: const Icon(Icons.storefront_outlined),
+                  trailing: FTButton(
+                    label: 'Timeline',
+                    variant: FTButtonVariant.ghost,
                     onPressed: id == null
                         ? null
                         : () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    TransactionTimelineScreen(orderId: id),
+                            Navigator.of(context).push(
+                              FTRoutes.page(
+                                child: TransactionTimelineScreen(orderId: id),
                               ),
                             );
                           },
-                    child: const Text('Timeline'),
                   ),
                   onTap: () {
-                    if (id != null) {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => OrderDetailScreen(orderId: id)),
-                      );
-                    }
+                    if (id == null) return;
+                    Navigator.of(context).push(
+                      FTRoutes.page(
+                        child: OrderDetailScreen(orderId: id),
+                      ),
+                    );
                   },
-                  title: Text('Order #${o['id']} | ₦${o['amount']}'),
-                  subtitle: Text('${o['status']}'),
-                );
-              },
-            );
-          },
-        ),
+                  title: 'Order #${o['id']} | NGN ${o['amount']}',
+                  subtitle: '${o['status']}',
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

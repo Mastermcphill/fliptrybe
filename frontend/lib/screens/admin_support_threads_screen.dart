@@ -84,9 +84,12 @@ class _AdminSupportThreadsScreenState extends State<AdminSupportThreadsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_authChecking) {
-      return const AdminScaffold(
+      return AdminScaffold(
         title: 'Support Threads',
-        child: Center(child: CircularProgressIndicator()),
+        child: FTSkeletonList(
+          itemCount: 4,
+          itemBuilder: (context, _) => const FTSkeletonCard(height: 82),
+        ),
       );
     }
     if (!_isAdmin) {

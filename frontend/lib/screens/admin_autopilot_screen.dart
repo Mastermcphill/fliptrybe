@@ -82,13 +82,12 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     }
     final recommendationsPayload =
         await _svc.getRecommendations(snapshotId: targetSnapshot);
-    final recommendationItems =
-        (recommendationsPayload['items'] is List)
-            ? (recommendationsPayload['items'] as List)
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList(growable: false)
-            : const <Map<String, dynamic>>[];
+    final recommendationItems = (recommendationsPayload['items'] is List)
+        ? (recommendationsPayload['items'] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
     final snapshotFromRec = (recommendationsPayload['snapshot'] is Map)
         ? Map<String, dynamic>.from(recommendationsPayload['snapshot'] as Map)
         : <String, dynamic>{};
@@ -201,7 +200,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
             .toList(growable: false)
         : const <Map<String, dynamic>>[];
     final selected = (recPayload['snapshot'] is Map)
-        ? int.tryParse('${(recPayload['snapshot'] as Map)['id'] ?? target ?? 0}')
+        ? int.tryParse(
+            '${(recPayload['snapshot'] as Map)['id'] ?? target ?? 0}')
         : target;
     if (!mounted) return;
     setState(() {
@@ -285,7 +285,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     if (_autopilotBusy) return;
     setState(() => _autopilotBusy = true);
     try {
-      final res = await _svc.generateDraft(window: _windowDays, acceptedOnly: true);
+      final res =
+          await _svc.generateDraft(window: _windowDays, acceptedOnly: true);
       if (!mounted) return;
       if (res['ok'] == true && res['policy'] is Map) {
         final policy = Map<String, dynamic>.from(res['policy'] as Map);
@@ -489,7 +490,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
     final impact = (recommendation['expected_impact'] is Map)
         ? Map<String, dynamic>.from(recommendation['expected_impact'] as Map)
         : <String, dynamic>{};
-    final revenueDelta = int.tryParse('${impact['revenue_delta_minor'] ?? 0}') ?? 0;
+    final revenueDelta =
+        int.tryParse('${impact['revenue_delta_minor'] ?? 0}') ?? 0;
     final gmvDelta = int.tryParse('${impact['gmv_delta_minor'] ?? 0}') ?? 0;
     final recommendationId = int.tryParse('${row['id'] ?? 0}') ?? 0;
     final status = (row['status'] ?? 'new').toString();
@@ -505,15 +507,15 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
       onAccept: _autopilotBusy
           ? null
           : () => _setRecommendationStatus(
-              recommendationId: recommendationId,
-              status: 'accepted',
-            ),
+                recommendationId: recommendationId,
+                status: 'accepted',
+              ),
       onDismiss: _autopilotBusy
           ? null
           : () => _setRecommendationStatus(
-              recommendationId: recommendationId,
-              status: 'dismissed',
-            ),
+                recommendationId: recommendationId,
+                status: 'dismissed',
+              ),
     );
   }
 
@@ -541,13 +543,17 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
         break;
       }
     }
-    final selectedDraftPolicyId =
-        int.tryParse('${selectedSnapshot['draft_policy_id'] ?? _draftPolicyId ?? 0}') ?? 0;
+    final selectedDraftPolicyId = int.tryParse(
+            '${selectedSnapshot['draft_policy_id'] ?? _draftPolicyId ?? 0}') ??
+        0;
     return AdminScaffold(
       title: 'Admin: Autopilot',
       onRefresh: _load,
       child: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? FTSkeletonList(
+              itemCount: 6,
+              itemBuilder: (_, __) => const FTSkeletonCard(height: 108),
+            )
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -776,9 +782,12 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                           border: OutlineInputBorder(),
                         ),
                         items: const [
-                          DropdownMenuItem(value: 7, child: Text('Last 7 days')),
-                          DropdownMenuItem(value: 30, child: Text('Last 30 days')),
-                          DropdownMenuItem(value: 90, child: Text('Last 90 days')),
+                          DropdownMenuItem(
+                              value: 7, child: Text('Last 7 days')),
+                          DropdownMenuItem(
+                              value: 30, child: Text('Last 30 days')),
+                          DropdownMenuItem(
+                              value: 90, child: Text('Last 90 days')),
                         ],
                         onChanged: (v) {
                           if (v == null) return;
@@ -803,12 +812,15 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                           ),
                           items: _snapshots.map((row) {
                             final id = int.tryParse('${row['id'] ?? 0}') ?? 0;
-                            final window = int.tryParse('${row['window_days'] ?? 0}') ?? 0;
-                            final recCount =
-                                int.tryParse('${row['recommendations_count'] ?? 0}') ?? 0;
+                            final window =
+                                int.tryParse('${row['window_days'] ?? 0}') ?? 0;
+                            final recCount = int.tryParse(
+                                    '${row['recommendations_count'] ?? 0}') ??
+                                0;
                             return DropdownMenuItem<int>(
                               value: id,
-                              child: Text('Snapshot #$id ($window d, $recCount recs)'),
+                              child: Text(
+                                  'Snapshot #$id ($window d, $recCount recs)'),
                             );
                           }).toList(growable: false),
                           onChanged: (v) async {
@@ -861,9 +873,10 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                         label: 'Preview Impact',
                         icon: Icons.analytics_outlined,
                         variant: FTButtonVariant.ghost,
-                        onPressed: (_autopilotBusy || selectedDraftPolicyId <= 0)
-                            ? null
-                            : _previewImpact,
+                        onPressed:
+                            (_autopilotBusy || selectedDraftPolicyId <= 0)
+                                ? null
+                                : _previewImpact,
                         expand: true,
                       ),
                       const SizedBox(height: 8),
@@ -884,7 +897,8 @@ class _AdminAutopilotScreenState extends State<AdminAutopilotScreen> {
                               children: [
                                 Text(
                                   'Projected Revenue Delta: ${(_impactPreview?['projected_revenue_delta_minor'] ?? 0)} minor',
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -993,12 +1007,10 @@ class AutopilotRecommendationCard extends StatelessWidget {
             ],
             if (explanation.isNotEmpty) ...[
               const SizedBox(height: 8),
-              ...explanation
-                  .take(3)
-                  .map((line) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text('• $line'),
-                      )),
+              ...explanation.take(3).map((line) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('• $line'),
+                  )),
             ],
             const SizedBox(height: 8),
             Text('Expected revenue Δ: $revenueDeltaMinor minor'),
@@ -1035,4 +1047,3 @@ class AutopilotRecommendationCard extends StatelessWidget {
     );
   }
 }
-

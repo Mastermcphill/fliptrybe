@@ -28,6 +28,7 @@ import '../utils/auth_navigation.dart';
 import '../utils/ft_routes.dart';
 import '../ui/admin/admin_scaffold.dart';
 import '../ui/components/ft_components.dart';
+import '../ui/foundation/components/ft_dialog.dart';
 
 class AdminHubScreen extends StatefulWidget {
   const AdminHubScreen({super.key});
@@ -71,24 +72,14 @@ class _AdminHubScreenState extends State<AdminHubScreen> {
   }
 
   Future<bool> _confirmSignOut() async {
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
+    final res = await FTDialog.confirm(
+      context,
+      title: 'Sign out',
+      message: 'Are you sure you want to sign out?',
+      confirmLabel: 'Sign out',
+      destructive: true,
     );
-    return res ?? false;
+    return res;
   }
 
   Future<void> _handleSignOut() async {

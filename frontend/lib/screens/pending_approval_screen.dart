@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/api_config.dart';
 import '../services/api_service.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/tokens/ft_spacing.dart';
+import '../utils/ft_routes.dart';
 import 'landing_screen.dart';
 import 'login_screen.dart';
 
@@ -122,22 +125,22 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
 
   void _goLogin() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      FTRoutes.page(child: const LoginScreen()),
     );
   }
 
   void _goMarketplace() {
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => LandingScreen(
+      FTRoutes.page(
+        child: LandingScreen(
           onLogin: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              FTRoutes.page(child: const LoginScreen()),
             );
           },
           onSignup: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              FTRoutes.page(child: const LoginScreen()),
             );
           },
         ),
@@ -147,61 +150,77 @@ class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pending Approval')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _titleText(),
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.w800),
+    return FTScaffold(
+      title: 'Pending Approval',
+      child: _loading
+          ? FTSkeletonList(
+              itemCount: 1,
+              itemBuilder: (_, __) => const FTSkeletonCard(height: 260),
+            )
+          : ListView(
+              children: [
+                FTCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _titleText(),
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: FTSpacing.xs),
+                      Text(
+                        _bodyText(),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                      if ((_error ?? '').isNotEmpty) ...[
+                        const SizedBox(height: FTSpacing.xs),
+                        FTBadge(
+                          text: 'Status warning',
+                          backgroundColor:
+                              Theme.of(context).colorScheme.errorContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                        const SizedBox(height: FTSpacing.xs),
+                        Text(
+                          _error!,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                        ),
+                      ],
+                      const SizedBox(height: FTSpacing.sm),
+                      FTButton(
+                        label: 'Refresh status',
+                        expand: true,
+                        onPressed: _refresh,
+                      ),
+                      const SizedBox(height: FTSpacing.xs),
+                      FTButton(
+                        label: _status == 'approved'
+                            ? 'Continue to Login'
+                            : 'Go to Login',
+                        expand: true,
+                        variant: FTButtonVariant.secondary,
+                        onPressed: _goLogin,
+                      ),
+                      const SizedBox(height: FTSpacing.xs),
+                      FTButton(
+                        label: 'Back to Marketplace',
+                        expand: true,
+                        variant: FTButtonVariant.ghost,
+                        onPressed: _goMarketplace,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _bodyText(),
-                    style: TextStyle(color: Colors.grey.shade700, height: 1.4),
-                  ),
-                  if ((_error ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      'Status check warning: $_error',
-                      style: const TextStyle(color: Colors.redAccent),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _refresh,
-                      child: const Text('Refresh status'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _goLogin,
-                      child: Text(_status == 'approved'
-                          ? 'Continue to Login'
-                          : 'Go to Login'),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: _goMarketplace,
-                      child: const Text('Back to Marketplace'),
-                    ),
-                  ),
-                ],
-              ),
-      ),
+                ),
+              ],
+            ),
     );
   }
 }

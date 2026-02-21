@@ -5,6 +5,9 @@ import '../screens/marketplace_screen.dart';
 import '../screens/role_signup_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/shortlet_screen.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/tokens/ft_radius.dart';
+import '../ui/foundation/tokens/ft_spacing.dart';
 import '../utils/ft_routes.dart';
 
 class PublicBrowseShell extends StatefulWidget {
@@ -103,17 +106,12 @@ class _PublicHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return FTScaffold(
       appBar: AppBar(title: const Text('Browse FlipTrybe')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      child: ListView(
+        padding: const EdgeInsets.all(FTSpacing.sm),
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: scheme.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
-            ),
+          FTCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -121,26 +119,26 @@ class _PublicHome extends StatelessWidget {
                   'Declutter + Shortlet',
                   style: TextStyle(
                     fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: FTSpacing.xs),
                 Text(
                   'Browse listings and stays immediately. Login is only required when you want to transact.',
-                  style: TextStyle(color: scheme.onPrimaryContainer),
+                  style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: FTSpacing.sm),
           _EntryTile(
             icon: Icons.storefront_outlined,
             title: 'Declutter Marketplace',
             subtitle: 'Browse gadgets, furniture, appliances, and more.',
             onTap: onOpenMarketplace,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: FTSpacing.xs),
           _EntryTile(
             icon: Icons.home_work_outlined,
             title: 'Shortlet Stays',
@@ -169,43 +167,45 @@ class _EntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Ink(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: scheme.surfaceContainerLow,
-          border: Border.all(color: scheme.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: scheme.secondaryContainer,
-              child: Icon(icon, color: scheme.onSecondaryContainer),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                          color: scheme.onSurface)),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: scheme.onSurfaceVariant),
-                  ),
-                ],
+    return FTCard(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: FTRadius.roundedMd,
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(FTSpacing.sm),
+          decoration: BoxDecoration(
+            borderRadius: FTRadius.roundedMd,
+            color: Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: scheme.secondaryContainer,
+                child: Icon(icon, color: scheme.onSecondaryContainer),
               ),
-            ),
-            Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
-          ],
+              const SizedBox(width: FTSpacing.xs),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: scheme.onSurface)),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
@@ -217,67 +217,62 @@ class _GuestAccountTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
+    return FTScaffold(
       appBar: AppBar(title: const Text('Account')),
-      body: Center(
+      child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Card(
-              color: scheme.surfaceContainerLow,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Sign in to transact',
-                      style:
-                          TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Browse is open. Login or create an account to buy, sell, book shortlets, and manage wallet actions.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.of(context).push(
-                          FTRoutes.page(
-                            child: const SettingsScreen(),
-                          ),
+            padding: const EdgeInsets.all(FTSpacing.sm),
+            child: FTCard(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Sign in to transact',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
-                        icon: const Icon(Icons.palette_outlined),
-                        label: const Text('Appearance'),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: FTSpacing.xs),
+                  Text(
+                    'Browse is open. Login or create an account to buy, sell, book shortlets, and manage wallet actions.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: FTSpacing.sm),
+                  FTButton(
+                    label: 'Appearance',
+                    icon: Icons.palette_outlined,
+                    variant: FTButtonVariant.ghost,
+                    expand: true,
+                    onPressed: () => Navigator.of(context).push(
+                      FTRoutes.page(
+                        child: const SettingsScreen(),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.of(context).pushReplacement(
-                          FTRoutes.slideUp(child: const LoginScreen()),
-                        ),
-                        child: const Text('Login'),
-                      ),
+                  ),
+                  const SizedBox(height: FTSpacing.xs),
+                  FTButton(
+                    label: 'Login',
+                    expand: true,
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                      FTRoutes.slideUp(child: const LoginScreen()),
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pushReplacement(
-                          FTRoutes.slideUp(child: const RoleSignupScreen()),
-                        ),
-                        child: const Text('Sign up'),
-                      ),
+                  ),
+                  const SizedBox(height: FTSpacing.xs),
+                  FTButton(
+                    label: 'Sign up',
+                    expand: true,
+                    variant: FTButtonVariant.secondary,
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                      FTRoutes.slideUp(child: const RoleSignupScreen()),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -286,4 +281,3 @@ class _GuestAccountTab extends StatelessWidget {
     );
   }
 }
-

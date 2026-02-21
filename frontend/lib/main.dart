@@ -180,9 +180,21 @@ class _FlipTrybeAppState extends State<FlipTrybeApp>
           darkTheme: AppTheme.dark(_themeController.backgroundPalette),
           themeMode: _themeController.themeMode,
           builder: (context, child) {
-            final wrapped = AppCrashOverlay(
+            Widget wrapped = AppCrashOverlay(
               child: child ?? const SizedBox.shrink(),
             );
+            final mediaQuery = MediaQuery.maybeOf(context);
+            if (mediaQuery != null) {
+              wrapped = MediaQuery(
+                data: mediaQuery.copyWith(
+                  textScaler: mediaQuery.textScaler.clamp(
+                    minScaleFactor: 1.0,
+                    maxScaleFactor: 1.3,
+                  ),
+                ),
+                child: wrapped,
+              );
+            }
             if (kReleaseMode) return wrapped;
             final envTag = const String.fromEnvironment(
               'APP_ENV',

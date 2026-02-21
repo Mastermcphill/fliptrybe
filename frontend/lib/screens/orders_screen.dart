@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/order_service.dart';
+import '../ui/components/ft_components.dart';
+import '../ui/foundation/tokens/ft_spacing.dart';
+import '../utils/ft_routes.dart';
 import 'listing_detail_screen.dart';
 import 'order_detail_screen.dart';
 import 'transaction/transaction_timeline_screen.dart';
@@ -90,9 +93,8 @@ class _OrdersScreenState extends State<OrdersScreen>
       'title': item['listing_title'],
       'price': item['amount'],
     };
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ListingDetailScreen(listing: listing)),
+    Navigator.of(context).push(
+      FTRoutes.page(child: ListingDetailScreen(listing: listing)),
     );
   }
 
@@ -105,7 +107,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   @override
   Widget build(BuildContext context) {
     final rows = _filtered();
-    return Scaffold(
+    return FTScaffold(
       appBar: AppBar(
         title: const Text('My Orders'),
         actions: [
@@ -121,73 +123,84 @@ class _OrdersScreenState extends State<OrdersScreen>
           ],
         ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : rows.isEmpty
-              ? const Center(child: Text('No orders yet.'))
-              : ListView.builder(
-                  itemCount: rows.length,
-                  itemBuilder: (_, index) {
-                    final item = rows[index];
-                    final orderId =
-                        int.tryParse((item['id'] ?? '').toString()) ?? 0;
-                    final amount = (item['amount'] ?? 0).toString();
-                    final status = (item['status'] ?? '').toString();
-                    final listingTitle =
-                        (item['listing_title'] ?? 'Listing').toString();
-                    return Card(
-                      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                      child: ListTile(
-                        title: Text(
-                          '$listingTitle • ₦$amount',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Status: $status'),
-                            const SizedBox(height: 4),
-                            Wrap(
-                              spacing: 8,
-                              children: [
-                                TextButton(
-                                  onPressed: () => _openReorder(item),
-                                  child: const Text('Reorder'),
-                                ),
-                                TextButton(
-                                  onPressed: orderId <= 0
-                                      ? null
-                                      : () => Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  TransactionTimelineScreen(
-                                                orderId: orderId,
-                                              ),
-                                            ),
-                                          ),
-                                  child:
-                                      const Text('View Transaction Timeline'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          if (orderId <= 0) return;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  OrderDetailScreen(orderId: orderId),
-                            ),
-                          );
-                        },
+      child: FTLoadStateLayout(
+        loading: _loading,
+        error: null,
+        onRetry: _load,
+        empty: rows.isEmpty,
+        loadingState: FTSkeletonList(
+          itemCount: 4,
+          itemBuilder: (_, __) => const FTSkeletonCard(height: 108),
+        ),
+        emptyState: FTEmptyState(
+          icon: Icons.receipt_long_outlined,
+          title: 'No orders yet',
+          subtitle: 'Your completed checkouts will appear here.',
+          primaryCtaText: 'Refresh',
+          onPrimaryCta: _load,
+        ),
+        child: ListView.builder(
+          padding: const EdgeInsets.only(bottom: FTSpacing.lg),
+          itemCount: rows.length,
+          itemBuilder: (_, index) {
+            final item = rows[index];
+            final orderId = int.tryParse((item['id'] ?? '').toString()) ?? 0;
+            final amount = (item['amount'] ?? 0).toString();
+            final status = (item['status'] ?? '').toString();
+            final listingTitle =
+                (item['listing_title'] ?? 'Listing').toString();
+            return FTCard(
+              margin: const EdgeInsets.fromLTRB(0, 0, 0, FTSpacing.xs),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  FTSectionHeader(
+                    title: listingTitle,
+                    subtitle: 'Status: $status',
+                  ),
+                  const SizedBox(height: FTSpacing.xs),
+                  Text('Amount: NGN $amount'),
+                  const SizedBox(height: FTSpacing.xs),
+                  Wrap(
+                    spacing: FTSpacing.xs,
+                    children: [
+                      FTButton(
+                        label: 'Reorder',
+                        variant: FTButtonVariant.ghost,
+                        onPressed: () => _openReorder(item),
                       ),
-                    );
-                  },
-                ),
+                      FTButton(
+                        label: 'Timeline',
+                        variant: FTButtonVariant.ghost,
+                        onPressed: orderId <= 0
+                            ? null
+                            : () => Navigator.of(context).push(
+                                  FTRoutes.page(
+                                    child: TransactionTimelineScreen(
+                                      orderId: orderId,
+                                    ),
+                                  ),
+                                ),
+                      ),
+                      FTButton(
+                        label: 'Details',
+                        variant: FTButtonVariant.secondary,
+                        onPressed: orderId <= 0
+                            ? null
+                            : () => Navigator.of(context).push(
+                                  FTRoutes.page(
+                                    child: OrderDetailScreen(orderId: orderId),
+                                  ),
+                                ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

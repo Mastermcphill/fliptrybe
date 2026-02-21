@@ -1,35 +1,54 @@
 import 'package:flutter/material.dart';
 
+import '../ui/foundation/tokens/ft_motion.dart';
+
 class FTPageRoute {
   const FTPageRoute._();
 
   static Route<T> fade<T>({
     required Widget child,
-    Duration duration = const Duration(milliseconds: 220),
-    Curve curve = Curves.easeOutCubic,
+    Duration duration = FTMotion.emphasized,
+    Curve curve = FTMotion.easeOut,
   }) {
     return PageRouteBuilder<T>(
       transitionDuration: duration,
-      reverseTransitionDuration: const Duration(milliseconds: 170),
+      reverseTransitionDuration: FTMotion.quick,
       pageBuilder: (context, animation, secondaryAnimation) => child,
       transitionsBuilder: (context, animation, secondaryAnimation, widget) {
-        final curved = CurvedAnimation(parent: animation, curve: curve);
-        return FadeTransition(opacity: curved, child: widget);
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: curve,
+          reverseCurve: FTMotion.easeIn,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.02),
+              end: Offset.zero,
+            ).animate(curved),
+            child: widget,
+          ),
+        );
       },
     );
   }
 
   static Route<T> slideUp<T>({
     required Widget child,
-    Duration duration = const Duration(milliseconds: 240),
-    Curve curve = Curves.easeOutCubic,
+    Duration duration = FTMotion.emphasized,
+    Curve curve = FTMotion.easeOut,
   }) {
     return PageRouteBuilder<T>(
       transitionDuration: duration,
-      reverseTransitionDuration: const Duration(milliseconds: 180),
+      reverseTransitionDuration: FTMotion.quick,
       pageBuilder: (context, animation, secondaryAnimation) => child,
       transitionsBuilder: (context, animation, secondaryAnimation, widget) {
-        final curved = CurvedAnimation(parent: animation, curve: curve);
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: curve,
+          reverseCurve: FTMotion.easeIn,
+        );
         return FadeTransition(
           opacity: curved,
           child: SlideTransition(
@@ -51,8 +70,8 @@ class FTRoutes {
 
   static Route<T> page<T>({
     required Widget child,
-    Duration duration = const Duration(milliseconds: 220),
-    Curve curve = Curves.easeOutCubic,
+    Duration duration = FTMotion.emphasized,
+    Curve curve = FTMotion.easeOut,
   }) {
     return FTPageRoute.fade(
       child: child,
@@ -63,8 +82,8 @@ class FTRoutes {
 
   static Route<T> slideUp<T>({
     required Widget child,
-    Duration duration = const Duration(milliseconds: 240),
-    Curve curve = Curves.easeOutCubic,
+    Duration duration = FTMotion.emphasized,
+    Curve curve = FTMotion.easeOut,
   }) {
     return FTPageRoute.slideUp(
       child: child,
