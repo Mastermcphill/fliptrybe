@@ -95,12 +95,32 @@ class _FakeMeiliClient:
             raise SearchUnavailable("timeout")
         if self._search_not_initialized:
             raise SearchNotInitialized(str(index_name or ""))
+        q_text = str(q or "").strip().lower()
+        if self._hits:
+            source_hits = [dict(row) for row in self._hits if isinstance(row, dict)]
+        else:
+            source_hits = [dict(row) for _, row in sorted(self.docs_by_id.items(), key=lambda pair: pair[0])]
+        if q_text:
+            filtered_hits: list[dict] = []
+            for row in source_hits:
+                haystack = " ".join(
+                    [
+                        str(row.get("title") or ""),
+                        str(row.get("description") or ""),
+                        str(row.get("city") or ""),
+                        str(row.get("state") or ""),
+                        str(row.get("category") or ""),
+                    ]
+                ).lower()
+                if q_text in haystack:
+                    filtered_hits.append(row)
+            source_hits = filtered_hits
         safe_offset = max(0, int(offset or 0))
         safe_limit = max(1, int(limit or 20))
-        page_hits = self._hits[safe_offset : safe_offset + safe_limit]
+        page_hits = source_hits[safe_offset : safe_offset + safe_limit]
         return {
             "hits": page_hits,
-            "estimatedTotalHits": len(self._hits),
+            "estimatedTotalHits": len(source_hits),
             "offset": safe_offset,
             "limit": safe_limit,
         }
@@ -132,6 +152,7 @@ class _FakeMeiliClient:
                 doc_id = 0
             if doc_id > 0:
                 self.docs_by_id[doc_id] = dict(doc)
+        self._document_count = int(len(self.docs_by_id))
         return {"ok": True, "queued": True}
 
     def delete_document(self, index_name, doc_id):
@@ -139,6 +160,7 @@ class _FakeMeiliClient:
             self.docs_by_id.pop(int(doc_id), None)
         except Exception:
             pass
+        self._document_count = int(len(self.docs_by_id))
         return {"ok": True}
 
 
@@ -311,6 +333,108 @@ class SearchMeiliIntegrationTestCase(unittest.TestCase):
         self.assertTrue(bool(payload.get("ok")))
         items = payload.get("items") or []
         self.assertTrue(any(int(item.get("id") or 0) == listing_id for item in items))
+
+    def test_listing_update_rejects_malformed_json_without_db_change(self):
+        listing_id = self._create_listing(title="Seed Listing")
+        headers = self._admin_headers()
+        response = self.client.put(
+            f"/api/listings/{listing_id}",
+            headers=headers,
+            data='{"title": "Broken JSON"',
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json(force=True) or {}
+        self.assertEqual(payload.get("error"), "INVALID_JSON")
+        with self.app.app_context():
+            listing = db.session.get(Listing, int(listing_id))
+            self.assertIsNotNone(listing)
+            self.assertEqual(str(getattr(listing, "title", "") or ""), "Seed Listing")
+
+    def test_listing_update_rejects_empty_payload_without_db_change(self):
+        listing_id = self._create_listing(title="Seed Listing")
+        headers = self._admin_headers()
+        response = self.client.put(
+            f"/api/listings/{listing_id}",
+            headers=headers,
+            json={},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json(force=True) or {}
+        self.assertEqual(payload.get("error"), "EMPTY_UPDATE")
+        with self.app.app_context():
+            listing = db.session.get(Listing, int(listing_id))
+            self.assertIsNotNone(listing)
+            self.assertEqual(str(getattr(listing, "title", "") or ""), "Seed Listing")
+
+    def test_listing_update_triggers_meili_indexing(self):
+        listing_id = self._create_listing(title="Seed Listing")
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "meili"
+        os.environ["SEARCH_FALLBACK_SQL"] = "false"
+        fake = _FakeMeiliClient(existing_indexes={"listings_v1"})
+
+        def _delay_inline(listing_id, trace_id=""):
+            return search_index_listing.run(listing_id=int(listing_id), trace_id=str(trace_id or ""))
+
+        with patch("app.segments.segment_market.get_meili_client", return_value=fake), patch(
+            "app.tasks.search_tasks.get_meili_client",
+            return_value=fake,
+        ), patch(
+            "app.tasks.search_tasks.search_index_listing.delay",
+            side_effect=_delay_inline,
+        ):
+            update_res = self.client.put(
+                f"/api/listings/{listing_id}",
+                headers=headers,
+                json={"title": "ZEBRA-ALPHA-999"},
+            )
+            search_res = self.client.get("/api/listings/search?q=ZEBRA-ALPHA-999&limit=10&offset=0")
+
+        self.assertEqual(update_res.status_code, 200)
+        update_payload = update_res.get_json(force=True) or {}
+        self.assertTrue(bool(update_payload.get("ok")))
+        self.assertEqual((update_payload.get("listing") or {}).get("title"), "ZEBRA-ALPHA-999")
+        self.assertGreaterEqual(int(fake.upsert_calls or 0), 1)
+        self.assertIn(int(listing_id), fake.docs_by_id)
+        self.assertEqual(str(fake.docs_by_id[int(listing_id)].get("title") or ""), "ZEBRA-ALPHA-999")
+
+        self.assertEqual(search_res.status_code, 200)
+        search_payload = search_res.get_json(force=True) or {}
+        self.assertTrue(bool(search_payload.get("ok")))
+        items = search_payload.get("items") or []
+        self.assertTrue(any(str(item.get("title") or "") == "ZEBRA-ALPHA-999" for item in items))
+
+    def test_listing_update_without_meili_falls_back_sql_when_enabled(self):
+        listing_id = self._create_listing(title="Fallback After Update")
+        headers = self._admin_headers()
+        os.environ["SEARCH_ENGINE"] = "meili"
+        os.environ["SEARCH_FALLBACK_SQL"] = "true"
+
+        with patch(
+            "app.tasks.search_tasks.search_index_listing.delay",
+            side_effect=RuntimeError("simulated enqueue failure"),
+        ):
+            update_res = self.client.put(
+                f"/api/listings/{listing_id}",
+                headers=headers,
+                json={"title": "Fallback SQL Updated 321"},
+            )
+
+        with patch("app.segments.segment_market.get_meili_client", side_effect=SearchUnavailable("down")):
+            search_res = self.client.get("/api/listings/search?q=Fallback%20SQL%20Updated%20321&limit=10")
+
+        self.assertEqual(update_res.status_code, 200)
+        update_payload = update_res.get_json(force=True) or {}
+        self.assertTrue(bool(update_payload.get("ok")))
+        self.assertEqual((update_payload.get("listing") or {}).get("title"), "Fallback SQL Updated 321")
+        self.assertEqual(search_res.status_code, 200)
+        search_payload = search_res.get_json(force=True) or {}
+        self.assertTrue(bool(search_payload.get("ok")))
+        items = search_payload.get("items") or []
+        self.assertTrue(any(int(item.get("id") or 0) == int(listing_id) for item in items))
 
     def test_admin_search_init_creates_index_when_missing(self):
         fake = _FakeMeiliClient(existing_indexes=set())

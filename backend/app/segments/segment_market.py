@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import text, or_
 from flask import Blueprint, jsonify, request, send_from_directory, current_app
+from werkzeug.exceptions import BadRequest
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
@@ -2562,7 +2563,19 @@ def update_listing(listing_id: int):
     if not (_is_owner(u, item) or _is_admin(u)):
         return jsonify({"message": "Forbidden"}), 403
 
-    payload = request.get_json(silent=True) or {}
+    if not bool(request.is_json):
+        return jsonify({"ok": False, "error": "INVALID_JSON", "message": "Request body must be valid JSON."}), 400
+    try:
+        payload = request.get_json(silent=False)
+    except BadRequest:
+        return jsonify({"ok": False, "error": "INVALID_JSON", "message": "Malformed JSON payload."}), 400
+    except Exception:
+        return jsonify({"ok": False, "error": "INVALID_JSON", "message": "Invalid JSON payload."}), 400
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "error": "INVALID_JSON", "message": "JSON payload must be an object."}), 400
+    if not payload:
+        return jsonify({"ok": False, "error": "EMPTY_UPDATE", "message": "Update payload cannot be empty."}), 400
+
     # Listing cap enforcement on activation
     try:
         current_active = _is_active_listing(item)
@@ -2584,11 +2597,10 @@ def update_listing(listing_id: int):
         ok, info = enforce_listing_cap(int(u.id), account_role, next_listing_type)
         if not ok:
             return jsonify(info), 403
-    title = payload.get("title")
-    if title is not None:
-        title = str(title).strip()
+    if "title" in payload:
+        title = str(payload.get("title") or "").strip()
         if not title:
-            return jsonify({"message": "title cannot be empty"}), 400
+            return jsonify({"ok": False, "error": "VALIDATION_ERROR", "message": "title cannot be empty", "field": "title"}), 400
         item.title = title
 
     if "description" in payload:
