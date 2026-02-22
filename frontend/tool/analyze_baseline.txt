@@ -1,0 +1,3 @@
+# Flutter analyze issue baseline.
+# The CI guard fails if current issue count exceeds this number.
+136

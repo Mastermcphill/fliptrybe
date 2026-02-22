@@ -24,7 +24,7 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      - name: Flutter analyze (report only)
-        run: flutter analyze || true
+      - name: Flutter analyze baseline guard
+        run: python3 tool/check_analyze_baseline.py --baseline-file tool/analyze_baseline.txt
       - name: Flutter tests
         run: flutter test

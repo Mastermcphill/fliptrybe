@@ -118,7 +118,7 @@ class FTTheme {
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: <TargetPlatform, PageTransitionsBuilder>{
           TargetPlatform.android: FTFadeSlidePageTransitionsBuilder(),
-          TargetPlatform.iOS: FTFadeSlidePageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           TargetPlatform.macOS: FTFadeSlidePageTransitionsBuilder(),
           TargetPlatform.windows: FTFadeSlidePageTransitionsBuilder(),
           TargetPlatform.linux: FTFadeSlidePageTransitionsBuilder(),

@@ -5,7 +5,10 @@ import '../services/api_client.dart';
 import '../services/api_service.dart';
 import '../widgets/app_exit_guard.dart';
 
-Future<void> logoutToLanding(BuildContext context) async {
+Future<void> logoutToLanding(
+  BuildContext context, {
+  Future<void> Function()? resetAuthSessionCall,
+}) async {
   FocusManager.instance.primaryFocus?.unfocus();
   ScaffoldMessenger.maybeOf(context)?.clearSnackBars();
 
@@ -19,7 +22,7 @@ Future<void> logoutToLanding(BuildContext context) async {
   // Immediately clear in-memory auth headers/cancelled requests before
   // persistent/session cleanup to avoid stale-client reuse.
   ApiClient.instance.resetSession();
-  await ApiService.resetAuthSession();
+  await (resetAuthSessionCall?.call() ?? ApiService.resetAuthSession());
   if (!context.mounted) return;
 
   Navigator.of(context).pushAndRemoveUntil(

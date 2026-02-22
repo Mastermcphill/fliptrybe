@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 
 import '../ui/foundation/tokens/ft_motion.dart';
 
@@ -68,11 +69,17 @@ class FTPageRoute {
 class FTRoutes {
   const FTRoutes._();
 
+  static bool get _useNativeIosTransition =>
+      defaultTargetPlatform == TargetPlatform.iOS;
+
   static Route<T> page<T>({
     required Widget child,
     Duration duration = FTMotion.emphasized,
     Curve curve = FTMotion.easeOut,
   }) {
+    if (_useNativeIosTransition) {
+      return CupertinoPageRoute<T>(builder: (_) => child);
+    }
     return FTPageRoute.fade(
       child: child,
       duration: duration,
@@ -85,6 +92,9 @@ class FTRoutes {
     Duration duration = FTMotion.emphasized,
     Curve curve = FTMotion.easeOut,
   }) {
+    if (_useNativeIosTransition) {
+      return CupertinoPageRoute<T>(builder: (_) => child);
+    }
     return FTPageRoute.slideUp(
       child: child,
       duration: duration,
